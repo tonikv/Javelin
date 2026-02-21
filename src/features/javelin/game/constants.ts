@@ -53,6 +53,10 @@ export const WORLD_METER_LINE_WIDTH_PX = 6;
 export const WORLD_METER_CURSOR_RADIUS_PX = 5;
 export const WORLD_METER_OFFSET_Y_PX = 18;
 
+export const JAVELIN_GRIP_OFFSET_M = 0.12;
+export const JAVELIN_GRIP_OFFSET_Y_M = 0.03;
+export const JAVELIN_RELEASE_OFFSET_Y_M = 0.06;
+
 export const LAUNCH_SPEED_MIN_MS = 9;
 export const LAUNCH_SPEED_MAX_MS = 44;
 export const LAUNCH_POWER_EXP = 1.42;

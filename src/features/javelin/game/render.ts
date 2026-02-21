@@ -20,6 +20,8 @@ import {
   CAMERA_Y_SCALE_RUNUP,
   CAMERA_Y_SCALE_THROW,
   FIELD_MAX_DISTANCE_M,
+  JAVELIN_GRIP_OFFSET_M,
+  JAVELIN_GRIP_OFFSET_Y_M,
   JAVELIN_LENGTH_M,
   RUN_TO_AIM_BLEND_MS,
   THROW_LINE_X_M,
@@ -72,7 +74,7 @@ const drawBackground = (ctx: CanvasRenderingContext2D, width: number, height: nu
   }
 };
 
-const getCameraTargetX = (state: GameState): number => {
+export const getCameraTargetX = (state: GameState): number => {
   if (state.phase.tag === 'runup') {
     return state.phase.runupDistanceM;
   }
@@ -83,7 +85,8 @@ const getCameraTargetX = (state: GameState): number => {
     return state.phase.javelin.xM;
   }
   if (state.phase.tag === 'result') {
-    return state.phase.distanceM + THROW_LINE_X_M;
+    const javelinWorldX = state.phase.landingXM;
+    return state.phase.athleteXM * 0.3 + javelinWorldX * 0.7;
   }
   return 5;
 };
@@ -531,8 +534,8 @@ export const getVisibleJavelinRenderState = (
   ) {
     return {
       mode: 'attached',
-      xM: pose.javelinGrip.xM + Math.cos(pose.javelinAngleRad) * 0.44,
-      yM: pose.javelinGrip.yM + Math.sin(pose.javelinAngleRad) * 0.08,
+      xM: pose.javelinGrip.xM + Math.cos(pose.javelinAngleRad) * JAVELIN_GRIP_OFFSET_M,
+      yM: pose.javelinGrip.yM + Math.sin(pose.javelinAngleRad) * JAVELIN_GRIP_OFFSET_Y_M,
       angleRad: pose.javelinAngleRad,
       lengthM: JAVELIN_LENGTH_M
     };
@@ -541,9 +544,9 @@ export const getVisibleJavelinRenderState = (
   if (state.phase.tag === 'result') {
     return {
       mode: 'landed',
-      xM: state.phase.distanceM + THROW_LINE_X_M,
-      yM: 0.22,
-      angleRad: state.phase.tipFirst ? (-34 * Math.PI) / 180 : (-8 * Math.PI) / 180,
+      xM: state.phase.landingXM,
+      yM: Math.max(0.08, state.phase.landingYM),
+      angleRad: state.phase.landingAngleRad,
       lengthM: JAVELIN_LENGTH_M
     };
   }

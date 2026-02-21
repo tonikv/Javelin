@@ -113,6 +113,9 @@ export type GamePhase =
       isHighscore: boolean;
       resultKind: ResultKind;
       tipFirst: boolean | null;
+      landingXM: number;
+      landingYM: number;
+      landingAngleRad: number;
     }
   | {
       tag: 'fault';

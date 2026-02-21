@@ -29,4 +29,14 @@ describe('athlete pose helpers', () => {
     expect(Math.abs(deliveryReach - loadedReach)).toBeGreaterThan(0.15);
     expect(loaded.javelinAngleRad).toBeGreaterThan(delivery.javelinAngleRad);
   });
+
+  it('front arm tracks javelin angle during aim', () => {
+    const pose = computeAthletePoseGeometry({ animTag: 'aim', animT: 0.5 }, 0.5, 45, 10);
+    const dx = pose.handFront.xM - pose.shoulderCenter.xM;
+    const dy = pose.handFront.yM - pose.shoulderCenter.yM;
+    const handAngleDeg = (Math.atan2(dy, dx) * 180) / Math.PI;
+
+    expect(handAngleDeg).toBeGreaterThan(20);
+    expect(handAngleDeg).toBeLessThan(70);
+  });
 });
