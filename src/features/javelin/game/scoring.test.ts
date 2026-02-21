@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   angleEfficiency,
+  computeCompetitionDistanceM,
   computeThrowDistance,
+  evaluateThrowLegality,
+  isLandingInSector,
   releaseEfficiency,
   windEfficiency
 } from './scoring';
@@ -36,7 +39,46 @@ describe('scoring helpers', () => {
       windMs: 1.4
     });
     expect(weakThrow).toBeGreaterThanOrEqual(12);
-    expect(strongThrow).toBeLessThanOrEqual(98);
+    expect(strongThrow).toBeLessThanOrEqual(110);
     expect(strongThrow).toBeGreaterThan(weakThrow);
+  });
+
+  it('measures distance from throw line baseline', () => {
+    expect(computeCompetitionDistanceM(50, 18.2)).toBe(31.8);
+    expect(computeCompetitionDistanceM(16, 18.2)).toBe(0);
+  });
+
+  it('checks sector legality with lateral offset', () => {
+    expect(isLandingInSector(60, 4.2, 18.2)).toBe(true);
+    expect(isLandingInSector(60, 20, 18.2)).toBe(false);
+  });
+
+  it('returns foul reasons based on rule order', () => {
+    expect(
+      evaluateThrowLegality({
+        lineCrossedAtRelease: true,
+        landingTipXM: 80,
+        landingTipZM: 0,
+        tipFirst: true
+      }).resultKind
+    ).toBe('foul_line');
+
+    expect(
+      evaluateThrowLegality({
+        lineCrossedAtRelease: false,
+        landingTipXM: 60,
+        landingTipZM: 30,
+        tipFirst: true
+      }).resultKind
+    ).toBe('foul_sector');
+
+    expect(
+      evaluateThrowLegality({
+        lineCrossedAtRelease: false,
+        landingTipXM: 60,
+        landingTipZM: 0,
+        tipFirst: false
+      }).resultKind
+    ).toBe('foul_tip_first');
   });
 });

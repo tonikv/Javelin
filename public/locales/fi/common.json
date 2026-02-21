@@ -12,5 +12,8 @@
   "javelin.throwLine": "Heittoviiva",
   "javelin.speedPassiveHint": "Perusvauhti kasvaa myös ilman klikkejä.",
   "javelin.landingTipFirst": "Kärki edellä",
-  "javelin.landingFlat": "Litteä alastulo"
+  "javelin.landingFlat": "Litteä alastulo",
+  "javelin.result.foul_line": "Hylätty: viiva ylitetty",
+  "javelin.result.foul_sector": "Hylätty: sektorin ulkopuolella",
+  "javelin.result.foul_tip_first": "Hylätty: kärki ei osunut ensin"
 }

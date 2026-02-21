@@ -12,5 +12,8 @@
   "javelin.throwLine": "Throw Line",
   "javelin.speedPassiveHint": "Base speed also builds without clicking.",
   "javelin.landingTipFirst": "Tip-first landing",
-  "javelin.landingFlat": "Flat landing"
+  "javelin.landingFlat": "Flat landing",
+  "javelin.result.foul_line": "Foul: line crossed",
+  "javelin.result.foul_sector": "Foul: outside sector",
+  "javelin.result.foul_tip_first": "Foul: tip did not land first"
 }

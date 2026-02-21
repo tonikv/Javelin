@@ -5,26 +5,22 @@ import type { GameState } from './types';
 type WorldToScreenInput = {
   xM: number;
   yM: number;
-  width: number;
-  height: number;
 };
 
-const RUNWAY_OFFSET_X = 72;
-const GROUND_BOTTOM_PADDING = 70;
-const Y_SCALE = 14;
+type WorldToScreen = (input: WorldToScreenInput) => { x: number; y: number };
 
-const toScreen = ({ xM, yM, width, height }: WorldToScreenInput): { x: number; y: number } => {
-  const playableWidth = width - RUNWAY_OFFSET_X - 28;
-  const x = RUNWAY_OFFSET_X + (xM / FIELD_MAX_DISTANCE_M) * playableWidth;
-  const y = height - GROUND_BOTTOM_PADDING - yM * Y_SCALE;
-  return { x, y };
-};
+const RUNWAY_OFFSET_X = 60;
+const GROUND_BOTTOM_PADDING = 56;
+const DEFAULT_Y_SCALE = 18;
+
+const clamp = (value: number, min: number, max: number): number =>
+  Math.min(max, Math.max(min, value));
 
 const drawBackground = (ctx: CanvasRenderingContext2D, width: number, height: number): void => {
   const sky = ctx.createLinearGradient(0, 0, 0, height);
-  sky.addColorStop(0, '#eef8ff');
-  sky.addColorStop(0.66, '#d3f0ff');
-  sky.addColorStop(1, '#fff9df');
+  sky.addColorStop(0, '#e9f7ff');
+  sky.addColorStop(0.58, '#d0efff');
+  sky.addColorStop(1, '#f5ffe4');
   ctx.fillStyle = sky;
   ctx.fillRect(0, 0, width, height);
 
@@ -34,31 +30,80 @@ const drawBackground = (ctx: CanvasRenderingContext2D, width: number, height: nu
   }
 };
 
+const getCameraTargetX = (state: GameState): number => {
+  if (state.phase.tag === 'runup') {
+    return state.phase.runupDistanceM;
+  }
+  if (state.phase.tag === 'chargeAim' || state.phase.tag === 'throwAnim') {
+    return state.phase.athleteXM;
+  }
+  if (state.phase.tag === 'flight') {
+    return state.phase.javelin.xM;
+  }
+  if (state.phase.tag === 'result') {
+    return state.phase.distanceM + THROW_LINE_X_M;
+  }
+  return 5;
+};
+
+const getViewWidthM = (state: GameState): number => {
+  if (state.phase.tag === 'flight') {
+    return 34;
+  }
+  if (state.phase.tag === 'result') {
+    return 30;
+  }
+  return 28;
+};
+
+const createWorldToScreen = (
+  state: GameState,
+  width: number,
+  height: number
+): { toScreen: WorldToScreen; worldMinX: number; worldMaxX: number } => {
+  const viewWidthM = getViewWidthM(state);
+  const targetX = getCameraTargetX(state);
+  const worldMinX = clamp(targetX - viewWidthM * 0.3, 0, FIELD_MAX_DISTANCE_M - viewWidthM);
+  const worldMaxX = worldMinX + viewWidthM;
+  const playableWidth = width - RUNWAY_OFFSET_X - 24;
+
+  const toScreen: WorldToScreen = ({ xM, yM }) => {
+    const x = RUNWAY_OFFSET_X + ((xM - worldMinX) / viewWidthM) * playableWidth;
+    const y = height - GROUND_BOTTOM_PADDING - yM * DEFAULT_Y_SCALE;
+    return { x, y };
+  };
+
+  return { toScreen, worldMinX, worldMaxX };
+};
+
 const drawThrowLine = (
   ctx: CanvasRenderingContext2D,
-  width: number,
+  toScreen: WorldToScreen,
   height: number,
   label: string
 ): void => {
   const groundY = height - GROUND_BOTTOM_PADDING;
-  const line = toScreen({ xM: THROW_LINE_X_M, yM: 0, width, height });
+  const line = toScreen({ xM: THROW_LINE_X_M, yM: 0 });
   ctx.strokeStyle = '#ff5d4e';
   ctx.lineWidth = 3;
   ctx.beginPath();
-  ctx.moveTo(line.x, groundY - 26);
-  ctx.lineTo(line.x, groundY + 20);
+  ctx.moveTo(line.x, groundY - 24);
+  ctx.lineTo(line.x, groundY + 19);
   ctx.stroke();
 
   ctx.fillStyle = '#a3211a';
   ctx.font = '700 12px ui-sans-serif';
-  ctx.fillText(label, line.x - 34, groundY - 30);
+  ctx.fillText(label, line.x - 28, groundY - 27);
 };
 
 const drawTrackAndField = (
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
-  throwLineLabel: string
+  toScreen: WorldToScreen,
+  throwLineLabel: string,
+  worldMinX: number,
+  worldMaxX: number
 ): void => {
   const groundY = height - GROUND_BOTTOM_PADDING;
   ctx.fillStyle = '#88d37f';
@@ -71,24 +116,28 @@ const drawTrackAndField = (
   ctx.lineTo(width - 20, groundY);
   ctx.stroke();
 
-  for (let m = 10; m <= FIELD_MAX_DISTANCE_M; m += 10) {
-    const { x } = toScreen({ xM: m, yM: 0, width, height });
-    const isMajor = m % 20 === 0;
-    ctx.strokeStyle = isMajor ? 'rgba(255, 255, 255, 0.9)' : 'rgba(255, 255, 255, 0.5)';
+  const meterStart = Math.floor(worldMinX / 5) * 5;
+  for (let m = meterStart; m <= worldMaxX + 5; m += 5) {
+    if (m < 0 || m > FIELD_MAX_DISTANCE_M) {
+      continue;
+    }
+    const { x } = toScreen({ xM: m, yM: 0 });
+    const isMajor = m % 10 === 0;
+    ctx.strokeStyle = isMajor ? 'rgba(255, 255, 255, 0.85)' : 'rgba(255, 255, 255, 0.4)';
     ctx.lineWidth = isMajor ? 2 : 1;
     ctx.beginPath();
     ctx.moveTo(x, groundY);
-    ctx.lineTo(x, groundY + (isMajor ? 18 : 12));
+    ctx.lineTo(x, groundY + (isMajor ? 16 : 10));
     ctx.stroke();
 
     if (isMajor) {
       ctx.fillStyle = '#0b2238';
       ctx.font = 'bold 12px ui-sans-serif';
-      ctx.fillText(`${m} m`, x - 14, groundY + 35);
+      ctx.fillText(`${m} m`, x - 12, groundY + 32);
     }
   }
 
-  drawThrowLine(ctx, width, height, throwLineLabel);
+  drawThrowLine(ctx, toScreen, height, throwLineLabel);
 };
 
 const drawWindVane = (
@@ -98,7 +147,7 @@ const drawWindVane = (
   localeFormatter: Intl.NumberFormat
 ): void => {
   const dir = windMs >= 0 ? 1 : -1;
-  const x = width - 128;
+  const x = width - 118;
   const y = 42;
 
   ctx.strokeStyle = '#0f4165';
@@ -146,8 +195,7 @@ const drawLimb = (
 
 const drawJavelinWorld = (
   ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number,
+  toScreen: WorldToScreen,
   xM: number,
   yM: number,
   angleRad: number,
@@ -162,10 +210,10 @@ const drawJavelinWorld = (
     xM: xM + Math.cos(angleRad) * halfLength,
     yM: yM + Math.sin(angleRad) * halfLength
   };
-  const tailScreen = toScreen({ ...tail, width, height });
-  const tipScreen = toScreen({ ...tip, width, height });
+  const tailScreen = toScreen(tail);
+  const tipScreen = toScreen(tip);
 
-  ctx.strokeStyle = '#ffe69a';
+  ctx.strokeStyle = '#111111';
   ctx.lineWidth = 3;
   ctx.lineCap = 'round';
   ctx.beginPath();
@@ -173,7 +221,7 @@ const drawJavelinWorld = (
   ctx.lineTo(tipScreen.x, tipScreen.y);
   ctx.stroke();
 
-  ctx.fillStyle = '#d4472d';
+  ctx.fillStyle = '#000000';
   ctx.beginPath();
   ctx.arc(tipScreen.x, tipScreen.y, 2.2, 0, Math.PI * 2);
   ctx.fill();
@@ -181,30 +229,29 @@ const drawJavelinWorld = (
 
 const drawAthlete = (
   ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number,
+  toScreen: WorldToScreen,
   pose: AthletePoseGeometry
 ): void => {
-  const shadowCenter = toScreen({ xM: pose.pelvis.xM + 0.06, yM: 0.02, width, height });
+  const shadowCenter = toScreen({ xM: pose.pelvis.xM + 0.06, yM: 0.02 });
   ctx.fillStyle = 'rgba(5, 28, 42, 0.18)';
   ctx.beginPath();
   ctx.ellipse(shadowCenter.x, shadowCenter.y + 3, 17, 6, 0, 0, Math.PI * 2);
   ctx.fill();
 
   const p = {
-    head: toScreen({ ...pose.head, width, height }),
-    shoulderCenter: toScreen({ ...pose.shoulderCenter, width, height }),
-    pelvis: toScreen({ ...pose.pelvis, width, height }),
-    hipFront: toScreen({ ...pose.hipFront, width, height }),
-    hipBack: toScreen({ ...pose.hipBack, width, height }),
-    kneeFront: toScreen({ ...pose.kneeFront, width, height }),
-    kneeBack: toScreen({ ...pose.kneeBack, width, height }),
-    footFront: toScreen({ ...pose.footFront, width, height }),
-    footBack: toScreen({ ...pose.footBack, width, height }),
-    elbowFront: toScreen({ ...pose.elbowFront, width, height }),
-    elbowBack: toScreen({ ...pose.elbowBack, width, height }),
-    handFront: toScreen({ ...pose.handFront, width, height }),
-    handBack: toScreen({ ...pose.handBack, width, height })
+    head: toScreen(pose.head),
+    shoulderCenter: toScreen(pose.shoulderCenter),
+    pelvis: toScreen(pose.pelvis),
+    hipFront: toScreen(pose.hipFront),
+    hipBack: toScreen(pose.hipBack),
+    kneeFront: toScreen(pose.kneeFront),
+    kneeBack: toScreen(pose.kneeBack),
+    footFront: toScreen(pose.footFront),
+    footBack: toScreen(pose.footBack),
+    elbowFront: toScreen(pose.elbowFront),
+    elbowBack: toScreen(pose.elbowBack),
+    handFront: toScreen(pose.handFront),
+    handBack: toScreen(pose.handBack)
   };
 
   drawLimb(ctx, p.hipBack, p.kneeBack, 6, '#0a2f4d');
@@ -273,7 +320,7 @@ export const getVisibleJavelinRenderState = (
   if (state.phase.tag === 'result') {
     return {
       mode: 'landed',
-      xM: state.phase.distanceM,
+      xM: state.phase.distanceM + THROW_LINE_X_M,
       yM: 0.22,
       angleRad: state.phase.tipFirst ? (-34 * Math.PI) / 180 : (-8 * Math.PI) / 180,
       lengthM: JAVELIN_LENGTH_M
@@ -317,7 +364,12 @@ const getPoseForState = (state: GameState): AthletePoseGeometry => {
     );
   }
   if (state.phase.tag === 'result') {
-    return computeAthletePoseGeometry({ animTag: 'followThrough', animT: 1 }, 0.72, 24, state.phase.athleteXM);
+    return computeAthletePoseGeometry(
+      { animTag: 'followThrough', animT: 1 },
+      0.72,
+      24,
+      state.phase.athleteXM
+    );
   }
   return computeAthletePoseGeometry({ animTag: 'idle', animT: 0 }, 0, 20, 2.8);
 };
@@ -330,23 +382,18 @@ export const renderGame = (
   numberFormat: Intl.NumberFormat,
   throwLineLabel: string
 ): void => {
+  const camera = createWorldToScreen(state, width, height);
+  const { toScreen, worldMinX, worldMaxX } = camera;
+
   drawBackground(ctx, width, height);
-  drawTrackAndField(ctx, width, height, throwLineLabel);
+  drawTrackAndField(ctx, width, height, toScreen, throwLineLabel, worldMinX, worldMaxX);
   drawWindVane(ctx, width, state.windMs, numberFormat);
 
   const pose = getPoseForState(state);
-  drawAthlete(ctx, width, height, pose);
+  drawAthlete(ctx, toScreen, pose);
 
   const javelin = getVisibleJavelinRenderState(state, pose);
   if (javelin.mode !== 'none') {
-    drawJavelinWorld(
-      ctx,
-      width,
-      height,
-      javelin.xM,
-      javelin.yM,
-      javelin.angleRad,
-      javelin.lengthM
-    );
+    drawJavelinWorld(ctx, toScreen, javelin.xM, javelin.yM, javelin.angleRad, javelin.lengthM);
   }
 };

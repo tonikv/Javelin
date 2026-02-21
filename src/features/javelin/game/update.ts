@@ -6,7 +6,6 @@ import {
   CHARGE_FORCE_CYCLE_MS,
   CHARGE_GOOD_WINDOW,
   CHARGE_PERFECT_WINDOW,
-  CHARGE_ZONE_MARGIN_M,
   GOOD_WINDOW_MS,
   PERFECT_WINDOW_MS,
   RUNUP_MAX_TAPS,
@@ -31,12 +30,11 @@ import {
   wrap01
 } from './chargeMeter';
 import { computeAthletePoseGeometry } from './athletePose';
+import { computeLaunchSpeedMs, createPhysicalJavelin, updatePhysicalJavelin } from './physics';
 import {
-  computeLaunchSpeedMs,
-  createPhysicalJavelin,
-  distanceFromJavelin,
-  updatePhysicalJavelin
-} from './physics';
+  computeCompetitionDistanceM,
+  evaluateThrowLegality
+} from './scoring';
 import type { FaultReason, GameAction, GameState, TimingQuality } from './types';
 
 const clamp = (value: number, min: number, max: number): number =>
@@ -91,6 +89,17 @@ const getFaultForRelease = (angleDeg: number): FaultReason | null => {
     return 'lowAngle';
   }
   return null;
+};
+
+const lateralVelocityFromRelease = (
+  quality: TimingQuality,
+  angleDeg: number,
+  roundId: number
+): number => {
+  const qualityBase = quality === 'perfect' ? 0.1 : quality === 'good' ? 0.45 : 0.95;
+  const sign = roundId % 2 === 0 ? 1 : -1;
+  const angleBias = ((angleDeg - ANGLE_DEFAULT_DEG) / 18) * 0.55;
+  return sign * qualityBase + angleBias;
 };
 
 export const createInitialGameState = (): GameState => ({
@@ -177,9 +186,6 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
       if (state.phase.tapCount < RUNUP_MIN_TAPS_FOR_THROW) {
         return state;
       }
-      if (state.phase.runupDistanceM < THROW_LINE_X_M - CHARGE_ZONE_MARGIN_M) {
-        return state;
-      }
       return {
         ...state,
         nowMs: action.atMs,
@@ -246,6 +252,7 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
           athleteXM: state.phase.athleteXM,
           angleDeg: state.phase.angleDeg,
           forceNorm,
+          releaseQuality: quality,
           animProgress: 0,
           released: false,
           athletePose: {
@@ -345,6 +352,12 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
             nextState.phase.forceNorm
           );
           const launchAngleRad = (nextState.phase.angleDeg * Math.PI) / 180;
+          const athleteForwardMs = runSpeedMsFromNorm(nextState.phase.speedNorm) * 0.34;
+          const lateralVelMs = lateralVelocityFromRelease(
+            nextState.phase.releaseQuality,
+            nextState.phase.angleDeg,
+            nextState.roundId
+          );
 
           return {
             ...nextState,
@@ -354,8 +367,11 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
               javelin: createPhysicalJavelin({
                 xM: releasePose.javelinGrip.xM + Math.cos(launchAngleRad) * 0.45,
                 yM: Math.max(1.35, releasePose.javelinGrip.yM + Math.sin(launchAngleRad) * 0.2),
+                zM: 0,
                 launchAngleRad,
                 launchSpeedMs,
+                athleteForwardMs,
+                lateralVelMs,
                 releasedAtMs: action.nowMs
               }),
               launchedFrom: {
@@ -363,6 +379,8 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
                 athleteXM: nextState.phase.athleteXM,
                 angleDeg: nextState.phase.angleDeg,
                 forceNorm: nextState.phase.forceNorm,
+                releaseQuality: nextState.phase.releaseQuality,
+                lineCrossedAtRelease: nextState.phase.athleteXM >= THROW_LINE_X_M,
                 windMs: nextState.windMs,
                 launchSpeedMs
               },
@@ -390,13 +408,23 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
       if (nextState.phase.tag === 'flight') {
         const updated = updatePhysicalJavelin(nextState.phase.javelin, action.dtMs, nextState.windMs);
         if (updated.landed) {
+          const landingTipXM = updated.landingTipXM ?? updated.javelin.xM;
+          const landingTipZM = updated.landingTipZM ?? updated.javelin.zM;
+          const legality = evaluateThrowLegality({
+            lineCrossedAtRelease: nextState.phase.launchedFrom.lineCrossedAtRelease,
+            landingTipXM,
+            landingTipZM,
+            tipFirst: updated.tipFirst === true
+          });
+
           return {
             ...nextState,
             phase: {
               tag: 'result',
               athleteXM: nextState.phase.athleteXM,
-              distanceM: distanceFromJavelin(updated.javelin),
+              distanceM: computeCompetitionDistanceM(landingTipXM),
               isHighscore: false,
+              resultKind: legality.resultKind,
               tipFirst: updated.tipFirst
             }
           };

@@ -27,7 +27,7 @@ export const JavelinPage = (): ReactElement => {
   useGameLoop(dispatch);
 
   useEffect(() => {
-    if (state.phase.tag !== 'result') {
+    if (state.phase.tag !== 'result' || state.phase.resultKind !== 'valid') {
       return;
     }
     const shouldBeHighscore = isHighscore(state.phase.distanceM);
@@ -48,6 +48,9 @@ export const JavelinPage = (): ReactElement => {
           : state.phase.tipFirst
             ? ` · ${t('javelin.landingTipFirst')}`
             : ` · ${t('javelin.landingFlat')}`;
+      if (state.phase.resultKind !== 'valid') {
+        return `${t(`javelin.result.${state.phase.resultKind}`)} · ${formatNumber(state.phase.distanceM)} m`;
+      }
       return `${t('result.distance')} ${formatNumber(state.phase.distanceM)} m${landingMessage}`;
     }
     if (state.phase.tag === 'fault') {
@@ -58,6 +61,7 @@ export const JavelinPage = (): ReactElement => {
 
   const canSaveScore =
     state.phase.tag === 'result' &&
+    state.phase.resultKind === 'valid' &&
     state.phase.isHighscore &&
     savedRoundId !== state.roundId;
   const resultDistanceM = state.phase.tag === 'result' ? state.phase.distanceM : null;
@@ -94,7 +98,10 @@ export const JavelinPage = (): ReactElement => {
             </button>
           </div>
 
-          <p className="result-live" aria-live="polite">
+          <p
+            className={`result-live ${state.phase.tag === 'result' && state.phase.resultKind !== 'valid' ? 'is-foul' : ''}`}
+            aria-live="polite"
+          >
             {resultMessage}
           </p>
 
@@ -126,7 +133,7 @@ export const JavelinPage = (): ReactElement => {
               <button type="submit">{t('action.saveScore')}</button>
             </form>
           )}
-          {state.phase.tag === 'result' && state.phase.isHighscore && (
+          {state.phase.tag === 'result' && state.phase.resultKind === 'valid' && state.phase.isHighscore && (
             <div className="badge">{t('result.highscore')}</div>
           )}
         </div>
