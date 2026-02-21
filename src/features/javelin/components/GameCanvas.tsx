@@ -13,7 +13,7 @@ type GameCanvasProps = {
 
 export const GameCanvas = ({ state, dispatch }: GameCanvasProps): ReactElement => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const { locale } = useI18n();
+  const { locale, t } = useI18n();
 
   const numberFormat = useMemo(
     () => new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }),
@@ -36,8 +36,8 @@ export const GameCanvas = ({ state, dispatch }: GameCanvasProps): ReactElement =
       return;
     }
     context.setTransform(dpr, 0, 0, dpr, 0, 0);
-    renderGame(context, state, rect.width, rect.height, numberFormat);
-  }, [state, numberFormat]);
+    renderGame(context, state, rect.width, rect.height, numberFormat, t('javelin.throwLine'));
+  }, [state, numberFormat, t]);
 
   return (
     <div className="canvas-frame">

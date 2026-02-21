@@ -45,6 +45,7 @@ export type LaunchSnapshot = {
   forceNorm: number;
   windMs: number;
   launchSpeedMs: number;
+  athleteXM: number;
 };
 
 export type PhysicalJavelinState = {
@@ -55,6 +56,7 @@ export type PhysicalJavelinState = {
   angleRad: number;
   angularVelRad: number;
   releasedAtMs: number;
+  lengthM: number;
 };
 
 export type GamePhase =
@@ -64,12 +66,14 @@ export type GamePhase =
       speedNorm: number;
       startedAtMs: number;
       tapCount: number;
+      runupDistanceM: number;
       rhythm: RhythmState;
       athletePose: AthletePoseState;
     }
   | {
       tag: 'chargeAim';
       speedNorm: number;
+      athleteXM: number;
       angleDeg: number;
       chargeStartedAtMs: number;
       chargeMeter: ChargeMeterState;
@@ -79,6 +83,7 @@ export type GamePhase =
   | {
       tag: 'throwAnim';
       speedNorm: number;
+      athleteXM: number;
       angleDeg: number;
       forceNorm: number;
       animProgress: number;
@@ -87,14 +92,17 @@ export type GamePhase =
     }
   | {
       tag: 'flight';
+      athleteXM: number;
       javelin: PhysicalJavelinState;
       launchedFrom: LaunchSnapshot;
       athletePose: AthletePoseState;
     }
   | {
       tag: 'result';
+      athleteXM: number;
       distanceM: number;
       isHighscore: boolean;
+      tipFirst: boolean | null;
     }
   | {
       tag: 'fault';

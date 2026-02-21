@@ -2,7 +2,8 @@ import {
   BEAT_INTERVAL_MS,
   GOOD_WINDOW_MS,
   PERFECT_WINDOW_MS,
-  RHYTHM_TARGET_PHASE01
+  RHYTHM_TARGET_PHASE01,
+  THROW_LINE_X_M
 } from './constants';
 import type { GameState, TimingQuality } from './types';
 
@@ -75,4 +76,25 @@ export const getRhythmHotZones = (): {
       end: RHYTHM_TARGET_PHASE01 + goodRadius
     }
   };
+};
+
+export const getRunupDistanceM = (state: GameState): number | null => {
+  if (state.phase.tag === 'runup') {
+    return state.phase.runupDistanceM;
+  }
+  if (state.phase.tag === 'chargeAim' || state.phase.tag === 'throwAnim' || state.phase.tag === 'flight') {
+    return state.phase.athleteXM;
+  }
+  if (state.phase.tag === 'result') {
+    return state.phase.athleteXM;
+  }
+  return null;
+};
+
+export const getThrowLineRemainingM = (state: GameState): number | null => {
+  const distance = getRunupDistanceM(state);
+  if (distance === null) {
+    return null;
+  }
+  return Math.max(0, THROW_LINE_X_M - distance);
 };

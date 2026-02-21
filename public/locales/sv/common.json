@@ -7,5 +7,10 @@
   "hud.rhythm": "Rytm",
   "hud.force": "Kraft",
   "help.mouse4": "Högerknapp upp: släpp kastet",
-  "help.kbd4": "Enter upp: släpp kastet"
+  "help.kbd4": "Enter upp: släpp kastet",
+  "javelin.runupHint": "Tajma klicken till det gröna området. Kvar till linjen",
+  "javelin.throwLine": "Kastlinje",
+  "javelin.speedPassiveHint": "Grundfarten ökar även utan klick.",
+  "javelin.landingTipFirst": "Spetsen först",
+  "javelin.landingFlat": "Platt landning"
 }

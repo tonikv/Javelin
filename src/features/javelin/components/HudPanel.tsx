@@ -12,7 +12,8 @@ import {
   getRhythmHotZones,
   getRunupFeedback,
   getRunupMeterPhase01,
-  getSpeedPercent
+  getSpeedPercent,
+  getThrowLineRemainingM
 } from '../game/selectors';
 import { useI18n } from '../../../i18n/init';
 import { CircularTimingMeter } from './CircularTimingMeter';
@@ -59,10 +60,19 @@ export const HudPanel = ({ state }: HudPanelProps): ReactElement => {
   const rhythmPhase = getRunupMeterPhase01(state);
   const rhythmHotZones = getRhythmHotZones();
   const forcePercent = getForcePreviewPercent(state);
+  const throwLineRemainingM = getThrowLineRemainingM(state);
+
+  const phaseHint =
+    state.phase.tag === 'runup'
+      ? `${t('javelin.runupHint')} ${throwLineRemainingM !== null ? `${formatNumber(throwLineRemainingM)} m` : ''}`
+      : state.phase.tag === 'chargeAim'
+        ? t('javelin.speedPassiveHint')
+        : '';
 
   return (
     <section className="card hud-panel" aria-label="HUD">
       <div className="hud-topline">{t(phaseMessageKey(state))}</div>
+      {phaseHint && <div className="hud-hint">{phaseHint}</div>}
       <div className="hud-grid">
         <div className="hud-item">
           <span>{t('hud.speed')}</span>
