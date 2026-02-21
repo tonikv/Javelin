@@ -161,18 +161,18 @@ const runCurves = (t01: number, speedNorm: number): MotionCurves => {
 const aimCurves = (t01: number, aimAngleDeg: number): MotionCurves => {
   const settle = Math.sin(clamp01(t01) * Math.PI);
   return {
-    leanRad: -0.3,
+    leanRad: -0.31,
     pelvisShiftXM: 0.02 * settle,
     pelvisBobYM: 0.015 * settle,
     hipFront: 0.2,
     hipBack: -0.18,
     kneeFront: 0.56,
     kneeBack: 0.48,
-    shoulderFront: -1.5 + 0.18 * settle,
+    shoulderFront: 1.52 + 0.16 * settle,
     shoulderBack: 0.38,
-    elbowFront: 0.42,
+    elbowFront: -0.24,
     elbowBack: -0.08,
-    javelinAngleRad: toRad(aimAngleDeg)
+    javelinAngleRad: toRad(Math.min(aimAngleDeg + 10, 56))
   };
 };
 
@@ -185,16 +185,16 @@ const throwCurves = (t01: number, aimAngleDeg: number): MotionCurves => {
   const loadedLean = lerp(-0.28, -0.4, windup);
   const deliveryLean = lerp(loadedLean, 0.06, delivery);
 
-  const loadedShoulderFront = lerp(-1.52, -2.22, windup);
-  const deliveryShoulderFront = lerp(loadedShoulderFront, -0.32, delivery);
+  const loadedShoulderFront = lerp(1.44, 2.18, windup);
+  const deliveryShoulderFront = lerp(loadedShoulderFront, -0.24, delivery);
 
   const loadedShoulderBack = lerp(0.36, 0.58, windup);
   const deliveryShoulderBack = lerp(loadedShoulderBack, -0.42, delivery);
 
-  const loadedElbowFront = lerp(0.38, 0.88, windup);
+  const loadedElbowFront = lerp(-0.24, -0.46, windup);
   const deliveryElbowFront = lerp(loadedElbowFront, -0.06, delivery);
 
-  const loadedJavelinAngle = toRad(aimAngleDeg + 6 + windup * 12);
+  const loadedJavelinAngle = toRad(Math.min(aimAngleDeg + 10 + windup * 11, 62));
   const deliveryJavelinAngle = lerp(loadedJavelinAngle, toRad(-6), delivery);
 
   const pelvisLoaded = lerp(-0.02, -0.08, windup);

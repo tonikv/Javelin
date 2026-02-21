@@ -64,13 +64,10 @@ describe('gameReducer', () => {
     }
   });
 
-  it('allows early throw start before line', () => {
+  it('allows immediate throw start before line without taps', () => {
     let state = createInitialGameState();
     state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0.2 });
-    state = gameReducer(state, { type: 'rhythmTap', atMs: 1880 });
-    state = gameReducer(state, { type: 'rhythmTap', atMs: 2760 });
-    state = gameReducer(state, { type: 'rhythmTap', atMs: 3640 });
-    state = gameReducer(state, { type: 'beginChargeAim', atMs: 3700 });
+    state = gameReducer(state, { type: 'beginChargeAim', atMs: 1080 });
     expect(state.phase.tag).toBe('chargeAim');
     if (state.phase.tag === 'chargeAim') {
       expect(state.phase.athleteXM).toBeLessThan(THROW_LINE_X_M);

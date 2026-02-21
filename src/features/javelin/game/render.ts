@@ -608,6 +608,9 @@ const getPoseForState = (state: GameState): AthletePoseGeometry => {
 };
 
 const shouldDrawFrontArmOverHead = (state: GameState): boolean => {
+  if (state.phase.tag === 'chargeAim') {
+    return false;
+  }
   if (state.phase.tag === 'throwAnim') {
     return sampleThrowSubphase(state.phase.animProgress).stage !== 'windup';
   }
@@ -618,7 +621,8 @@ const shouldDrawFrontArmOverHead = (state: GameState): boolean => {
 };
 
 const shouldDrawAttachedJavelinBehindAthlete = (state: GameState): boolean =>
-  state.phase.tag === 'throwAnim' && sampleThrowSubphase(state.phase.animProgress).stage === 'windup';
+  state.phase.tag === 'chargeAim' ||
+  (state.phase.tag === 'throwAnim' && sampleThrowSubphase(state.phase.animProgress).stage === 'windup');
 
 export const renderGame = (
   ctx: CanvasRenderingContext2D,

@@ -10,7 +10,6 @@ import {
   PERFECT_WINDOW_MS,
   RUNUP_MAX_TAPS,
   RUNUP_MAX_X_M,
-  RUNUP_MIN_TAPS_FOR_THROW,
   RUNUP_PASSIVE_MAX_SPEED,
   RUNUP_PASSIVE_TO_HALF_MS,
   RUNUP_SPEED_DECAY_PER_SECOND,
@@ -182,9 +181,6 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
     }
     case 'beginChargeAim': {
       if (state.phase.tag !== 'runup') {
-        return state;
-      }
-      if (state.phase.tapCount < RUNUP_MIN_TAPS_FOR_THROW) {
         return state;
       }
       return {

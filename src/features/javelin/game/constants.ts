@@ -6,7 +6,6 @@ export const GOOD_WINDOW_MS = 180;
 export const SPAM_THRESHOLD_MS = 160;
 export const SPAM_PENALTY_MS = 320;
 export const RUNUP_MAX_TAPS = 12;
-export const RUNUP_MIN_TAPS_FOR_THROW = 3;
 export const RUNUP_SPEED_DECAY_PER_SECOND = 0.018;
 export const RUNUP_PASSIVE_MAX_SPEED = 0.5;
 export const RUNUP_PASSIVE_TO_HALF_MS = 4200;
