@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { keyboardAngleDelta, pointerMovementToAngleDelta } from '../game/controls';
+import { keyboardAngleDelta, pointerClientYToAngleDeg } from '../game/controls';
 import type { GameAction, GamePhase } from '../game/types';
 
 type Dispatch = (action: GameAction) => void;
@@ -17,6 +17,13 @@ export const usePointerControls = ({ canvas, dispatch, phaseTag }: UsePointerCon
     }
 
     const now = (): number => performance.now();
+    const dispatchAngleFromPointer = (clientY: number): void => {
+      const rect = canvas.getBoundingClientRect();
+      dispatch({
+        type: 'setAngle',
+        angleDeg: pointerClientYToAngleDeg(clientY, rect.top, rect.height)
+      });
+    };
 
     const onMouseDown = (event: MouseEvent): void => {
       if (event.button === 0) {
@@ -25,6 +32,7 @@ export const usePointerControls = ({ canvas, dispatch, phaseTag }: UsePointerCon
       if (event.button === 2) {
         event.preventDefault();
         dispatch({ type: 'beginChargeAim', atMs: now() });
+        dispatchAngleFromPointer(event.clientY);
       }
     };
 
@@ -36,10 +44,7 @@ export const usePointerControls = ({ canvas, dispatch, phaseTag }: UsePointerCon
 
     const onMouseMove = (event: MouseEvent): void => {
       if ((event.buttons & 2) !== 0) {
-        dispatch({
-          type: 'adjustAngle',
-          deltaDeg: pointerMovementToAngleDelta(event.movementY)
-        });
+        dispatchAngleFromPointer(event.clientY);
       }
     };
 

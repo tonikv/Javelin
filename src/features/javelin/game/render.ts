@@ -566,11 +566,10 @@ const getPoseForState = (state: GameState): AthletePoseGeometry => {
     );
   }
   if (state.phase.tag === 'chargeAim') {
-    const runToAimBlend01 = getRunToAimBlend01(
-      state.phase.chargeStartedAtMs,
-      state.nowMs,
-      RUN_TO_AIM_BLEND_MS
-    );
+    const runToAimBlend01 =
+      state.phase.speedNorm > 0.01
+        ? getRunToAimBlend01(state.phase.chargeStartedAtMs, state.nowMs, RUN_TO_AIM_BLEND_MS)
+        : 1;
     return computeAthletePoseGeometry(
       state.phase.athletePose,
       state.phase.speedNorm,

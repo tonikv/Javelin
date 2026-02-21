@@ -84,6 +84,8 @@ const passiveSpeedTarget = (startedAtMs: number, nowMs: number): number => {
 const runSpeedMsFromNorm = (speedNorm: number): number =>
   RUNUP_SPEED_MIN_MS + (RUNUP_SPEED_MAX_MS - RUNUP_SPEED_MIN_MS) * speedNorm;
 
+const isRunning = (speedNorm: number): boolean => speedNorm > 0.01;
+
 const getFaultForRelease = (_angleDeg: number): FaultReason | null => null;
 
 const lateralVelocityFromRelease = (
@@ -128,7 +130,7 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
             lastQualityAtMs: 0
           },
           athletePose: {
-            animTag: 'run',
+            animTag: 'idle',
             animT: 0
           }
         }
@@ -170,8 +172,8 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
             lastQualityAtMs: action.atMs
           },
           athletePose: {
-            animTag: 'run',
-            animT: runAnimT(phase.startedAtMs, action.atMs, speedNorm)
+            animTag: isRunning(speedNorm) ? 'run' : 'idle',
+            animT: isRunning(speedNorm) ? runAnimT(phase.startedAtMs, action.atMs, speedNorm) : 0
           }
         }
       };
@@ -215,6 +217,18 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
         phase: {
           ...state.phase,
           angleDeg: clamp(state.phase.angleDeg + action.deltaDeg, ANGLE_MIN_DEG, ANGLE_MAX_DEG)
+        }
+      };
+    }
+    case 'setAngle': {
+      if (state.phase.tag !== 'chargeAim') {
+        return state;
+      }
+      return {
+        ...state,
+        phase: {
+          ...state.phase,
+          angleDeg: clamp(action.angleDeg, ANGLE_MIN_DEG, ANGLE_MAX_DEG)
         }
       };
     }
@@ -293,8 +307,10 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
             speedNorm,
             runupDistanceM,
             athletePose: {
-              animTag: 'run',
-              animT: runAnimT(nextState.phase.startedAtMs, action.nowMs, speedNorm)
+              animTag: isRunning(speedNorm) ? 'run' : 'idle',
+              animT: isRunning(speedNorm)
+                ? runAnimT(nextState.phase.startedAtMs, action.nowMs, speedNorm)
+                : 0
             }
           }
         };

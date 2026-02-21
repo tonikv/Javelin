@@ -130,6 +130,7 @@ export type GameAction =
   | { type: 'startRound'; atMs: number; windMs: number }
   | { type: 'rhythmTap'; atMs: number }
   | { type: 'beginChargeAim'; atMs: number }
+  | { type: 'setAngle'; angleDeg: number }
   | { type: 'adjustAngle'; deltaDeg: number }
   | { type: 'releaseCharge'; atMs: number }
   | { type: 'tick'; dtMs: number; nowMs: number }

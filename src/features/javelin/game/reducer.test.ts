@@ -19,6 +19,8 @@ describe('gameReducer', () => {
     if (state.phase.tag === 'runup') {
       expect(state.phase.speedNorm).toBe(0);
       expect(state.phase.runupDistanceM).toBe(2.8);
+      expect(state.phase.athletePose.animTag).toBe('idle');
+      expect(state.phase.athletePose.animT).toBe(0);
     }
 
     state = gameReducer(state, { type: 'rhythmTap', atMs: 3200 });
@@ -109,6 +111,25 @@ describe('gameReducer', () => {
       if (state.phase.tag === 'flight') {
         expect(state.phase.javelin.releasedAtMs).toBe(releasedAt);
       }
+    }
+  });
+
+  it('sets absolute angle and clamps to allowed range', () => {
+    let state = createInitialGameState();
+    state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0.1 });
+    state = gameReducer(state, { type: 'beginChargeAim', atMs: 1080 });
+    expect(state.phase.tag).toBe('chargeAim');
+
+    state = gameReducer(state, { type: 'setAngle', angleDeg: 90 });
+    expect(state.phase.tag).toBe('chargeAim');
+    if (state.phase.tag === 'chargeAim') {
+      expect(state.phase.angleDeg).toBe(90);
+    }
+
+    state = gameReducer(state, { type: 'setAngle', angleDeg: -150 });
+    expect(state.phase.tag).toBe('chargeAim');
+    if (state.phase.tag === 'chargeAim') {
+      expect(state.phase.angleDeg).toBe(-90);
     }
   });
 

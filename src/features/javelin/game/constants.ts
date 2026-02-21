@@ -22,7 +22,6 @@ export const ANGLE_MIN_DEG = -90;
 export const ANGLE_MAX_DEG = 90;
 export const ANGLE_DEFAULT_DEG = 36;
 export const ANGLE_CHANGE_STEP_DEG = 1.2;
-export const ANGLE_MOUSE_SENSITIVITY = 0.1;
 
 export const CHARGE_FORCE_CYCLE_MS = 860;
 export const CHARGE_PERFECT_WINDOW: MeterWindow = { start: 0.47, end: 0.53 };
