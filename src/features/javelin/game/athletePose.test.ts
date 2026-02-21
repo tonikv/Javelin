@@ -21,13 +21,15 @@ describe('athlete pose helpers', () => {
   it('stages throw hand and javelin from loaded to forward delivery', () => {
     const loaded = computeAthletePoseGeometry({ animTag: 'throw', animT: 0.16 }, 0.84, 36, 12.5);
     const delivery = computeAthletePoseGeometry({ animTag: 'throw', animT: 0.76 }, 0.84, 36, 12.5);
-    const loadedReach = loaded.handFront.xM - loaded.pelvis.xM;
-    const deliveryReach = delivery.handFront.xM - delivery.pelvis.xM;
+    const handTravel = Math.hypot(
+      delivery.handFront.xM - loaded.handFront.xM,
+      delivery.handFront.yM - loaded.handFront.yM
+    );
 
-    expect(Number.isFinite(loadedReach)).toBe(true);
-    expect(Number.isFinite(deliveryReach)).toBe(true);
-    expect(Math.abs(deliveryReach - loadedReach)).toBeGreaterThan(0.15);
-    expect(loaded.javelinAngleRad).toBeGreaterThan(delivery.javelinAngleRad);
+    expect(Number.isFinite(handTravel)).toBe(true);
+    expect(handTravel).toBeGreaterThan(0.2);
+    expect(Math.abs(delivery.javelinAngleRad - loaded.javelinAngleRad)).toBeLessThan(0.08);
+    expect(delivery.javelinAngleRad).toBeCloseTo((36 * Math.PI) / 180, 1);
   });
 
   it('front arm tracks javelin angle during aim', () => {
