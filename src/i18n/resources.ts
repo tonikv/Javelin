@@ -61,8 +61,11 @@ export const resources: Record<Locale, Messages> = {
     'result.fault.lowAngle': 'Virhe: kulma liian matala',
     'scoreboard.title': 'Paikallinen ennätystaulukko',
     'scoreboard.name': 'Nimi',
+    'scoreboard.defaultName': 'Pelaaja',
     'scoreboard.empty': 'Ei vielä tuloksia.',
-    'language.label': 'Kieli'
+    'language.label': 'Kieli',
+    'a11y.gameCanvas': 'Keihäänheiton pelialue',
+    'a11y.hudPanel': 'Tilapaneeli'
   },
   sv: {
     'app.title': 'Browser Games 2026',
@@ -122,8 +125,11 @@ export const resources: Record<Locale, Messages> = {
     'result.fault.lowAngle': 'Fel: för låg vinkel',
     'scoreboard.title': 'Lokal topplista',
     'scoreboard.name': 'Namn',
+    'scoreboard.defaultName': 'Spelare',
     'scoreboard.empty': 'Inga resultat än.',
-    'language.label': 'Språk'
+    'language.label': 'Språk',
+    'a11y.gameCanvas': 'Spjutkastning spelplan',
+    'a11y.hudPanel': 'Statuspanel'
   },
   en: {
     'app.title': 'Browser Games 2026',
@@ -183,7 +189,10 @@ export const resources: Record<Locale, Messages> = {
     'result.fault.lowAngle': 'Fault: angle too low',
     'scoreboard.title': 'Local leaderboard',
     'scoreboard.name': 'Name',
+    'scoreboard.defaultName': 'PLAYER',
     'scoreboard.empty': 'No scores yet.',
-    'language.label': 'Language'
+    'language.label': 'Language',
+    'a11y.gameCanvas': 'Javelin throw play area',
+    'a11y.hudPanel': 'Status panel'
   }
 };

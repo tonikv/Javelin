@@ -6,9 +6,11 @@ import {
 } from './athletePose';
 import { playBeatTick } from './audio';
 import {
+  createCameraSmoothingState,
   createWorldToScreen,
   createWorldToScreenRaw,
   RUNWAY_OFFSET_X,
+  type CameraSmoothingState,
   type WorldToScreen
 } from './camera';
 import {
@@ -70,8 +72,23 @@ const CLOUD_LAYERS: CloudLayer[] = [
   }
 ];
 
-let lastResultRoundId = -1;
-let resultShownAtMs = 0;
+type ResultMarkerFadeState = {
+  lastRoundId: number;
+  shownAtMs: number;
+};
+
+export type RenderSession = {
+  camera: CameraSmoothingState;
+  resultMarker: ResultMarkerFadeState;
+};
+
+export const createRenderSession = (): RenderSession => ({
+  camera: createCameraSmoothingState(),
+  resultMarker: {
+    lastRoundId: -1,
+    shownAtMs: 0
+  }
+});
 
 type ReleaseFlashLabels = Record<TimingQuality, string> & {
   foulLine: string;
@@ -490,9 +507,10 @@ export const renderGame = (
   dtMs: number,
   numberFormat: Intl.NumberFormat,
   throwLineLabel: string,
-  releaseFlashLabels: ReleaseFlashLabels
+  releaseFlashLabels: ReleaseFlashLabels,
+  session: RenderSession
 ): void => {
-  const camera = createWorldToScreen(state, width, height, dtMs);
+  const camera = createWorldToScreen(state, width, height, dtMs, session.camera);
   const { toScreen, worldMinX, worldMaxX } = camera;
 
   drawBackground(ctx, width, height);
@@ -528,11 +546,11 @@ export const renderGame = (
   }
 
   if (state.phase.tag === 'result') {
-    if (state.roundId !== lastResultRoundId) {
-      lastResultRoundId = state.roundId;
-      resultShownAtMs = state.nowMs;
+    if (state.roundId !== session.resultMarker.lastRoundId) {
+      session.resultMarker.lastRoundId = state.roundId;
+      session.resultMarker.shownAtMs = state.nowMs;
     }
-    const fadeAgeMs = Math.max(0, state.nowMs - resultShownAtMs);
+    const fadeAgeMs = Math.max(0, state.nowMs - session.resultMarker.shownAtMs);
     const alpha = Math.min(1, fadeAgeMs / 400);
     ctx.save();
     ctx.globalAlpha = alpha;
@@ -545,7 +563,7 @@ export const renderGame = (
     );
     ctx.restore();
   } else {
-    lastResultRoundId = -1;
+    session.resultMarker.lastRoundId = -1;
   }
 
   const releaseFeedback =

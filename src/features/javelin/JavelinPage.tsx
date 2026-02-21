@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useReducer, useState, type ReactElement } from 'react';
+import { memo, useEffect, useMemo, useReducer, useState, type ReactElement } from 'react';
 import { LanguageSwitch } from './components/LanguageSwitch';
 import { HudPanel } from './components/HudPanel';
 import { GameCanvas } from './components/GameCanvas';
@@ -6,7 +6,7 @@ import { ScoreBoard } from './components/ScoreBoard';
 import { ControlHelp } from './components/ControlHelp';
 import { gameReducer } from './game/reducer';
 import { WIND_MAX_MS, WIND_MIN_MS } from './game/constants';
-import type { FaultReason } from './game/types';
+import type { FaultReason, HighscoreEntry } from './game/types';
 import { useGameLoop } from './hooks/useGameLoop';
 import { useLocalHighscores } from './hooks/useLocalHighscores';
 import { useI18n } from '../../i18n/init';
@@ -16,6 +16,43 @@ const randomWind = (): number =>
   Math.round((WIND_MIN_MS + Math.random() * (WIND_MAX_MS - WIND_MIN_MS)) * 10) / 10;
 
 const faultReasonKey = (reason: FaultReason): string => `result.fault.${reason}`;
+
+type TopBarProps = {
+  appTitle: string;
+  gameTitle: string;
+};
+
+const TopBarComponent = ({ appTitle, gameTitle }: TopBarProps): ReactElement => (
+  <header className="topbar">
+    <div>
+      <p className="eyebrow">{appTitle}</p>
+      <h1>{gameTitle}</h1>
+    </div>
+    <LanguageSwitch />
+  </header>
+);
+
+const TopBar = memo(TopBarComponent);
+
+type SideColumnProps = {
+  highscores: HighscoreEntry[];
+  clearHighscores: () => void;
+};
+
+const SideColumnComponent = ({ highscores, clearHighscores }: SideColumnProps): ReactElement => {
+  const { t } = useI18n();
+  return (
+    <aside className="side-column">
+      <ControlHelp />
+      <ScoreBoard highscores={highscores} />
+      <button type="button" className="ghost" onClick={clearHighscores}>
+        {t('action.resetScores')}
+      </button>
+    </aside>
+  );
+};
+
+const SideColumn = memo(SideColumnComponent);
 
 export const JavelinPage = (): ReactElement => {
   const { t, formatNumber, locale } = useI18n();
@@ -94,13 +131,7 @@ export const JavelinPage = (): ReactElement => {
 
   return (
     <main className="page">
-      <header className="topbar">
-        <div>
-          <p className="eyebrow">{t('app.title')}</p>
-          <h1>{t('javelin.title')}</h1>
-        </div>
-        <LanguageSwitch />
-      </header>
+      <TopBar appTitle={t('app.title')} gameTitle={t('javelin.title')} />
 
       <section className="layout">
         <div className="main-column">
@@ -141,7 +172,7 @@ export const JavelinPage = (): ReactElement => {
                 event.preventDefault();
                 addHighscore({
                   id: crypto.randomUUID(),
-                  name: nameInput.trim().slice(0, 10) || 'PLAYER',
+                  name: nameInput.trim().slice(0, 10) || t('scoreboard.defaultName'),
                   distanceM: resultDistanceM ?? 0,
                   playedAtIso: new Date().toISOString(),
                   locale,
@@ -167,13 +198,7 @@ export const JavelinPage = (): ReactElement => {
           )}
         </div>
 
-        <aside className="side-column">
-          <ControlHelp />
-          <ScoreBoard highscores={highscores} />
-          <button type="button" className="ghost" onClick={clearHighscores}>
-            {t('action.resetScores')}
-          </button>
-        </aside>
+        <SideColumn highscores={highscores} clearHighscores={clearHighscores} />
       </section>
     </main>
   );

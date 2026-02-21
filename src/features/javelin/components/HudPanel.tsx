@@ -51,7 +51,7 @@ export const HudPanel = ({ state }: HudPanelProps): ReactElement => {
   })();
 
   return (
-    <section className="card hud-panel" aria-label="HUD">
+    <section className="card hud-panel" aria-label={t('a11y.hudPanel')}>
       <div className="hud-topline">{t(phaseMessageKey(state))}</div>
       {phaseHint && <div className="hud-hint">{phaseHint}</div>}
       {windHint && <div className="hud-hint hud-hint-wind">{windHint}</div>}

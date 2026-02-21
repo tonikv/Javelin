@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react';
+import { memo, type ReactElement } from 'react';
 import { useI18n } from '../../../i18n/init';
 import type { Locale } from '../game/types';
 
@@ -8,7 +8,7 @@ const LABELS: Record<Locale, string> = {
   en: 'English'
 };
 
-export const LanguageSwitch = (): ReactElement => {
+const LanguageSwitchComponent = (): ReactElement => {
   const { locale, setLocale, t } = useI18n();
 
   return (
@@ -26,3 +26,5 @@ export const LanguageSwitch = (): ReactElement => {
     </label>
   );
 };
+
+export const LanguageSwitch = memo(LanguageSwitchComponent);

@@ -1,6 +1,20 @@
-import { describe, expect, it } from 'vitest';
-import { insertHighscoreSorted, pruneHighscores } from './useLocalHighscores';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { HIGHSCORE_STORAGE_KEY } from '../game/constants';
+import {
+  insertHighscoreSorted,
+  loadHighscores,
+  pruneHighscores,
+  saveHighscores
+} from './useLocalHighscores';
 import type { HighscoreEntry } from '../game/types';
+
+type StorageMock = {
+  getItem: ReturnType<typeof vi.fn<(key: string) => string | null>>;
+  setItem: ReturnType<typeof vi.fn<(key: string, value: string) => void>>;
+  clear: ReturnType<typeof vi.fn<() => void>>;
+};
+
+let storage: StorageMock;
 
 const makeEntry = (name: string, distanceM: number, playedAtIso: string): HighscoreEntry => ({
   id: `${name}-${distanceM}`,
@@ -9,6 +23,28 @@ const makeEntry = (name: string, distanceM: number, playedAtIso: string): Highsc
   playedAtIso,
   locale: 'fi',
   windMs: 0
+});
+
+beforeEach(() => {
+  const store = new Map<string, string>();
+  storage = {
+    getItem: vi.fn((key: string) => store.get(key) ?? null),
+    setItem: vi.fn((key: string, value: string) => {
+      store.set(key, value);
+    }),
+    clear: vi.fn(() => {
+      store.clear();
+    })
+  };
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: storage
+  });
+  localStorage.clear();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe('highscore helpers', () => {
@@ -32,5 +68,37 @@ describe('highscore helpers', () => {
       makeEntry(`${index}`, 95 - index, `2026-02-21T09:${String(index).padStart(2, '0')}:00.000Z`)
     );
     expect(pruneHighscores(list, 10)).toHaveLength(10);
+  });
+
+  it('returns empty when storage getter throws', () => {
+    storage.getItem.mockImplementation(() => {
+      throw new Error('blocked');
+    });
+
+    expect(loadHighscores()).toEqual([]);
+  });
+
+  it('ignores malformed and invalid stored entries', () => {
+    const valid = makeEntry('VALID', 75.2, '2026-02-21T09:10:00.000Z');
+    localStorage.setItem(
+      HIGHSCORE_STORAGE_KEY,
+      JSON.stringify([
+        valid,
+        { ...valid, distanceM: Number.NaN },
+        { ...valid, playedAtIso: 'not-a-date' },
+        { ...valid, locale: 'xx' },
+        { ...valid, windMs: Number.POSITIVE_INFINITY }
+      ])
+    );
+
+    expect(loadHighscores()).toEqual([valid]);
+  });
+
+  it('swallows storage setter errors', () => {
+    storage.setItem.mockImplementation(() => {
+      throw new Error('quota');
+    });
+
+    expect(() => saveHighscores([makeEntry('A', 70, '2026-02-21T10:00:00.000Z')])).not.toThrow();
   });
 });

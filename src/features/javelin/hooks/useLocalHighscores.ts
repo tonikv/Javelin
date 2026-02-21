@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
+import { safeLocalStorageGet, safeLocalStorageSet } from '../../../app/browser';
 import { HIGHSCORE_STORAGE_KEY, MAX_HIGHSCORES } from '../game/constants';
-import type { HighscoreEntry } from '../game/types';
+import type { HighscoreEntry, Locale } from '../game/types';
 
 const compareHighscores = (a: HighscoreEntry, b: HighscoreEntry): number => {
   if (b.distanceM !== a.distanceM) {
@@ -19,24 +20,58 @@ export const insertHighscoreSorted = (
   entry: HighscoreEntry
 ): HighscoreEntry[] => [...entries, entry].sort(compareHighscores);
 
+const supportedLocales = new Set<Locale>(['fi', 'sv', 'en']);
+
+const parseEntry = (value: unknown): HighscoreEntry | null => {
+  if (typeof value !== 'object' || value === null) {
+    return null;
+  }
+  const raw = value as Record<string, unknown>;
+  if (typeof raw.id !== 'string' || typeof raw.name !== 'string') {
+    return null;
+  }
+  if (typeof raw.distanceM !== 'number' || !Number.isFinite(raw.distanceM)) {
+    return null;
+  }
+  if (typeof raw.playedAtIso !== 'string' || Number.isNaN(Date.parse(raw.playedAtIso))) {
+    return null;
+  }
+
+  if (raw.locale !== undefined && (typeof raw.locale !== 'string' || !supportedLocales.has(raw.locale as Locale))) {
+    return null;
+  }
+  const locale: Locale = raw.locale === undefined ? 'en' : (raw.locale as Locale);
+
+  if (raw.windMs !== undefined && (typeof raw.windMs !== 'number' || !Number.isFinite(raw.windMs))) {
+    return null;
+  }
+  const windMs = raw.windMs === undefined ? 0 : raw.windMs;
+
+  return {
+    id: raw.id,
+    name: raw.name,
+    distanceM: raw.distanceM,
+    playedAtIso: raw.playedAtIso,
+    locale,
+    windMs
+  };
+};
+
+const isDefined = <T>(value: T | null): value is T => value !== null;
+
 export const loadHighscores = (): HighscoreEntry[] => {
-  const raw = localStorage.getItem(HIGHSCORE_STORAGE_KEY);
+  const raw = safeLocalStorageGet(HIGHSCORE_STORAGE_KEY);
   if (!raw) {
     return [];
   }
   try {
-    const parsed = JSON.parse(raw) as HighscoreEntry[];
+    const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) {
       return [];
     }
     return parsed
-      .filter(
-        (item) =>
-          typeof item.id === 'string' &&
-          typeof item.name === 'string' &&
-          typeof item.distanceM === 'number' &&
-          typeof item.playedAtIso === 'string'
-      )
+      .map(parseEntry)
+      .filter(isDefined)
       .sort(compareHighscores)
       .slice(0, MAX_HIGHSCORES);
   } catch {
@@ -45,7 +80,7 @@ export const loadHighscores = (): HighscoreEntry[] => {
 };
 
 export const saveHighscores = (entries: HighscoreEntry[]): void => {
-  localStorage.setItem(HIGHSCORE_STORAGE_KEY, JSON.stringify(entries));
+  safeLocalStorageSet(HIGHSCORE_STORAGE_KEY, JSON.stringify(entries));
 };
 
 type UseLocalHighscoresResult = {

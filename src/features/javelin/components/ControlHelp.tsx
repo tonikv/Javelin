@@ -1,7 +1,7 @@
-import { useMemo, type ReactElement } from 'react';
+import { memo, useMemo, type ReactElement } from 'react';
 import { useI18n } from '../../../i18n/init';
 
-export const ControlHelp = (): ReactElement => {
+const ControlHelpComponent = (): ReactElement => {
   const { t } = useI18n();
   const isTouchDevice = useMemo(() => {
     if (typeof window === 'undefined') {
@@ -37,3 +37,5 @@ export const ControlHelp = (): ReactElement => {
     </section>
   );
 };
+
+export const ControlHelp = memo(ControlHelpComponent);

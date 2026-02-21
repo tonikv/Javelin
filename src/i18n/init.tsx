@@ -7,6 +7,7 @@ import {
   type PropsWithChildren,
   type ReactElement
 } from 'react';
+import { safeLocalStorageGet, safeLocalStorageSet } from '../app/browser';
 import type { Locale } from '../features/javelin/game/types';
 import { resources } from './resources';
 
@@ -21,12 +22,29 @@ type I18nContextValue = {
 
 const I18nContext = createContext<I18nContextValue | null>(null);
 
-const detectLocale = (): Locale => {
-  const stored = localStorage.getItem(LOCALE_STORAGE_KEY);
+export const readStoredLocale = (): Locale | null => {
+  const stored = safeLocalStorageGet(LOCALE_STORAGE_KEY);
   if (stored === 'fi' || stored === 'sv' || stored === 'en') {
     return stored;
   }
-  const browserLocale = navigator.language.toLowerCase();
+  return null;
+};
+
+export const getBrowserLocale = (): string => {
+  try {
+    if (typeof navigator === 'undefined' || typeof navigator.language !== 'string') {
+      return '';
+    }
+    return navigator.language.toLowerCase();
+  } catch {
+    return '';
+  }
+};
+
+export const resolveLocale = (stored: Locale | null, browserLocale: string): Locale => {
+  if (stored !== null) {
+    return stored;
+  }
   if (browserLocale.startsWith('fi')) {
     return 'fi';
   }
@@ -36,12 +54,20 @@ const detectLocale = (): Locale => {
   return 'en';
 };
 
+export const persistLocale = (locale: Locale): void => {
+  safeLocalStorageSet(LOCALE_STORAGE_KEY, locale);
+};
+
+const detectLocale = (): Locale => {
+  return resolveLocale(readStoredLocale(), getBrowserLocale());
+};
+
 export const I18nProvider = ({ children }: PropsWithChildren): ReactElement => {
   const [locale, setLocaleState] = useState<Locale>(detectLocale);
 
   const setLocale = useCallback((next: Locale) => {
     setLocaleState(next);
-    localStorage.setItem(LOCALE_STORAGE_KEY, next);
+    persistLocale(next);
   }, []);
 
   const t = useCallback(
