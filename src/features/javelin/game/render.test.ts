@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { computeAthletePoseGeometry } from './athletePose';
-import { RUNUP_START_X_M } from './constants';
 import { getCameraTargetX, getHeadMeterScreenAnchor, getVisibleJavelinRenderState } from './render';
+import { RUNUP_START_X_M } from './tuning';
 import type { GameState } from './types';
 
 const baseState: Pick<GameState, 'nowMs' | 'roundId' | 'windMs' | 'aimAngleDeg'> = {
@@ -39,7 +39,6 @@ describe('javelin visibility state', () => {
       phase: {
         tag: 'chargeAim',
         speedNorm: 0.72,
-        athleteXM: 17.4,
         runupDistanceM: 17.4,
         startedAtMs: 1200,
         runEntryAnimT: 0.78,
@@ -47,7 +46,6 @@ describe('javelin visibility state', () => {
         chargeStartedAtMs: 1800,
         chargeMeter: {
           phase01: 0.5,
-          cycles: 1,
           perfectWindow: { start: 0.47, end: 0.53 },
           goodWindow: { start: 0.4, end: 0.6 },
           lastQuality: 'perfect',
@@ -75,7 +73,7 @@ describe('javelin visibility state', () => {
       chargeState.phase.athletePose,
       chargeState.phase.speedNorm,
       chargeState.phase.angleDeg,
-      chargeState.phase.athleteXM
+      chargeState.phase.runupDistanceM
     );
 
     expect(getVisibleJavelinRenderState(runupState, runPose).mode).toBe('attached');
@@ -140,7 +138,6 @@ describe('javelin visibility state', () => {
     const chargePhaseBase: Extract<GameState['phase'], { tag: 'chargeAim' }> = {
       tag: 'chargeAim',
       speedNorm: 0.55,
-      athleteXM: 10,
       runupDistanceM: 10,
       startedAtMs: 1000,
       runEntryAnimT: 0.4,
@@ -148,7 +145,6 @@ describe('javelin visibility state', () => {
       chargeStartedAtMs: 1800,
       chargeMeter: {
         phase01: 0.25,
-        cycles: 0,
         perfectWindow: { start: 0.47, end: 0.53 },
         goodWindow: { start: 0.4, end: 0.6 },
         lastQuality: 'good',
@@ -166,7 +162,6 @@ describe('javelin visibility state', () => {
       ...chargeState1,
       phase: {
         ...chargePhaseBase,
-        athleteXM: 12,
         runupDistanceM: 12
       }
     };

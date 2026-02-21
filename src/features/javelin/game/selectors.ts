@@ -1,16 +1,10 @@
 import {
-  BEAT_INTERVAL_MS,
-  GOOD_WINDOW_MS,
-  PERFECT_WINDOW_MS,
   RHYTHM_TARGET_PHASE01,
   THROW_LINE_X_M
 } from './constants';
+import { wrap01 } from './math';
+import { BEAT_INTERVAL_MS, GOOD_WINDOW_MS, PERFECT_WINDOW_MS } from './tuning';
 import type { GameState, TimingQuality } from './types';
-
-const wrap01 = (value: number): number => {
-  const wrapped = value % 1;
-  return wrapped < 0 ? wrapped + 1 : wrapped;
-};
 
 export const getSpeedPercent = (state: GameState): number => {
   if (

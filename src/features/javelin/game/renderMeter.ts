@@ -1,0 +1,200 @@
+import {
+  WORLD_METER_CURSOR_RADIUS_PX,
+  WORLD_METER_LINE_WIDTH_PX,
+  WORLD_METER_OFFSET_Y_PX,
+  WORLD_METER_RADIUS_PX
+} from './constants';
+import { clamp01, wrap01 } from './math';
+import {
+  getForcePreviewPercent,
+  getRhythmHotZones,
+  getRunupFeedback,
+  getRunupMeterPhase01,
+  getSpeedPercent
+} from './selectors';
+import { CHARGE_GOOD_WINDOW, CHARGE_PERFECT_WINDOW } from './tuning';
+import type { GameState, TimingQuality } from './types';
+import type { HeadAnchor } from './renderAthlete';
+
+type MeterZones = {
+  perfect: { start: number; end: number };
+  good: { start: number; end: number };
+};
+
+type WorldMeterState = {
+  phase01: number;
+  zones: MeterZones;
+  feedback: TimingQuality | null;
+  valuePercent: number;
+};
+
+const normalizeMeterPhase01 = (phase01: number): number => {
+  if (phase01 <= 0) {
+    return 0;
+  }
+  if (phase01 >= 1) {
+    return 1;
+  }
+  return wrap01(phase01);
+};
+
+const phaseToSemicircleAngle = (phase01: number): number =>
+  Math.PI + clamp01(phase01) * Math.PI;
+
+const drawSemicircleArc = (
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  radius: number,
+  start01: number,
+  end01: number,
+  color: string,
+  lineWidth: number
+): void => {
+  const drawSegment = (start: number, end: number): void => {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lineWidth;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, phaseToSemicircleAngle(start), phaseToSemicircleAngle(end), false);
+    ctx.stroke();
+  };
+
+  if (Math.abs(end01 - start01) >= 1) {
+    drawSegment(0, 1);
+    return;
+  }
+
+  const start = wrap01(start01);
+  const end = wrap01(end01);
+  if (start <= end) {
+    drawSegment(start, end);
+    return;
+  }
+  drawSegment(start, 1);
+  drawSegment(0, end);
+};
+
+export const getHeadMeterScreenAnchor = (headScreen: HeadAnchor): HeadAnchor => ({
+  x: headScreen.x,
+  y: headScreen.y - WORLD_METER_OFFSET_Y_PX
+});
+
+const getWorldMeterState = (state: GameState): WorldMeterState | null => {
+  if (state.phase.tag === 'runup') {
+    const meterPhase = getRunupMeterPhase01(state);
+    if (meterPhase === null) {
+      return null;
+    }
+    return {
+      phase01: meterPhase,
+      zones: getRhythmHotZones(),
+      feedback: getRunupFeedback(state),
+      valuePercent: getSpeedPercent(state)
+    };
+  }
+
+  if (state.phase.tag === 'chargeAim') {
+    return {
+      phase01: state.phase.chargeMeter.phase01,
+      zones: {
+        perfect: CHARGE_PERFECT_WINDOW,
+        good: CHARGE_GOOD_WINDOW
+      },
+      feedback: state.phase.chargeMeter.lastQuality,
+      valuePercent: getForcePreviewPercent(state) ?? Math.round(state.phase.forceNormPreview * 100)
+    };
+  }
+
+  if (state.phase.tag === 'throwAnim') {
+    return {
+      phase01: state.phase.forceNorm,
+      zones: {
+        perfect: CHARGE_PERFECT_WINDOW,
+        good: CHARGE_GOOD_WINDOW
+      },
+      feedback: state.phase.releaseQuality,
+      valuePercent: getForcePreviewPercent(state) ?? Math.round(state.phase.forceNorm * 100)
+    };
+  }
+
+  return null;
+};
+
+export const drawWorldTimingMeter = (
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  headScreen: HeadAnchor
+): void => {
+  const meterState = getWorldMeterState(state);
+  if (meterState === null) {
+    return;
+  }
+
+  const anchor = getHeadMeterScreenAnchor(headScreen);
+  if (!Number.isFinite(anchor.x) || !Number.isFinite(anchor.y)) {
+    return;
+  }
+
+  ctx.save();
+  ctx.globalAlpha = 0.96;
+
+  drawSemicircleArc(
+    ctx,
+    anchor.x,
+    anchor.y,
+    WORLD_METER_RADIUS_PX,
+    0,
+    1,
+    'rgba(10, 46, 77, 0.34)',
+    WORLD_METER_LINE_WIDTH_PX
+  );
+
+  drawSemicircleArc(
+    ctx,
+    anchor.x,
+    anchor.y,
+    WORLD_METER_RADIUS_PX,
+    meterState.zones.good.start,
+    meterState.zones.good.end,
+    'rgba(30, 142, 247, 0.82)',
+    WORLD_METER_LINE_WIDTH_PX
+  );
+
+  drawSemicircleArc(
+    ctx,
+    anchor.x,
+    anchor.y,
+    WORLD_METER_RADIUS_PX,
+    meterState.zones.perfect.start,
+    meterState.zones.perfect.end,
+    'rgba(18, 196, 119, 0.98)',
+    WORLD_METER_LINE_WIDTH_PX + 0.8
+  );
+
+  const cursorAngle = phaseToSemicircleAngle(normalizeMeterPhase01(meterState.phase01));
+  const cursorX = anchor.x + Math.cos(cursorAngle) * WORLD_METER_RADIUS_PX;
+  const cursorY = anchor.y + Math.sin(cursorAngle) * WORLD_METER_RADIUS_PX;
+
+  const cursorFill =
+    meterState.feedback === 'perfect'
+      ? '#22c272'
+      : meterState.feedback === 'good'
+        ? '#329cf5'
+        : '#f6d255';
+
+  ctx.fillStyle = cursorFill;
+  ctx.strokeStyle = '#0f3b61';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(cursorX, cursorY, WORLD_METER_CURSOR_RADIUS_PX, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = 'rgba(6, 32, 57, 0.9)';
+  ctx.font = '700 11px ui-sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(`${meterState.valuePercent}%`, anchor.x, anchor.y + 16);
+
+  ctx.restore();
+};

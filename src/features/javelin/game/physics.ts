@@ -15,10 +15,8 @@ import {
   MAX_ANGULAR_VEL_RAD,
   MAX_LINEAR_ACCEL
 } from './constants';
+import { clamp } from './math';
 import type { PhysicalJavelinState } from './types';
-
-const clamp = (value: number, min: number, max: number): number =>
-  Math.min(max, Math.max(min, value));
 
 const normalizeAngleRad = (angleRad: number): number => {
   let angle = angleRad;

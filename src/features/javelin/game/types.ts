@@ -19,9 +19,13 @@ export type RhythmState = {
   lastQualityAtMs: number;
 };
 
+/**
+ * Tracks linear throw-force charge progress.
+ * `phase01` goes from 0 (start) to 1 (fully charged).
+ * Overfill past the configured threshold triggers a late-release fault.
+ */
 export type ChargeMeterState = {
   phase01: number;
-  cycles: number;
   perfectWindow: MeterWindow;
   goodWindow: MeterWindow;
   lastQuality: TimingQuality | null;
@@ -80,7 +84,6 @@ export type GamePhase =
   | {
       tag: 'chargeAim';
       speedNorm: number;
-      athleteXM: number;
       runupDistanceM: number;
       startedAtMs: number;
       runEntryAnimT: number;

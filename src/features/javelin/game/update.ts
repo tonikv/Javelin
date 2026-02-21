@@ -2,6 +2,27 @@ import {
   ANGLE_DEFAULT_DEG,
   ANGLE_MAX_DEG,
   ANGLE_MIN_DEG,
+  JAVELIN_GRIP_OFFSET_M,
+  JAVELIN_RELEASE_OFFSET_Y_M,
+  RUNUP_MAX_TAPS,
+  RUNUP_MAX_X_M,
+  RUNUP_SPEED_MAX_MS,
+  RUNUP_SPEED_MIN_MS,
+  THROW_LINE_X_M
+} from './constants';
+import {
+  applyForceQualityBonus,
+  computeForcePreview,
+  getTimingQuality
+} from './chargeMeter';
+import { computeAthletePoseGeometry } from './athletePose';
+import { clamp, easeOutQuad, wrap01 } from './math';
+import { computeLaunchSpeedMs, createPhysicalJavelin, updatePhysicalJavelin } from './physics';
+import {
+  computeCompetitionDistanceM,
+  evaluateThrowLegality
+} from './scoring';
+import {
   BEAT_INTERVAL_MS,
   CHARGEAIM_SPEED_DECAY_PER_SECOND,
   CHARGEAIM_STOP_SPEED_NORM,
@@ -13,47 +34,23 @@ import {
   FAULT_STUMBLE_DISTANCE_M,
   FOLLOW_THROUGH_STEP_DISTANCE_M,
   GOOD_WINDOW_MS,
-  JAVELIN_GRIP_OFFSET_M,
-  JAVELIN_RELEASE_OFFSET_Y_M,
   PERFECT_WINDOW_MS,
   RHYTHM_SPEED_DELTA_GOOD,
   RHYTHM_SPEED_DELTA_IN_PENALTY,
   RHYTHM_SPEED_DELTA_MISS,
   RHYTHM_SPEED_DELTA_PERFECT,
   RHYTHM_SPEED_DELTA_SPAM,
-  RUNUP_MAX_TAPS,
-  RUNUP_MAX_X_M,
   RUNUP_PASSIVE_MAX_SPEED,
   RUNUP_PASSIVE_TO_HALF_MS,
   RUNUP_SPEED_DECAY_PER_SECOND,
-  RUNUP_SPEED_MAX_MS,
-  RUNUP_SPEED_MIN_MS,
   RUNUP_START_X_M,
   RUN_TO_DRAWBACK_BLEND_MS,
   SPAM_PENALTY_MS,
   SPAM_THRESHOLD_MS,
   THROW_ANIM_DURATION_MS,
-  THROW_LINE_X_M,
   THROW_RELEASE_PROGRESS
-} from './constants';
-import {
-  applyForceQualityBonus,
-  computeForcePreview,
-  getTimingQuality,
-  wrap01
-} from './chargeMeter';
-import { computeAthletePoseGeometry } from './athletePose';
-import { computeLaunchSpeedMs, createPhysicalJavelin, updatePhysicalJavelin } from './physics';
-import {
-  computeCompetitionDistanceM,
-  evaluateThrowLegality
-} from './scoring';
-import type { FaultReason, GameAction, GameState, TimingQuality } from './types';
-
-const clamp = (value: number, min: number, max: number): number =>
-  Math.min(max, Math.max(min, value));
-
-const easeOutQuad = (t: number): number => 1 - (1 - t) * (1 - t);
+} from './tuning';
+import type { GameAction, GameState, TimingQuality } from './types';
 
 const nearestBeatDeltaMs = (startedAtMs: number, atMs: number): number => {
   const elapsed = atMs - startedAtMs;
@@ -119,7 +116,7 @@ const createFaultJavelinFromCharge = (
     phase.athletePose,
     phase.speedNorm,
     phase.angleDeg,
-    phase.athleteXM,
+    phase.runupDistanceM,
     {
       runBlendFromAnimT: phase.runEntryAnimT,
       runToAimBlend01: 1
@@ -142,8 +139,6 @@ const createFaultJavelinFromCharge = (
   });
 };
 
-const getFaultForRelease = (_angleDeg: number): FaultReason | null => null;
-
 const lateralVelocityFromRelease = (
   quality: TimingQuality,
   angleDeg: number,
@@ -162,6 +157,271 @@ export const createInitialGameState = (): GameState => ({
   aimAngleDeg: ANGLE_DEFAULT_DEG,
   phase: { tag: 'idle' }
 });
+
+const tickFault = (state: GameState, dtMs: number): GameState => {
+  if (state.phase.tag !== 'fault') {
+    return state;
+  }
+
+  const nextFaultAnimT = clamp(state.phase.athletePose.animT + dtMs / FALL_ANIM_DURATION_MS, 0, 1);
+  const stumbleDeltaM =
+    faultStumbleOffsetM(nextFaultAnimT) - faultStumbleOffsetM(state.phase.athletePose.animT);
+  const javelinUpdate = state.phase.javelinLanded
+    ? null
+    : updatePhysicalJavelin(state.phase.javelin, dtMs, state.windMs);
+
+  return {
+    ...state,
+    phase: {
+      ...state.phase,
+      athleteXM: state.phase.athleteXM + stumbleDeltaM,
+      athletePose: {
+        animTag: 'fall',
+        animT: nextFaultAnimT
+      },
+      javelin:
+        javelinUpdate === null
+          ? state.phase.javelin
+          : javelinUpdate.landed
+            ? {
+                ...javelinUpdate.javelin,
+                vxMs: 0,
+                vyMs: 0,
+                vzMs: 0,
+                angularVelRad: 0
+              }
+            : javelinUpdate.javelin,
+      javelinLanded: javelinUpdate === null ? state.phase.javelinLanded : javelinUpdate.landed
+    }
+  };
+};
+
+const tickRunup = (state: GameState, dtMs: number, nowMs: number): GameState => {
+  if (state.phase.tag !== 'runup') {
+    return state;
+  }
+
+  const hasStartedRunup = state.phase.rhythm.firstTapAtMs !== null;
+  const passiveTarget =
+    state.phase.rhythm.firstTapAtMs === null
+      ? 0
+      : passiveSpeedTarget(state.phase.rhythm.firstTapAtMs, nowMs);
+  const speedAfterDecay = clamp(state.phase.speedNorm - (dtMs / 1000) * RUNUP_SPEED_DECAY_PER_SECOND, 0, 1);
+  const speedNorm = Math.max(speedAfterDecay, passiveTarget);
+  const runSpeedMs = hasStartedRunup ? runSpeedMsFromNorm(speedNorm) : 0;
+  const runupDistanceM = clamp(
+    state.phase.runupDistanceM + runSpeedMs * (dtMs / 1000),
+    RUNUP_START_X_M,
+    RUNUP_MAX_X_M
+  );
+
+  return {
+    ...state,
+    phase: {
+      ...state.phase,
+      speedNorm,
+      runupDistanceM,
+      athletePose: {
+        animTag: isRunning(speedNorm) ? 'run' : 'idle',
+        animT: isRunning(speedNorm)
+          ? advanceRunAnimT(state.phase.athletePose.animT, dtMs, speedNorm)
+          : 0
+      }
+    }
+  };
+};
+
+const tickChargeAim = (state: GameState, dtMs: number, nowMs: number): GameState => {
+  if (state.phase.tag !== 'chargeAim') {
+    return state;
+  }
+
+  const elapsedMs = Math.max(0, nowMs - state.phase.chargeStartedAtMs);
+  const rawFill01 = elapsedMs / CHARGE_FILL_DURATION_MS;
+  if (rawFill01 >= CHARGE_OVERFILL_FAULT_01) {
+    return {
+      ...state,
+      phase: {
+        tag: 'fault',
+        reason: 'lateRelease',
+        athleteXM: state.phase.runupDistanceM,
+        athletePose: {
+          animTag: 'fall',
+          animT: 0
+        },
+        javelin: createFaultJavelinFromCharge(state.phase, nowMs),
+        javelinLanded: false
+      }
+    };
+  }
+
+  const phase01 = clamp(rawFill01, 0, 1);
+  const speedAfterDecay = clamp(state.phase.speedNorm - (dtMs / 1000) * CHARGEAIM_SPEED_DECAY_PER_SECOND, 0, 1);
+  const speedNorm = Math.max(speedAfterDecay, 0);
+  const stillRunning = speedNorm > CHARGEAIM_STOP_SPEED_NORM;
+  const runSpeedMs = stillRunning ? runSpeedMsFromNorm(speedNorm) : 0;
+  const runupDistanceM = clamp(
+    state.phase.runupDistanceM + runSpeedMs * (dtMs / 1000),
+    RUNUP_START_X_M,
+    RUNUP_MAX_X_M
+  );
+  const blend01 = clamp(elapsedMs / RUN_TO_DRAWBACK_BLEND_MS, 0, 1);
+  const aimAnimT = blend01 < 1 ? blend01 * 0.2 : phase01;
+  const legAnimT = stillRunning
+    ? advanceRunAnimT(state.phase.runEntryAnimT, dtMs, speedNorm)
+    : state.phase.runEntryAnimT;
+  const forceNormPreview = computeForcePreview(phase01);
+  const quality = getTimingQuality(
+    phase01,
+    state.phase.chargeMeter.perfectWindow,
+    state.phase.chargeMeter.goodWindow
+  );
+
+  return {
+    ...state,
+    phase: {
+      ...state.phase,
+      speedNorm,
+      runupDistanceM,
+      runEntryAnimT: legAnimT,
+      forceNormPreview,
+      chargeMeter: {
+        ...state.phase.chargeMeter,
+        phase01,
+        lastQuality: quality,
+        lastSampleAtMs: nowMs
+      },
+      athletePose: {
+        animTag: 'aim',
+        animT: aimAnimT
+      }
+    }
+  };
+};
+
+const tickThrowAnim = (state: GameState, dtMs: number, nowMs: number): GameState => {
+  if (state.phase.tag !== 'throwAnim') {
+    return state;
+  }
+
+  const nextProgress = clamp(state.phase.animProgress + dtMs / THROW_ANIM_DURATION_MS, 0, 1);
+  const released = nextProgress >= THROW_RELEASE_PROGRESS;
+  if (released && !state.phase.released) {
+    const releasePose = computeAthletePoseGeometry(
+      {
+        animTag: 'throw',
+        animT: THROW_RELEASE_PROGRESS
+      },
+      state.phase.speedNorm,
+      state.phase.angleDeg,
+      state.phase.athleteXM
+    );
+    const launchSpeedMs = computeLaunchSpeedMs(state.phase.speedNorm, state.phase.forceNorm);
+    const launchAngleRad = (state.phase.angleDeg * Math.PI) / 180;
+    const athleteForwardMs = runSpeedMsFromNorm(state.phase.speedNorm) * 0.34;
+    const lateralVelMs = lateralVelocityFromRelease(
+      state.phase.releaseQuality,
+      state.phase.angleDeg,
+      state.roundId
+    );
+
+    return {
+      ...state,
+      phase: {
+        tag: 'flight',
+        athleteXM: state.phase.athleteXM,
+        javelin: createPhysicalJavelin({
+          xM: releasePose.javelinGrip.xM + Math.cos(launchAngleRad) * JAVELIN_GRIP_OFFSET_M,
+          yM: Math.max(
+            1.35,
+            releasePose.javelinGrip.yM + Math.sin(launchAngleRad) * JAVELIN_RELEASE_OFFSET_Y_M
+          ),
+          zM: 0,
+          launchAngleRad,
+          launchSpeedMs,
+          athleteForwardMs,
+          lateralVelMs,
+          releasedAtMs: nowMs
+        }),
+        launchedFrom: {
+          speedNorm: state.phase.speedNorm,
+          athleteXM: state.phase.athleteXM,
+          angleDeg: state.phase.angleDeg,
+          forceNorm: state.phase.forceNorm,
+          releaseQuality: state.phase.releaseQuality,
+          lineCrossedAtRelease: state.phase.athleteXM >= THROW_LINE_X_M,
+          windMs: state.windMs,
+          launchSpeedMs
+        },
+        athletePose: {
+          animTag: 'followThrough',
+          animT: 0
+        }
+      }
+    };
+  }
+
+  return {
+    ...state,
+    phase: {
+      ...state.phase,
+      animProgress: nextProgress,
+      athletePose: {
+        animTag: 'throw',
+        animT: nextProgress
+      }
+    }
+  };
+};
+
+const tickFlight = (state: GameState, dtMs: number): GameState => {
+  if (state.phase.tag !== 'flight') {
+    return state;
+  }
+
+  const nextFollowAnimT = clamp(state.phase.athletePose.animT + dtMs / 650, 0, 1);
+  const stepDeltaM = followThroughStepOffsetM(nextFollowAnimT) - followThroughStepOffsetM(state.phase.athletePose.animT);
+  const athleteXM = state.phase.athleteXM + stepDeltaM;
+  const updated = updatePhysicalJavelin(state.phase.javelin, dtMs, state.windMs);
+  if (updated.landed) {
+    const landingTipXM = updated.landingTipXM ?? updated.javelin.xM;
+    const landingTipZM = updated.landingTipZM ?? updated.javelin.zM;
+    const legality = evaluateThrowLegality({
+      lineCrossedAtRelease: state.phase.launchedFrom.lineCrossedAtRelease,
+      landingTipXM,
+      landingTipZM,
+      tipFirst: updated.tipFirst === true
+    });
+
+    return {
+      ...state,
+      phase: {
+        tag: 'result',
+        athleteXM,
+        distanceM: computeCompetitionDistanceM(landingTipXM),
+        isHighscore: false,
+        resultKind: legality.resultKind,
+        tipFirst: updated.tipFirst,
+        landingXM: updated.javelin.xM,
+        landingYM: Math.max(0, updated.javelin.yM),
+        landingAngleRad: updated.javelin.angleRad
+      }
+    };
+  }
+
+  return {
+    ...state,
+    phase: {
+      ...state.phase,
+      athleteXM,
+      javelin: updated.javelin,
+      athletePose: {
+        animTag: 'followThrough',
+        animT: nextFollowAnimT
+      }
+    }
+  };
+};
 
 export const reduceGameState = (state: GameState, action: GameAction): GameState => {
   switch (action.type) {
@@ -253,7 +513,6 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
         phase: {
           tag: 'chargeAim',
           speedNorm: state.phase.speedNorm,
-          athleteXM: state.phase.runupDistanceM,
           runupDistanceM: state.phase.runupDistanceM,
           startedAtMs: state.phase.startedAtMs,
           runEntryAnimT: state.phase.athletePose.animT,
@@ -261,7 +520,6 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
           chargeStartedAtMs: action.atMs,
           chargeMeter: {
             phase01: 0,
-            cycles: 0,
             perfectWindow: CHARGE_PERFECT_WINDOW,
             goodWindow: CHARGE_GOOD_WINDOW,
             lastQuality: null,
@@ -323,24 +581,6 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
       if (state.phase.tag !== 'chargeAim') {
         return state;
       }
-      const fault = getFaultForRelease(state.phase.angleDeg);
-      if (fault !== null) {
-        return {
-          ...state,
-          nowMs: action.atMs,
-          phase: {
-            tag: 'fault',
-            reason: fault,
-            athleteXM: state.phase.athleteXM,
-            athletePose: {
-              animTag: 'fall',
-              animT: 0
-            },
-            javelin: createFaultJavelinFromCharge(state.phase, action.atMs),
-            javelinLanded: false
-          }
-        };
-      }
       const elapsedMs = Math.max(0, action.atMs - state.phase.chargeStartedAtMs);
       const rawFill01 = elapsedMs / CHARGE_FILL_DURATION_MS;
       if (rawFill01 >= CHARGE_OVERFILL_FAULT_01) {
@@ -350,7 +590,7 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
           phase: {
             tag: 'fault',
             reason: 'lateRelease',
-            athleteXM: state.phase.athleteXM,
+            athleteXM: state.phase.runupDistanceM,
             athletePose: {
               animTag: 'fall',
               animT: 0
@@ -374,7 +614,7 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
         phase: {
           tag: 'throwAnim',
           speedNorm: state.phase.speedNorm,
-          athleteXM: state.phase.athleteXM,
+          athleteXM: state.phase.runupDistanceM,
           angleDeg: state.phase.angleDeg,
           forceNorm,
           releaseQuality: quality,
@@ -388,279 +628,25 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
       };
     }
     case 'tick': {
-      if (
-        state.phase.tag === 'idle' ||
-        state.phase.tag === 'result'
-      ) {
+      if (state.phase.tag === 'idle' || state.phase.tag === 'result') {
         return state;
       }
 
       const nextState: GameState = { ...state, nowMs: action.nowMs };
-      if (nextState.phase.tag === 'fault') {
-        const nextFaultAnimT = clamp(
-          nextState.phase.athletePose.animT + action.dtMs / FALL_ANIM_DURATION_MS,
-          0,
-          1
-        );
-        const stumbleDeltaM =
-          faultStumbleOffsetM(nextFaultAnimT) -
-          faultStumbleOffsetM(nextState.phase.athletePose.animT);
-        const javelinUpdate = nextState.phase.javelinLanded
-          ? null
-          : updatePhysicalJavelin(nextState.phase.javelin, action.dtMs, nextState.windMs);
-        return {
-          ...nextState,
-          phase: {
-            ...nextState.phase,
-            athleteXM: nextState.phase.athleteXM + stumbleDeltaM,
-            athletePose: {
-              animTag: 'fall',
-              animT: nextFaultAnimT
-            },
-            javelin:
-              javelinUpdate === null
-                ? nextState.phase.javelin
-                : javelinUpdate.landed
-                  ? {
-                      ...javelinUpdate.javelin,
-                      vxMs: 0,
-                      vyMs: 0,
-                      vzMs: 0,
-                      angularVelRad: 0
-                    }
-                  : javelinUpdate.javelin,
-            javelinLanded:
-              javelinUpdate === null ? nextState.phase.javelinLanded : javelinUpdate.landed
-          }
-        };
+      switch (nextState.phase.tag) {
+        case 'fault':
+          return tickFault(nextState, action.dtMs);
+        case 'runup':
+          return tickRunup(nextState, action.dtMs, action.nowMs);
+        case 'chargeAim':
+          return tickChargeAim(nextState, action.dtMs, action.nowMs);
+        case 'throwAnim':
+          return tickThrowAnim(nextState, action.dtMs, action.nowMs);
+        case 'flight':
+          return tickFlight(nextState, action.dtMs);
+        default:
+          return nextState;
       }
-      if (nextState.phase.tag === 'runup') {
-        const hasStartedRunup = nextState.phase.rhythm.firstTapAtMs !== null;
-        const passiveTarget =
-          nextState.phase.rhythm.firstTapAtMs === null
-            ? 0
-            : passiveSpeedTarget(nextState.phase.rhythm.firstTapAtMs, action.nowMs);
-        const speedAfterDecay = clamp(
-          nextState.phase.speedNorm - (action.dtMs / 1000) * RUNUP_SPEED_DECAY_PER_SECOND,
-          0,
-          1
-        );
-        const speedNorm = Math.max(speedAfterDecay, passiveTarget);
-        const runSpeedMs = hasStartedRunup ? runSpeedMsFromNorm(speedNorm) : 0;
-        const runupDistanceM = clamp(
-          nextState.phase.runupDistanceM + runSpeedMs * (action.dtMs / 1000),
-          RUNUP_START_X_M,
-          RUNUP_MAX_X_M
-        );
-
-        return {
-          ...nextState,
-          phase: {
-            ...nextState.phase,
-            speedNorm,
-            runupDistanceM,
-            athletePose: {
-              animTag: isRunning(speedNorm) ? 'run' : 'idle',
-              animT: isRunning(speedNorm)
-                ? advanceRunAnimT(nextState.phase.athletePose.animT, action.dtMs, speedNorm)
-                : 0
-            }
-          }
-        };
-      }
-
-      if (nextState.phase.tag === 'chargeAim') {
-        const elapsedMs = Math.max(0, action.nowMs - nextState.phase.chargeStartedAtMs);
-        const rawFill01 = elapsedMs / CHARGE_FILL_DURATION_MS;
-        if (rawFill01 >= CHARGE_OVERFILL_FAULT_01) {
-          return {
-            ...nextState,
-            phase: {
-              tag: 'fault',
-              reason: 'lateRelease',
-              athleteXM: nextState.phase.athleteXM,
-              athletePose: {
-                animTag: 'fall',
-                animT: 0
-              },
-              javelin: createFaultJavelinFromCharge(nextState.phase, action.nowMs),
-              javelinLanded: false
-            }
-          };
-        }
-        const phase01 = clamp(rawFill01, 0, 1);
-        const speedAfterDecay = clamp(
-          nextState.phase.speedNorm - (action.dtMs / 1000) * CHARGEAIM_SPEED_DECAY_PER_SECOND,
-          0,
-          1
-        );
-        const speedNorm = Math.max(speedAfterDecay, 0);
-        const stillRunning = speedNorm > CHARGEAIM_STOP_SPEED_NORM;
-        const runSpeedMs = stillRunning ? runSpeedMsFromNorm(speedNorm) : 0;
-        const runupDistanceM = clamp(
-          nextState.phase.runupDistanceM + runSpeedMs * (action.dtMs / 1000),
-          RUNUP_START_X_M,
-          RUNUP_MAX_X_M
-        );
-        const blend01 = clamp(elapsedMs / RUN_TO_DRAWBACK_BLEND_MS, 0, 1);
-        const aimAnimT = blend01 < 1 ? blend01 * 0.2 : phase01;
-        const legAnimT = stillRunning
-          ? advanceRunAnimT(nextState.phase.runEntryAnimT, action.dtMs, speedNorm)
-          : nextState.phase.runEntryAnimT;
-        const forceNormPreview = computeForcePreview(phase01);
-        const quality = getTimingQuality(
-          phase01,
-          nextState.phase.chargeMeter.perfectWindow,
-          nextState.phase.chargeMeter.goodWindow
-        );
-        return {
-          ...nextState,
-          phase: {
-            ...nextState.phase,
-            speedNorm,
-            athleteXM: runupDistanceM,
-            runupDistanceM,
-            runEntryAnimT: legAnimT,
-            forceNormPreview,
-            chargeMeter: {
-              ...nextState.phase.chargeMeter,
-              phase01,
-              cycles: Math.floor(rawFill01),
-              lastQuality: quality,
-              lastSampleAtMs: action.nowMs
-            },
-            athletePose: {
-              animTag: 'aim',
-              animT: aimAnimT
-            }
-          }
-        };
-      }
-
-      if (nextState.phase.tag === 'throwAnim') {
-        const nextProgress = clamp(
-          nextState.phase.animProgress + action.dtMs / THROW_ANIM_DURATION_MS,
-          0,
-          1
-        );
-        const released = nextProgress >= THROW_RELEASE_PROGRESS;
-        if (released && !nextState.phase.released) {
-          const releasePose = computeAthletePoseGeometry(
-            {
-              animTag: 'throw',
-              animT: THROW_RELEASE_PROGRESS
-            },
-            nextState.phase.speedNorm,
-            nextState.phase.angleDeg,
-            nextState.phase.athleteXM
-          );
-          const launchSpeedMs = computeLaunchSpeedMs(
-            nextState.phase.speedNorm,
-            nextState.phase.forceNorm
-          );
-          const launchAngleRad = (nextState.phase.angleDeg * Math.PI) / 180;
-          const athleteForwardMs = runSpeedMsFromNorm(nextState.phase.speedNorm) * 0.34;
-          const lateralVelMs = lateralVelocityFromRelease(
-            nextState.phase.releaseQuality,
-            nextState.phase.angleDeg,
-            nextState.roundId
-          );
-
-          return {
-            ...nextState,
-            phase: {
-              tag: 'flight',
-              athleteXM: nextState.phase.athleteXM,
-              javelin: createPhysicalJavelin({
-                xM: releasePose.javelinGrip.xM + Math.cos(launchAngleRad) * JAVELIN_GRIP_OFFSET_M,
-                yM: Math.max(
-                  1.35,
-                  releasePose.javelinGrip.yM + Math.sin(launchAngleRad) * JAVELIN_RELEASE_OFFSET_Y_M
-                ),
-                zM: 0,
-                launchAngleRad,
-                launchSpeedMs,
-                athleteForwardMs,
-                lateralVelMs,
-                releasedAtMs: action.nowMs
-              }),
-              launchedFrom: {
-                speedNorm: nextState.phase.speedNorm,
-                athleteXM: nextState.phase.athleteXM,
-                angleDeg: nextState.phase.angleDeg,
-                forceNorm: nextState.phase.forceNorm,
-                releaseQuality: nextState.phase.releaseQuality,
-                lineCrossedAtRelease: nextState.phase.athleteXM >= THROW_LINE_X_M,
-                windMs: nextState.windMs,
-                launchSpeedMs
-              },
-              athletePose: {
-                animTag: 'followThrough',
-                animT: 0
-              }
-            }
-          };
-        }
-
-        return {
-          ...nextState,
-          phase: {
-            ...nextState.phase,
-            animProgress: nextProgress,
-            athletePose: {
-              animTag: 'throw',
-              animT: nextProgress
-            }
-          }
-        };
-      }
-
-      if (nextState.phase.tag === 'flight') {
-        const nextFollowAnimT = clamp(nextState.phase.athletePose.animT + action.dtMs / 650, 0, 1);
-        const stepDeltaM =
-          followThroughStepOffsetM(nextFollowAnimT) -
-          followThroughStepOffsetM(nextState.phase.athletePose.animT);
-        const athleteXM = nextState.phase.athleteXM + stepDeltaM;
-        const updated = updatePhysicalJavelin(nextState.phase.javelin, action.dtMs, nextState.windMs);
-        if (updated.landed) {
-          const landingTipXM = updated.landingTipXM ?? updated.javelin.xM;
-          const landingTipZM = updated.landingTipZM ?? updated.javelin.zM;
-          const legality = evaluateThrowLegality({
-            lineCrossedAtRelease: nextState.phase.launchedFrom.lineCrossedAtRelease,
-            landingTipXM,
-            landingTipZM,
-            tipFirst: updated.tipFirst === true
-          });
-
-          return {
-            ...nextState,
-            phase: {
-              tag: 'result',
-              athleteXM,
-              distanceM: computeCompetitionDistanceM(landingTipXM),
-              isHighscore: false,
-              resultKind: legality.resultKind,
-              tipFirst: updated.tipFirst,
-              landingXM: updated.javelin.xM,
-              landingYM: Math.max(0, updated.javelin.yM),
-              landingAngleRad: updated.javelin.angleRad
-            }
-          };
-        }
-        return {
-          ...nextState,
-          phase: {
-            ...nextState.phase,
-            athleteXM,
-            javelin: updated.javelin,
-            athletePose: {
-              animTag: 'followThrough',
-              animT: nextFollowAnimT
-            }
-          }
-        };
-      }
-      return nextState;
     }
     case 'setResultHighscoreFlag': {
       if (state.phase.tag !== 'result') {
@@ -685,3 +671,4 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
     }
   }
 };
+

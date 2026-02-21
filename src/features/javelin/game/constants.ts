@@ -1,17 +1,6 @@
-import { GAMEPLAY_TUNING } from './tuning';
-
-export const BEAT_INTERVAL_MS = GAMEPLAY_TUNING.speedUp.beatIntervalMs;
-export const PERFECT_WINDOW_MS = GAMEPLAY_TUNING.speedUp.perfectWindowMs;
-export const GOOD_WINDOW_MS = GAMEPLAY_TUNING.speedUp.goodWindowMs;
-export const SPAM_THRESHOLD_MS = GAMEPLAY_TUNING.speedUp.spamThresholdMs;
-export const SPAM_PENALTY_MS = GAMEPLAY_TUNING.speedUp.spamPenaltyMs;
 export const RUNUP_MAX_TAPS = 12;
-export const RUNUP_SPEED_DECAY_PER_SECOND = GAMEPLAY_TUNING.movement.runupSpeedDecayPerSecond;
-export const RUNUP_PASSIVE_MAX_SPEED = GAMEPLAY_TUNING.speedUp.passiveMaxSpeedNorm;
-export const RUNUP_PASSIVE_TO_HALF_MS = GAMEPLAY_TUNING.speedUp.passiveToHalfMs;
 export const RUNUP_SPEED_MIN_MS = 1.6;
 export const RUNUP_SPEED_MAX_MS = 9.6;
-export const RUNUP_START_X_M = GAMEPLAY_TUNING.movement.runupStartXM;
 export const THROW_LINE_X_M = 18.2;
 export const CHARGE_ZONE_MARGIN_M = 1.4;
 export const RUNUP_MAX_X_M = 22.4;
@@ -22,28 +11,6 @@ export const ANGLE_MIN_DEG = -90;
 export const ANGLE_MAX_DEG = 90;
 export const ANGLE_DEFAULT_DEG = 36;
 export const ANGLE_CHANGE_STEP_DEG = 1.2;
-
-export const RHYTHM_SPEED_DELTA_PERFECT = GAMEPLAY_TUNING.speedUp.hitSpeedDelta.perfect;
-export const RHYTHM_SPEED_DELTA_GOOD = GAMEPLAY_TUNING.speedUp.hitSpeedDelta.good;
-export const RHYTHM_SPEED_DELTA_MISS = GAMEPLAY_TUNING.speedUp.hitSpeedDelta.miss;
-export const RHYTHM_SPEED_DELTA_IN_PENALTY = GAMEPLAY_TUNING.speedUp.hitSpeedDelta.inPenalty;
-export const RHYTHM_SPEED_DELTA_SPAM = GAMEPLAY_TUNING.speedUp.hitSpeedDelta.spam;
-
-export const CHARGE_FILL_DURATION_MS = GAMEPLAY_TUNING.throwPhase.chargeFillDurationMs;
-export const CHARGE_OVERFILL_FAULT_01 = GAMEPLAY_TUNING.throwPhase.chargeOverfillFault01;
-export const FAULT_JAVELIN_LAUNCH_SPEED_MS = GAMEPLAY_TUNING.throwPhase.faultJavelinLaunchSpeedMs;
-export const CHARGE_FORCE_CYCLE_MS = CHARGE_FILL_DURATION_MS; // legacy alias
-export const CHARGE_PERFECT_WINDOW = GAMEPLAY_TUNING.throwPhase.chargePerfectWindow;
-export const CHARGE_GOOD_WINDOW = GAMEPLAY_TUNING.throwPhase.chargeGoodWindow;
-export const CHARGEAIM_SPEED_DECAY_PER_SECOND = GAMEPLAY_TUNING.movement.chargeAimSpeedDecayPerSecond;
-export const CHARGEAIM_STOP_SPEED_NORM = GAMEPLAY_TUNING.movement.chargeAimStopSpeedNorm;
-export const FOLLOW_THROUGH_STEP_DISTANCE_M = GAMEPLAY_TUNING.movement.followThroughStepDistanceM;
-export const FAULT_STUMBLE_DISTANCE_M = GAMEPLAY_TUNING.movement.faultStumbleDistanceM;
-
-export const THROW_ANIM_DURATION_MS = GAMEPLAY_TUNING.throwPhase.throwAnimDurationMs;
-export const THROW_RELEASE_PROGRESS = GAMEPLAY_TUNING.throwPhase.throwReleaseProgress01;
-export const RUN_TO_AIM_BLEND_MS = 180; // kept for legacy; v7 uses RUN_TO_DRAWBACK_BLEND_MS
-export const RUN_TO_DRAWBACK_BLEND_MS = GAMEPLAY_TUNING.throwPhase.runToDrawbackBlendMs;
 
 export const CAMERA_RUNUP_VIEW_WIDTH_M = 21;
 export const CAMERA_THROW_VIEW_WIDTH_M = 19.5;

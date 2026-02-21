@@ -1,16 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import {
-  BEAT_INTERVAL_MS,
-  CHARGE_FILL_DURATION_MS,
-  CHARGE_OVERFILL_FAULT_01,
   RUNUP_MAX_X_M,
-  RUNUP_PASSIVE_MAX_SPEED,
-  RUNUP_PASSIVE_TO_HALF_MS,
-  RUNUP_START_X_M,
-  THROW_ANIM_DURATION_MS,
   THROW_LINE_X_M
 } from './constants';
 import { gameReducer } from './reducer';
+import {
+  BEAT_INTERVAL_MS,
+  CHARGE_FILL_DURATION_MS,
+  CHARGE_OVERFILL_FAULT_01,
+  RUNUP_PASSIVE_MAX_SPEED,
+  RUNUP_PASSIVE_TO_HALF_MS,
+  RUNUP_START_X_M,
+  THROW_ANIM_DURATION_MS
+} from './tuning';
 import { createInitialGameState } from './update';
 
 describe('gameReducer', () => {
@@ -91,8 +93,7 @@ describe('gameReducer', () => {
     state = gameReducer(state, { type: 'beginChargeAim', atMs: 1080 });
     expect(state.phase.tag).toBe('chargeAim');
     if (state.phase.tag === 'chargeAim') {
-      expect(state.phase.athleteXM).toBeLessThan(THROW_LINE_X_M);
-      expect(state.phase.runupDistanceM).toBe(state.phase.athleteXM);
+      expect(state.phase.runupDistanceM).toBeLessThan(THROW_LINE_X_M);
       expect(state.phase.startedAtMs).toBe(1000);
     }
   });
@@ -119,7 +120,6 @@ describe('gameReducer', () => {
     expect(state.phase.tag).toBe('chargeAim');
     if (state.phase.tag === 'chargeAim') {
       expect(state.phase.runupDistanceM).toBeGreaterThan(startDistance);
-      expect(state.phase.athleteXM).toBe(state.phase.runupDistanceM);
       expect(state.phase.speedNorm).toBeLessThan(startSpeed);
     }
   });
@@ -161,7 +161,6 @@ describe('gameReducer', () => {
     expect(state.phase.tag).toBe('chargeAim');
     if (state.phase.tag === 'chargeAim') {
       expect(state.phase.runupDistanceM).toBeLessThanOrEqual(RUNUP_MAX_X_M);
-      expect(state.phase.athleteXM).toBeLessThanOrEqual(RUNUP_MAX_X_M);
     }
   });
 

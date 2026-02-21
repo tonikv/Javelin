@@ -1,4 +1,13 @@
-import { RUNUP_START_X_M } from './constants';
+import {
+  clamp01,
+  easeInCubic,
+  easeInOutSine,
+  easeOutCubic,
+  easeOutQuad,
+  lerp,
+  toRad
+} from './math';
+import { RUNUP_START_X_M } from './tuning';
 import type { AthletePoseState } from './types';
 
 type PointM = {
@@ -52,20 +61,6 @@ export type ThrowSubphaseSample = {
   delivery01: number;
   follow01: number;
 };
-
-const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
-
-const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
-
-const easeOutCubic = (t: number): number => 1 - (1 - t) ** 3;
-
-const easeInCubic = (t: number): number => t ** 3;
-
-const easeOutQuad = (t: number): number => 1 - (1 - t) * (1 - t);
-
-const easeInOutSine = (t: number): number => 0.5 - Math.cos(Math.PI * clamp01(t)) * 0.5;
-
-const toRad = (deg: number): number => (deg * Math.PI) / 180;
 
 const polar = (angleRad: number, length: number): { x: number; y: number } => ({
   x: Math.cos(angleRad) * length,

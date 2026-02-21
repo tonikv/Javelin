@@ -1,8 +1,6 @@
 import { THROW_LINE_X_M } from './constants';
+import { clamp } from './math';
 import type { ResultKind, ThrowInput } from './types';
-
-const clamp = (value: number, min: number, max: number): number =>
-  Math.min(max, Math.max(min, value));
 
 const roundTo1 = (value: number): number => Math.round(value * 10) / 10;
 

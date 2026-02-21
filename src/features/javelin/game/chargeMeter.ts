@@ -1,12 +1,5 @@
 import type { MeterWindow, TimingQuality } from './types';
-
-const clamp = (value: number, min: number, max: number): number =>
-  Math.min(max, Math.max(min, value));
-
-export const wrap01 = (value: number): number => {
-  const wrapped = value % 1;
-  return wrapped < 0 ? wrapped + 1 : wrapped;
-};
+import { clamp } from './math';
 
 export const isInWindow = (phase01: number, window: MeterWindow): boolean => {
   const phase = clamp(phase01, 0, 1);
