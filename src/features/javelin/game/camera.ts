@@ -16,6 +16,7 @@ import {
   FIELD_MAX_DISTANCE_M
 } from './constants';
 import { clamp } from './math';
+import { RUNUP_START_X_M } from './tuning';
 import type { GamePhase, GameState } from './types';
 
 export type WorldToScreenInput = {
@@ -31,6 +32,13 @@ type PhaseCameraConfig = {
   viewWidthM: number;
   aheadRatio: number;
   yScale: number;
+};
+
+type SmoothedCamera = {
+  viewWidthM: number;
+  yScale: number;
+  targetX: number;
+  lastPhaseTag: GamePhase['tag'];
 };
 
 const PHASE_CAMERA_CONFIG: Record<GamePhase['tag'], PhaseCameraConfig> = {
@@ -71,6 +79,27 @@ const PHASE_CAMERA_CONFIG: Record<GamePhase['tag'], PhaseCameraConfig> = {
   }
 };
 
+const CAMERA_LERP_SPEED = 4.5;
+
+let smoothCam: SmoothedCamera = {
+  viewWidthM: CAMERA_DEFAULT_VIEW_WIDTH_M,
+  yScale: CAMERA_Y_SCALE_RUNUP,
+  targetX: RUNUP_START_X_M,
+  lastPhaseTag: 'idle'
+};
+
+const lerpToward = (current: number, target: number, factor: number): number =>
+  current + (target - current) * Math.min(1, Math.max(0, factor));
+
+export const resetSmoothCamera = (): void => {
+  smoothCam = {
+    viewWidthM: CAMERA_DEFAULT_VIEW_WIDTH_M,
+    yScale: CAMERA_Y_SCALE_RUNUP,
+    targetX: RUNUP_START_X_M,
+    lastPhaseTag: 'idle'
+  };
+};
+
 export const getCameraTargetX = (state: GameState): number => {
   switch (state.phase.tag) {
     case 'runup':
@@ -99,13 +128,14 @@ export const getCameraAheadRatio = (state: GameState): number =>
 export const getVerticalScale = (state: GameState): number =>
   PHASE_CAMERA_CONFIG[state.phase.tag].yScale;
 
-export const createWorldToScreen = (
+const createWorldToScreenWithCamera = (
   state: GameState,
   width: number,
-  height: number
+  height: number,
+  viewWidthM: number,
+  targetX: number,
+  yScale: number
 ): { toScreen: WorldToScreen; worldMinX: number; worldMaxX: number } => {
-  const viewWidthM = getViewWidthM(state);
-  const targetX = getCameraTargetX(state);
   const ahead = getCameraAheadRatio(state);
   const worldMinLimit = -viewWidthM * ahead;
   const worldMinX = clamp(
@@ -115,7 +145,6 @@ export const createWorldToScreen = (
   );
   const worldMaxX = worldMinX + viewWidthM;
   const playableWidth = width - RUNWAY_OFFSET_X - 24;
-  const yScale = getVerticalScale(state);
 
   const toScreen: WorldToScreen = ({ xM, yM }) => {
     const x = RUNWAY_OFFSET_X + ((xM - worldMinX) / viewWidthM) * playableWidth;
@@ -124,4 +153,57 @@ export const createWorldToScreen = (
   };
 
   return { toScreen, worldMinX, worldMaxX };
+};
+
+const updateSmoothedCamera = (state: GameState, dtMs: number): void => {
+  if (state.phase.tag === 'idle') {
+    resetSmoothCamera();
+    return;
+  }
+
+  const targetViewWidth = getViewWidthM(state);
+  const targetYScale = getVerticalScale(state);
+  const targetX = getCameraTargetX(state);
+  const dt = (Math.max(0, dtMs) / 1000) * CAMERA_LERP_SPEED;
+  const phaseChanged = state.phase.tag !== smoothCam.lastPhaseTag;
+  const lerpFactor = phaseChanged ? Math.min(1, dt * 2.5) : Math.min(1, dt);
+
+  smoothCam = {
+    viewWidthM: lerpToward(smoothCam.viewWidthM, targetViewWidth, lerpFactor),
+    yScale: lerpToward(smoothCam.yScale, targetYScale, lerpFactor),
+    targetX: lerpToward(smoothCam.targetX, targetX, Math.min(1, dt * 1.2)),
+    lastPhaseTag: state.phase.tag
+  };
+};
+
+export const createWorldToScreenRaw = (
+  state: GameState,
+  width: number,
+  height: number
+): { toScreen: WorldToScreen; worldMinX: number; worldMaxX: number } => {
+  return createWorldToScreenWithCamera(
+    state,
+    width,
+    height,
+    getViewWidthM(state),
+    getCameraTargetX(state),
+    getVerticalScale(state)
+  );
+};
+
+export const createWorldToScreen = (
+  state: GameState,
+  width: number,
+  height: number,
+  dtMs: number
+): { toScreen: WorldToScreen; worldMinX: number; worldMaxX: number } => {
+  updateSmoothedCamera(state, dtMs);
+  return createWorldToScreenWithCamera(
+    state,
+    width,
+    height,
+    smoothCam.viewWidthM,
+    smoothCam.targetX,
+    smoothCam.yScale
+  );
 };

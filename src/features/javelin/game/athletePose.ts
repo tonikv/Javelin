@@ -17,6 +17,7 @@ type PointM = {
 
 export type AthletePoseGeometry = {
   head: PointM;
+  headTiltRad: number;
   shoulderCenter: PointM;
   pelvis: PointM;
   hipFront: PointM;
@@ -246,18 +247,19 @@ const throwCurves = (t01: number, aimAngleDeg: number): MotionCurves => {
   };
 };
 
-const followThroughCurves = (t01: number): MotionCurves => {
+const followThroughCurves = (t01: number, speedNorm: number): MotionCurves => {
   const t = clamp01(t01);
   const step01 = easeOutQuad(Math.min(1, t / 0.78));
   const settle01 = easeInOutSine(clamp01((t - 0.38) / 0.62));
+  const brakingIntensity = clamp01(speedNorm * 1.4);
   return {
-    leanRad: lerp(0.16, -0.05, settle01),
+    leanRad: lerp(0.16 + brakingIntensity * 0.12, -0.05, settle01),
     pelvisShiftXM: lerp(0.02, 0.22, step01),
     pelvisBobYM: 0.006 + 0.014 * Math.sin(t * Math.PI),
-    hipFront: lerp(0.52, 0.38, settle01),
-    hipBack: lerp(-0.44, -0.3, settle01),
-    kneeFront: lerp(0.3, 0.42, settle01),
-    kneeBack: lerp(0.82, 0.68, settle01),
+    hipFront: lerp(0.52 + brakingIntensity * 0.18, 0.38, settle01),
+    hipBack: lerp(-0.44 - brakingIntensity * 0.12, -0.3, settle01),
+    kneeFront: lerp(0.3 - brakingIntensity * 0.1, 0.42, settle01),
+    kneeBack: lerp(0.82 + brakingIntensity * 0.08, 0.68, settle01),
     shoulderFront: lerp(0.32, 0.16, settle01),
     shoulderBack: lerp(-0.48, -0.3, settle01),
     elbowFront: lerp(-0.18, -0.06, settle01),
@@ -335,7 +337,7 @@ const curvesForPose = (
   }
 
   if (pose.animTag === 'followThrough') {
-    return followThroughCurves(t);
+    return followThroughCurves(t, speedNorm);
   }
 
   if (pose.animTag === 'fall') {
@@ -361,6 +363,24 @@ export const computeAthletePoseGeometry = (
   const torsoAngle = Math.PI / 2 + curves.leanRad;
   const shoulderCenter = add(pelvis, polar(torsoAngle, 0.58));
   const head = add(shoulderCenter, polar(Math.PI / 2 + curves.leanRad * 0.1, 0.22));
+  const headTiltRad = (() => {
+    if (pose.animTag === 'idle') {
+      return 0;
+    }
+    if (pose.animTag === 'run') {
+      return -0.1 - 0.08 * speedNorm;
+    }
+    if (pose.animTag === 'aim' || pose.animTag === 'throw') {
+      return toRad(aimAngleDeg) * 0.35;
+    }
+    if (pose.animTag === 'followThrough') {
+      return -0.15;
+    }
+    if (pose.animTag === 'fall') {
+      return -0.5;
+    }
+    return 0;
+  })();
 
   const hipFront: PointM = { xM: pelvis.xM + 0.055, yM: pelvis.yM - 0.02 };
   const hipBack: PointM = { xM: pelvis.xM - 0.055, yM: pelvis.yM - 0.02 };
@@ -447,6 +467,7 @@ export const computeAthletePoseGeometry = (
 
   return {
     head,
+    headTiltRad,
     shoulderCenter,
     pelvis,
     hipFront,

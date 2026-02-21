@@ -87,9 +87,11 @@ export const drawAthlete = (
   ctx.arc(p.head.x, p.head.y, 7.6, 0, Math.PI * 2);
   ctx.stroke();
 
+  const eyeOffsetX = Math.cos(pose.headTiltRad) * 3.5 + Math.sin(pose.headTiltRad) * 0.5;
+  const eyeOffsetY = -Math.sin(pose.headTiltRad) * 3.5 + Math.cos(pose.headTiltRad) * 0.5;
   ctx.fillStyle = '#0b2c49';
   ctx.beginPath();
-  ctx.arc(p.head.x - 1.4, p.head.y - 0.7, 1.2, 0, Math.PI * 2);
+  ctx.arc(p.head.x + eyeOffsetX, p.head.y - eyeOffsetY, 1.2, 0, Math.PI * 2);
   ctx.fill();
 
   if (drawFrontArmOverHead) {

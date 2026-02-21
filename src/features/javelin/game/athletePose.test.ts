@@ -42,6 +42,17 @@ describe('athlete pose helpers', () => {
     expect(handAngleDeg).toBeLessThan(70);
   });
 
+  it('head tilts toward aim angle during charge', () => {
+    const highAim = computeAthletePoseGeometry({ animTag: 'aim', animT: 0.5 }, 0.5, 60, 10);
+    const lowAim = computeAthletePoseGeometry({ animTag: 'aim', animT: 0.5 }, 0.5, 10, 10);
+    expect(highAim.headTiltRad).toBeGreaterThan(lowAim.headTiltRad);
+  });
+
+  it('head tilts forward during run', () => {
+    const pose = computeAthletePoseGeometry({ animTag: 'run', animT: 0.5 }, 0.8, 36, 10);
+    expect(pose.headTiltRad).toBeLessThan(0);
+  });
+
   it('keeps legs close to run pose during early aim blend at high speed', () => {
     const runPose = computeAthletePoseGeometry({ animTag: 'run', animT: 0.5 }, 0.6, 36, 10);
     const aimBlendPose = computeAthletePoseGeometry(
@@ -54,5 +65,13 @@ describe('athlete pose helpers', () => {
 
     expect(Math.abs(aimBlendPose.kneeFront.xM - runPose.kneeFront.xM)).toBeLessThan(0.1);
     expect(Math.abs(aimBlendPose.kneeBack.xM - runPose.kneeBack.xM)).toBeLessThan(0.1);
+  });
+
+  it('follow-through has wider stance at high speed', () => {
+    const slow = computeAthletePoseGeometry({ animTag: 'followThrough', animT: 0.3 }, 0.2, 36, 17);
+    const fast = computeAthletePoseGeometry({ animTag: 'followThrough', animT: 0.3 }, 0.9, 36, 17);
+    const slowStance = Math.abs(slow.footFront.xM - slow.footBack.xM);
+    const fastStance = Math.abs(fast.footFront.xM - fast.footBack.xM);
+    expect(fastStance).toBeGreaterThan(slowStance);
   });
 });

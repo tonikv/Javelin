@@ -4,7 +4,12 @@ import {
   sampleThrowSubphase,
   type AthletePoseGeometry
 } from './athletePose';
-import { createWorldToScreen, RUNWAY_OFFSET_X, type WorldToScreen } from './camera';
+import {
+  createWorldToScreen,
+  createWorldToScreenRaw,
+  RUNWAY_OFFSET_X,
+  type WorldToScreen
+} from './camera';
 import {
   CAMERA_GROUND_BOTTOM_PADDING,
   FIELD_MAX_DISTANCE_M,
@@ -16,10 +21,54 @@ import {
 import { drawAthlete } from './renderAthlete';
 import { drawWorldTimingMeter } from './renderMeter';
 import { RUNUP_START_X_M, RUN_TO_DRAWBACK_BLEND_MS } from './tuning';
-import type { GameState } from './types';
+import type { GameState, ResultKind } from './types';
 
 export { getCameraTargetX } from './camera';
 export { getHeadMeterScreenAnchor } from './renderMeter';
+
+type CloudLayer = {
+  yFraction: number;
+  parallaxFactor: number;
+  clouds: Array<{
+    offsetXM: number;
+    widthPx: number;
+    heightPx: number;
+    opacity: number;
+  }>;
+};
+
+const CLOUD_LAYERS: CloudLayer[] = [
+  {
+    yFraction: 0.12,
+    parallaxFactor: 0.05,
+    clouds: [
+      { offsetXM: 0, widthPx: 120, heightPx: 18, opacity: 0.18 },
+      { offsetXM: 35, widthPx: 90, heightPx: 14, opacity: 0.14 },
+      { offsetXM: 72, widthPx: 140, heightPx: 20, opacity: 0.16 },
+      { offsetXM: 120, widthPx: 100, heightPx: 16, opacity: 0.12 }
+    ]
+  },
+  {
+    yFraction: 0.28,
+    parallaxFactor: 0.15,
+    clouds: [
+      { offsetXM: 10, widthPx: 80, heightPx: 28, opacity: 0.22 },
+      { offsetXM: 50, widthPx: 110, heightPx: 34, opacity: 0.2 },
+      { offsetXM: 95, widthPx: 70, heightPx: 24, opacity: 0.18 }
+    ]
+  },
+  {
+    yFraction: 0.18,
+    parallaxFactor: 0.3,
+    clouds: [
+      { offsetXM: 20, widthPx: 100, heightPx: 38, opacity: 0.25 },
+      { offsetXM: 80, widthPx: 130, heightPx: 42, opacity: 0.22 }
+    ]
+  }
+];
+
+let lastResultRoundId = -1;
+let resultShownAtMs = 0;
 
 const drawBackground = (ctx: CanvasRenderingContext2D, width: number, height: number): void => {
   const sky = ctx.createLinearGradient(0, 0, 0, height);
@@ -32,6 +81,39 @@ const drawBackground = (ctx: CanvasRenderingContext2D, width: number, height: nu
   ctx.fillStyle = 'rgba(0, 44, 83, 0.06)';
   for (let i = 0; i < width; i += 28) {
     ctx.fillRect(i, 0, 2, height);
+  }
+};
+
+const drawClouds = (
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  worldMinX: number
+): void => {
+  const groundY = height - CAMERA_GROUND_BOTTOM_PADDING;
+
+  for (const layer of CLOUD_LAYERS) {
+    const baseY = groundY * layer.yFraction;
+    const scrollPx = worldMinX * layer.parallaxFactor * 4;
+
+    for (const cloud of layer.clouds) {
+      const rawX = cloud.offsetXM * 8 - scrollPx;
+      const wrapWidth = width + cloud.widthPx * 2;
+      const x = ((rawX % wrapWidth) + wrapWidth) % wrapWidth - cloud.widthPx;
+      const y = baseY;
+
+      ctx.save();
+      ctx.globalAlpha = cloud.opacity;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      const rx = cloud.widthPx / 2;
+      const ry = cloud.heightPx / 2;
+      ctx.ellipse(x + rx, y, rx, ry, 0, 0, Math.PI * 2);
+      ctx.ellipse(x + rx * 0.6, y + ry * 0.15, rx * 0.7, ry * 0.8, 0, 0, Math.PI * 2);
+      ctx.ellipse(x + rx * 1.4, y - ry * 0.1, rx * 0.65, ry * 0.75, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
   }
 };
 
@@ -167,6 +249,80 @@ const drawJavelinWorld = (
   ctx.stroke();
 };
 
+const drawLandedJavelin = (
+  ctx: CanvasRenderingContext2D,
+  toScreen: WorldToScreen,
+  xM: number,
+  yM: number,
+  angleRad: number,
+  lengthM: number,
+  tipFirst: boolean
+): void => {
+  if (tipFirst) {
+    const stuckAngle = Math.max(angleRad, -Math.PI * 0.35);
+    drawJavelinWorld(ctx, toScreen, xM, yM, stuckAngle, lengthM);
+
+    const tip = toScreen({ xM: xM + (Math.cos(stuckAngle) * lengthM) / 2, yM: 0 });
+    ctx.save();
+    ctx.fillStyle = 'rgba(80, 50, 20, 0.3)';
+    ctx.beginPath();
+    ctx.ellipse(tip.x, tip.y + 2, 5, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    return;
+  }
+
+  const flatAngle = angleRad * 0.3;
+  const lyingYM = Math.max(0.05, yM * 0.3);
+  drawJavelinWorld(ctx, toScreen, xM, lyingYM, flatAngle, lengthM);
+
+  const center = toScreen({ xM, yM: 0 });
+  ctx.save();
+  ctx.strokeStyle = 'rgba(80, 50, 20, 0.2)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(center.x - 8, center.y + 3);
+  ctx.lineTo(center.x + 12, center.y + 3);
+  ctx.stroke();
+  ctx.restore();
+};
+
+const drawLandingMarker = (
+  ctx: CanvasRenderingContext2D,
+  toScreen: WorldToScreen,
+  landingXM: number,
+  resultKind: ResultKind,
+  distanceLabel: string
+): void => {
+  const landing = toScreen({ xM: landingXM, yM: 0 });
+  const groundY = landing.y;
+
+  ctx.strokeStyle = resultKind === 'valid' ? '#1f9d44' : '#cf3a2f';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(landing.x, groundY + 5);
+  ctx.lineTo(landing.x, groundY - 36);
+  ctx.stroke();
+
+  ctx.fillStyle = resultKind === 'valid' ? '#22c272' : '#e0453a';
+  ctx.beginPath();
+  ctx.moveTo(landing.x, groundY - 36);
+  ctx.lineTo(landing.x + 28, groundY - 30);
+  ctx.lineTo(landing.x, groundY - 24);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '700 10px ui-sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(distanceLabel, landing.x + 4, groundY - 28);
+
+  ctx.fillStyle = 'rgba(15, 40, 60, 0.35)';
+  ctx.beginPath();
+  ctx.arc(landing.x, groundY + 2, 3, 0, Math.PI * 2);
+  ctx.fill();
+};
+
 type JavelinRenderState =
   | { mode: 'none' }
   | { mode: 'attached'; xM: number; yM: number; angleRad: number; lengthM: number }
@@ -294,7 +450,7 @@ export const getPlayerAngleAnchorScreen = (
   width: number,
   height: number
 ): { x: number; y: number } => {
-  const camera = createWorldToScreen(state, width, height);
+  const camera = createWorldToScreenRaw(state, width, height);
   const pose = getPoseForState(state);
   return camera.toScreen(pose.shoulderCenter);
 };
@@ -320,22 +476,64 @@ export const renderGame = (
   state: GameState,
   width: number,
   height: number,
+  dtMs: number,
   numberFormat: Intl.NumberFormat,
   throwLineLabel: string
 ): void => {
-  const camera = createWorldToScreen(state, width, height);
+  const camera = createWorldToScreen(state, width, height, dtMs);
   const { toScreen, worldMinX, worldMaxX } = camera;
 
   drawBackground(ctx, width, height);
-  drawTrackAndField(ctx, width, height, toScreen, throwLineLabel, worldMinX, worldMaxX);
+  drawClouds(ctx, width, height, worldMinX);
+  drawTrackAndField(
+    ctx,
+    width,
+    height,
+    toScreen,
+    throwLineLabel,
+    worldMinX,
+    worldMaxX
+  );
   drawWindVane(ctx, width, state.windMs, numberFormat);
 
   const pose = getPoseForState(state);
   const javelin = getVisibleJavelinRenderState(state, pose);
   const headScreen = drawAthlete(ctx, toScreen, pose, shouldDrawFrontArmOverHead(state));
 
-  if (javelin.mode !== 'none') {
+  if (javelin.mode === 'landed') {
+    const tipFirst = state.phase.tag === 'result' ? state.phase.tipFirst === true : false;
+    drawLandedJavelin(
+      ctx,
+      toScreen,
+      javelin.xM,
+      javelin.yM,
+      javelin.angleRad,
+      javelin.lengthM,
+      tipFirst
+    );
+  } else if (javelin.mode !== 'none') {
     drawJavelinWorld(ctx, toScreen, javelin.xM, javelin.yM, javelin.angleRad, javelin.lengthM);
+  }
+
+  if (state.phase.tag === 'result') {
+    if (state.roundId !== lastResultRoundId) {
+      lastResultRoundId = state.roundId;
+      resultShownAtMs = state.nowMs;
+    }
+    const fadeAgeMs = Math.max(0, state.nowMs - resultShownAtMs);
+    const alpha = Math.min(1, fadeAgeMs / 400);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    drawLandingMarker(
+      ctx,
+      toScreen,
+      state.phase.landingXM,
+      state.phase.resultKind,
+      `${numberFormat.format(state.phase.distanceM)}m`
+    );
+    ctx.restore();
+  } else {
+    lastResultRoundId = -1;
   }
 
   drawWorldTimingMeter(ctx, state, headScreen);
