@@ -96,6 +96,9 @@ export const getCameraTargetX = (state: GameState): number => {
   if (state.phase.tag === 'result') {
     return state.phase.landingXM;
   }
+  if (state.phase.tag === 'fault') {
+    return state.phase.athleteXM;
+  }
   return 5;
 };
 
@@ -111,6 +114,9 @@ const getViewWidthM = (state: GameState): number => {
   }
   if (state.phase.tag === 'result') {
     return CAMERA_RESULT_VIEW_WIDTH_M;
+  }
+  if (state.phase.tag === 'fault') {
+    return CAMERA_THROW_VIEW_WIDTH_M;
   }
   return CAMERA_DEFAULT_VIEW_WIDTH_M;
 };
@@ -128,6 +134,9 @@ const getCameraAheadRatio = (state: GameState): number => {
   if (state.phase.tag === 'result') {
     return CAMERA_RESULT_TARGET_AHEAD;
   }
+  if (state.phase.tag === 'fault') {
+    return CAMERA_THROW_TARGET_AHEAD;
+  }
   return CAMERA_RUNUP_TARGET_AHEAD;
 };
 
@@ -143,6 +152,9 @@ const getVerticalScale = (state: GameState): number => {
   }
   if (state.phase.tag === 'result') {
     return CAMERA_Y_SCALE_RESULT;
+  }
+  if (state.phase.tag === 'fault') {
+    return CAMERA_Y_SCALE_THROW;
   }
   return CAMERA_Y_SCALE_RUNUP;
 };
@@ -609,6 +621,16 @@ export const getVisibleJavelinRenderState = (
     };
   }
 
+  if (state.phase.tag === 'fault') {
+    return {
+      mode: state.phase.javelinLanded ? 'landed' : 'flight',
+      xM: state.phase.javelin.xM,
+      yM: state.phase.javelin.yM,
+      angleRad: state.phase.javelin.angleRad,
+      lengthM: state.phase.javelin.lengthM
+    };
+  }
+
   if (
     state.phase.tag === 'runup' ||
     state.phase.tag === 'chargeAim' ||
@@ -685,6 +707,14 @@ const getPoseForState = (state: GameState): AthletePoseGeometry => {
       state.phase.athleteXM
     );
   }
+  if (state.phase.tag === 'fault') {
+    return computeAthletePoseGeometry(
+      state.phase.athletePose,
+      0.14,
+      state.aimAngleDeg,
+      state.phase.athleteXM
+    );
+  }
   return computeAthletePoseGeometry({ animTag: 'idle', animT: 0 }, 0, state.aimAngleDeg, RUNUP_START_X_M);
 };
 
@@ -706,6 +736,9 @@ const shouldDrawFrontArmOverHead = (state: GameState): boolean => {
     return sampleThrowSubphase(state.phase.animProgress).stage !== 'windup';
   }
   if (state.phase.tag === 'flight') {
+    return false;
+  }
+  if (state.phase.tag === 'fault') {
     return false;
   }
   return true;

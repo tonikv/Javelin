@@ -29,7 +29,7 @@ export type ChargeMeterState = {
 };
 
 export type AthletePoseState = {
-  animTag: 'idle' | 'run' | 'aim' | 'throw' | 'followThrough';
+  animTag: 'idle' | 'run' | 'aim' | 'throw' | 'followThrough' | 'fall';
   animT: number;
 };
 
@@ -122,6 +122,10 @@ export type GamePhase =
   | {
       tag: 'fault';
       reason: FaultReason;
+      athleteXM: number;
+      athletePose: AthletePoseState;
+      javelin: PhysicalJavelinState;
+      javelinLanded: boolean;
     };
 
 export type GameState = {

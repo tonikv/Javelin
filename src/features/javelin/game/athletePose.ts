@@ -271,6 +271,26 @@ const followThroughCurves = (t01: number): MotionCurves => {
   };
 };
 
+const fallCurves = (t01: number): MotionCurves => {
+  const t = clamp01(t01);
+  const thrust01 = easeOutQuad(Math.min(1, t / 0.55));
+  const collapse01 = easeInOutSine(clamp01((t - 0.35) / 0.65));
+  return {
+    leanRad: lerp(-0.18, -0.88, collapse01),
+    pelvisShiftXM: lerp(0.06, 0.42, thrust01),
+    pelvisBobYM: lerp(0.01, -0.2, collapse01),
+    hipFront: lerp(0.32, 0.74, collapse01),
+    hipBack: lerp(-0.2, -0.44, collapse01),
+    kneeFront: lerp(0.48, 0.88, collapse01),
+    kneeBack: lerp(0.6, 1.02, collapse01),
+    shoulderFront: lerp(-0.34, -0.92, thrust01),
+    shoulderBack: lerp(0.12, -0.28, collapse01),
+    elbowFront: lerp(-0.12, 0.08, collapse01),
+    elbowBack: lerp(-0.04, 0.18, collapse01),
+    javelinAngleRad: lerp(toRad(12), toRad(-8), collapse01)
+  };
+};
+
 const idleCurves = (aimAngleDeg: number): MotionCurves => ({
   leanRad: -0.04,
   pelvisShiftXM: 0,
@@ -321,6 +341,10 @@ const curvesForPose = (
 
   if (pose.animTag === 'followThrough') {
     return followThroughCurves(t);
+  }
+
+  if (pose.animTag === 'fall') {
+    return fallCurves(t);
   }
 
   return idleCurves(aimAngleDeg);

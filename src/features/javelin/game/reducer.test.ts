@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   BEAT_INTERVAL_MS,
-  CHARGEAIM_STOP_SPEED_NORM,
+  CHARGE_FILL_DURATION_MS,
+  CHARGE_OVERFILL_FAULT_01,
   RUNUP_MAX_X_M,
   RUNUP_PASSIVE_MAX_SPEED,
   RUNUP_PASSIVE_TO_HALF_MS,
@@ -123,7 +124,7 @@ describe('gameReducer', () => {
     }
   });
 
-  it('slows chargeAim near standstill over time', () => {
+  it('decelerates during chargeAim before overfill', () => {
     let state = createInitialGameState();
     state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0 });
     state = gameReducer(state, { type: 'rhythmTap', atMs: 1880 });
@@ -131,14 +132,16 @@ describe('gameReducer', () => {
     state = gameReducer(state, { type: 'rhythmTap', atMs: 3640 });
     state = gameReducer(state, { type: 'rhythmTap', atMs: 4520 });
     state = gameReducer(state, { type: 'beginChargeAim', atMs: 4600 });
+    const startSpeed = state.phase.tag === 'chargeAim' ? state.phase.speedNorm : 0;
 
-    for (let i = 1; i <= 30; i += 1) {
+    const tickCount = Math.floor((CHARGE_FILL_DURATION_MS * 0.9) / 100);
+    for (let i = 1; i <= tickCount; i += 1) {
       state = gameReducer(state, { type: 'tick', dtMs: 100, nowMs: 4600 + i * 100 });
     }
 
     expect(state.phase.tag).toBe('chargeAim');
     if (state.phase.tag === 'chargeAim') {
-      expect(state.phase.speedNorm).toBeLessThanOrEqual(CHARGEAIM_STOP_SPEED_NORM);
+      expect(state.phase.speedNorm).toBeLessThan(startSpeed);
     }
   });
 
@@ -151,7 +154,7 @@ describe('gameReducer', () => {
     state = gameReducer(state, { type: 'tick', dtMs: 9000, nowMs: 10000 });
     state = gameReducer(state, { type: 'beginChargeAim', atMs: 10020 });
 
-    for (let i = 1; i <= 15; i += 1) {
+    for (let i = 1; i <= 4; i += 1) {
       state = gameReducer(state, { type: 'tick', dtMs: 120, nowMs: 10020 + i * 120 });
     }
 
@@ -188,6 +191,53 @@ describe('gameReducer', () => {
       if (state.phase.tag === 'flight') {
         expect(state.phase.javelin.releasedAtMs).toBe(releasedAt);
         expect(state.phase.athleteXM).toBeGreaterThan(athleteXAtRelease);
+      }
+    }
+  });
+
+  it('release near end of fill yields stronger force than early release', () => {
+    let early = createInitialGameState();
+    early = gameReducer(early, { type: 'startRound', atMs: 1000, windMs: 0 });
+    early = gameReducer(early, { type: 'beginChargeAim', atMs: 1200 });
+    early = gameReducer(early, { type: 'tick', dtMs: 120, nowMs: 1320 });
+    early = gameReducer(early, { type: 'releaseCharge', atMs: 1320 });
+    expect(early.phase.tag).toBe('throwAnim');
+
+    let late = createInitialGameState();
+    late = gameReducer(late, { type: 'startRound', atMs: 1000, windMs: 0 });
+    late = gameReducer(late, { type: 'beginChargeAim', atMs: 1200 });
+    late = gameReducer(late, {
+      type: 'tick',
+      dtMs: Math.round(CHARGE_FILL_DURATION_MS * 0.92),
+      nowMs: 1200 + Math.round(CHARGE_FILL_DURATION_MS * 0.92)
+    });
+    late = gameReducer(
+      late,
+      { type: 'releaseCharge', atMs: 1200 + Math.round(CHARGE_FILL_DURATION_MS * 0.92) }
+    );
+    expect(late.phase.tag).toBe('throwAnim');
+
+    if (early.phase.tag === 'throwAnim' && late.phase.tag === 'throwAnim') {
+      expect(late.phase.forceNorm).toBeGreaterThan(early.phase.forceNorm);
+    }
+  });
+
+  it('overfilling charge triggers late-release fault with fall animation', () => {
+    let state = createInitialGameState();
+    state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0 });
+    state = gameReducer(state, { type: 'beginChargeAim', atMs: 1200 });
+    const overfillMs = Math.ceil(CHARGE_FILL_DURATION_MS * CHARGE_OVERFILL_FAULT_01) + 10;
+    state = gameReducer(state, { type: 'tick', dtMs: overfillMs, nowMs: 1200 + overfillMs });
+
+    expect(state.phase.tag).toBe('fault');
+    if (state.phase.tag === 'fault') {
+      expect(state.phase.reason).toBe('lateRelease');
+      expect(state.phase.athletePose.animTag).toBe('fall');
+      const startX = state.phase.athleteXM;
+      state = gameReducer(state, { type: 'tick', dtMs: 120, nowMs: 1200 + overfillMs + 120 });
+      expect(state.phase.tag).toBe('fault');
+      if (state.phase.tag === 'fault') {
+        expect(state.phase.athleteXM).toBeGreaterThan(startX);
       }
     }
   });

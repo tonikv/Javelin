@@ -9,7 +9,7 @@ export const wrap01 = (value: number): number => {
 };
 
 export const isInWindow = (phase01: number, window: MeterWindow): boolean => {
-  const phase = wrap01(phase01);
+  const phase = clamp(phase01, 0, 1);
   if (window.start <= window.end) {
     return phase >= window.start && phase <= window.end;
   }
@@ -31,7 +31,7 @@ export const getTimingQuality = (
 };
 
 export const computeForcePreview = (phase01: number): number =>
-  clamp(0.15 + 0.85 * Math.abs(Math.sin(wrap01(phase01) * Math.PI)), 0.15, 1);
+  clamp(phase01, 0.05, 1);
 
 export const applyForceQualityBonus = (
   previewForceNorm: number,

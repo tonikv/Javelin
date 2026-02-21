@@ -18,7 +18,9 @@ type SpeedUpTuning = {
 };
 
 type ThrowPhaseTuning = {
-  chargeForceCycleMs: number;
+  chargeFillDurationMs: number;
+  chargeOverfillFault01: number;
+  faultJavelinLaunchSpeedMs: number;
   chargePerfectWindow: MeterWindow;
   chargeGoodWindow: MeterWindow;
   runToDrawbackBlendMs: number;
@@ -32,6 +34,7 @@ type MovementTuning = {
   chargeAimSpeedDecayPerSecond: number;
   chargeAimStopSpeedNorm: number;
   followThroughStepDistanceM: number;
+  faultStumbleDistanceM: number;
 };
 
 export type GameplayTuning = {
@@ -45,11 +48,11 @@ export type GameplayTuning = {
  *
  * Difficulty guidance:
  * - Easier speed-up: lower beatIntervalMs, wider perfect/good windows, less negative miss/spam deltas.
- * - Easier throw timing: wider charge windows and/or slower chargeForceCycleMs.
+ * - Easier throw timing: wider charge windows and/or slower chargeFillDurationMs.
  */
 export const GAMEPLAY_TUNING: GameplayTuning = {
   speedUp: {
-    beatIntervalMs: 920,
+    beatIntervalMs: 820,
     perfectWindowMs: 120,
     goodWindowMs: 230,
     spamThresholdMs: 130,
@@ -57,7 +60,7 @@ export const GAMEPLAY_TUNING: GameplayTuning = {
     passiveToHalfMs: 3200,
     passiveMaxSpeedNorm: 0.62,
     hitSpeedDelta: {
-      perfect: 0.11,
+      perfect: 0.15,
       good: 0.07,
       miss: -0.008,
       inPenalty: -0.025,
@@ -65,9 +68,11 @@ export const GAMEPLAY_TUNING: GameplayTuning = {
     },
   },
   throwPhase: {
-    chargeForceCycleMs: 1100,
-    chargePerfectWindow: { start: 0.44, end: 0.56 },
-    chargeGoodWindow: { start: 0.34, end: 0.66 },
+    chargeFillDurationMs: 800,
+    chargeOverfillFault01: 1.03,
+    faultJavelinLaunchSpeedMs: 8.4,
+    chargePerfectWindow: { start: 0.78, end: 0.98 },
+    chargeGoodWindow: { start: 0.56, end: 0.98 },
     runToDrawbackBlendMs: 420,
     throwAnimDurationMs: 320,
     throwReleaseProgress01: 0.56,
@@ -78,5 +83,6 @@ export const GAMEPLAY_TUNING: GameplayTuning = {
     chargeAimSpeedDecayPerSecond: 0.2,
     chargeAimStopSpeedNorm: 0.03,
     followThroughStepDistanceM: 0.75,
+    faultStumbleDistanceM: 0.82,
   },
 };

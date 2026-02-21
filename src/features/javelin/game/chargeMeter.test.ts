@@ -6,9 +6,9 @@ import {
 } from './chargeMeter';
 
 describe('charge meter helpers', () => {
-  it('peaks around midpoint of cycle', () => {
-    expect(computeForcePreview(0.5)).toBeGreaterThan(computeForcePreview(0.1));
-    expect(computeForcePreview(0.5)).toBeGreaterThan(computeForcePreview(0.9));
+  it('fills force steadily toward end of charge', () => {
+    expect(computeForcePreview(0.85)).toBeGreaterThan(computeForcePreview(0.25));
+    expect(computeForcePreview(1.1)).toBeCloseTo(1, 5);
   });
 
   it('detects perfect and good windows', () => {
