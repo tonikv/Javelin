@@ -4,6 +4,7 @@ import {
   sampleThrowSubphase,
   type AthletePoseGeometry
 } from './athletePose';
+import { playBeatTick } from './audio';
 import {
   createWorldToScreen,
   createWorldToScreenRaw,
@@ -16,12 +17,14 @@ import {
   JAVELIN_GRIP_OFFSET_M,
   JAVELIN_GRIP_OFFSET_Y_M,
   JAVELIN_LENGTH_M,
+  RHYTHM_TARGET_PHASE01,
   THROW_LINE_X_M
 } from './constants';
 import { drawAthlete } from './renderAthlete';
 import { drawWorldTimingMeter } from './renderMeter';
+import { getRunupMeterPhase01 } from './selectors';
 import { RUNUP_START_X_M, RUN_TO_DRAWBACK_BLEND_MS } from './tuning';
-import type { GameState, ResultKind } from './types';
+import type { GameState, ResultKind, TimingQuality } from './types';
 
 export { getCameraTargetX } from './camera';
 export { getHeadMeterScreenAnchor } from './renderMeter';
@@ -42,27 +45,27 @@ const CLOUD_LAYERS: CloudLayer[] = [
     yFraction: 0.12,
     parallaxFactor: 0.05,
     clouds: [
-      { offsetXM: 0, widthPx: 120, heightPx: 18, opacity: 0.18 },
-      { offsetXM: 35, widthPx: 90, heightPx: 14, opacity: 0.14 },
-      { offsetXM: 72, widthPx: 140, heightPx: 20, opacity: 0.16 },
-      { offsetXM: 120, widthPx: 100, heightPx: 16, opacity: 0.12 }
+      { offsetXM: 0, widthPx: 120, heightPx: 18, opacity: 0.28 },
+      { offsetXM: 35, widthPx: 90, heightPx: 14, opacity: 0.24 },
+      { offsetXM: 72, widthPx: 140, heightPx: 20, opacity: 0.26 },
+      { offsetXM: 120, widthPx: 100, heightPx: 16, opacity: 0.22 }
     ]
   },
   {
     yFraction: 0.28,
     parallaxFactor: 0.15,
     clouds: [
-      { offsetXM: 10, widthPx: 80, heightPx: 28, opacity: 0.22 },
-      { offsetXM: 50, widthPx: 110, heightPx: 34, opacity: 0.2 },
-      { offsetXM: 95, widthPx: 70, heightPx: 24, opacity: 0.18 }
+      { offsetXM: 10, widthPx: 80, heightPx: 28, opacity: 0.32 },
+      { offsetXM: 50, widthPx: 110, heightPx: 34, opacity: 0.3 },
+      { offsetXM: 95, widthPx: 70, heightPx: 24, opacity: 0.28 }
     ]
   },
   {
     yFraction: 0.18,
     parallaxFactor: 0.3,
     clouds: [
-      { offsetXM: 20, widthPx: 100, heightPx: 38, opacity: 0.25 },
-      { offsetXM: 80, widthPx: 130, heightPx: 42, opacity: 0.22 }
+      { offsetXM: 20, widthPx: 100, heightPx: 38, opacity: 0.34 },
+      { offsetXM: 80, widthPx: 130, heightPx: 42, opacity: 0.31 }
     ]
   }
 ];
@@ -70,18 +73,23 @@ const CLOUD_LAYERS: CloudLayer[] = [
 let lastResultRoundId = -1;
 let resultShownAtMs = 0;
 
+type ReleaseFlashLabels = Record<TimingQuality, string> & {
+  foulLine: string;
+};
+
 const drawBackground = (ctx: CanvasRenderingContext2D, width: number, height: number): void => {
   const sky = ctx.createLinearGradient(0, 0, 0, height);
-  sky.addColorStop(0, '#e9f7ff');
-  sky.addColorStop(0.58, '#d0efff');
-  sky.addColorStop(1, '#f5ffe4');
+  sky.addColorStop(0, '#dceef8');
+  sky.addColorStop(0.56, '#c8e1ef');
+  sky.addColorStop(1, '#b8d6e3');
   ctx.fillStyle = sky;
   ctx.fillRect(0, 0, width, height);
 
-  ctx.fillStyle = 'rgba(0, 44, 83, 0.06)';
-  for (let i = 0; i < width; i += 28) {
-    ctx.fillRect(i, 0, 2, height);
-  }
+  const haze = ctx.createRadialGradient(width * 0.25, height * 0.1, 20, width * 0.25, height * 0.1, width * 0.8);
+  haze.addColorStop(0, 'rgba(255, 255, 255, 0.24)');
+  haze.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  ctx.fillStyle = haze;
+  ctx.fillRect(0, 0, width, height);
 };
 
 const drawClouds = (
@@ -103,8 +111,8 @@ const drawClouds = (
       const y = baseY;
 
       ctx.save();
-      ctx.globalAlpha = cloud.opacity;
-      ctx.fillStyle = '#ffffff';
+      ctx.globalAlpha = Math.min(1, cloud.opacity + 0.16);
+      ctx.fillStyle = '#f8fcff';
       ctx.beginPath();
       const rx = cloud.widthPx / 2;
       const ry = cloud.heightPx / 2;
@@ -112,6 +120,9 @@ const drawClouds = (
       ctx.ellipse(x + rx * 0.6, y + ry * 0.15, rx * 0.7, ry * 0.8, 0, 0, Math.PI * 2);
       ctx.ellipse(x + rx * 1.4, y - ry * 0.1, rx * 0.65, ry * 0.75, 0, 0, Math.PI * 2);
       ctx.fill();
+      ctx.strokeStyle = 'rgba(142, 179, 200, 0.45)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
       ctx.restore();
     }
   }
@@ -478,7 +489,8 @@ export const renderGame = (
   height: number,
   dtMs: number,
   numberFormat: Intl.NumberFormat,
-  throwLineLabel: string
+  throwLineLabel: string,
+  releaseFlashLabels: ReleaseFlashLabels
 ): void => {
   const camera = createWorldToScreen(state, width, height, dtMs);
   const { toScreen, worldMinX, worldMaxX } = camera;
@@ -536,5 +548,53 @@ export const renderGame = (
     lastResultRoundId = -1;
   }
 
+  const releaseFeedback =
+    state.phase.tag === 'throwAnim'
+      ? {
+          label: state.phase.lineCrossedAtRelease
+            ? releaseFlashLabels.foulLine
+            : releaseFlashLabels[state.phase.releaseQuality],
+          shownAtMs: state.phase.releaseFlashAtMs
+        }
+      : state.phase.tag === 'flight'
+        ? {
+            label: state.phase.launchedFrom.lineCrossedAtRelease
+              ? releaseFlashLabels.foulLine
+              : releaseFlashLabels[state.phase.launchedFrom.releaseQuality],
+            shownAtMs: state.phase.javelin.releasedAtMs
+          }
+        : null;
+
+  if (releaseFeedback !== null) {
+    const feedbackAgeMs = Math.max(0, state.nowMs - releaseFeedback.shownAtMs);
+    const holdMs = 220;
+    const fadeMs = 620;
+    const totalMs = holdMs + fadeMs;
+    if (feedbackAgeMs < totalMs) {
+      const fadeT = feedbackAgeMs <= holdMs ? 0 : (feedbackAgeMs - holdMs) / fadeMs;
+      const alpha = 1 - Math.min(1, fadeT);
+      const scale = 1 + (1 - alpha) * 0.12;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.font = `900 ${Math.round(28 * scale)}px ui-sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#0b2238';
+      const y = 74 - (1 - alpha) * 8;
+      ctx.fillText(releaseFeedback.label, width / 2, y);
+      ctx.restore();
+    }
+  }
+
   drawWorldTimingMeter(ctx, state, headScreen);
+
+  if (state.phase.tag === 'runup') {
+    const meterPhase = getRunupMeterPhase01(state);
+    if (meterPhase !== null) {
+      const distToTarget = Math.abs(meterPhase - RHYTHM_TARGET_PHASE01);
+      const wrappedDist = Math.min(distToTarget, 1 - distToTarget);
+      if (wrappedDist < 0.02) {
+        playBeatTick(state.nowMs, wrappedDist < 0.01);
+      }
+    }
+  }
 };

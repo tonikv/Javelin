@@ -20,6 +20,15 @@ export const GameCanvas = ({ state, dispatch }: GameCanvasProps): ReactElement =
     () => new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }),
     [locale]
   );
+  const releaseFlashLabels = useMemo(
+    () => ({
+      perfect: t('hud.perfect'),
+      good: t('hud.good'),
+      miss: t('hud.miss'),
+      foulLine: t('javelin.result.foul_line')
+    }),
+    [t]
+  );
 
   usePointerControls({ canvas: canvasRef.current, dispatch, phaseTag: state.phase.tag, state });
 
@@ -40,14 +49,24 @@ export const GameCanvas = ({ state, dispatch }: GameCanvasProps): ReactElement =
     const dtMs = Math.min(40, Math.max(0, nowMs - lastRenderAtMsRef.current));
     lastRenderAtMsRef.current = nowMs;
     context.setTransform(dpr, 0, 0, dpr, 0, 0);
-    renderGame(context, state, rect.width, rect.height, dtMs, numberFormat, t('javelin.throwLine'));
-  }, [state, numberFormat, t]);
+    renderGame(
+      context,
+      state,
+      rect.width,
+      rect.height,
+      dtMs,
+      numberFormat,
+      t('javelin.throwLine'),
+      releaseFlashLabels
+    );
+  }, [state, numberFormat, t, releaseFlashLabels]);
 
   return (
     <div className="canvas-frame">
       <canvas
         ref={canvasRef}
         className="game-canvas"
+        style={{ touchAction: 'none' }}
         role="img"
         aria-label="Javelin throw game canvas"
       />

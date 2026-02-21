@@ -40,11 +40,21 @@ export const HudPanel = ({ state }: HudPanelProps): ReactElement => {
       : state.phase.tag === 'chargeAim'
         ? t('javelin.speedPassiveHint')
         : '';
+  const windHint = (() => {
+    if (state.phase.tag !== 'chargeAim') {
+      return '';
+    }
+    if (Math.abs(state.windMs) < 0.3) {
+      return '';
+    }
+    return state.windMs < -0.3 ? t('javelin.windHintHeadwind') : t('javelin.windHintTailwind');
+  })();
 
   return (
     <section className="card hud-panel" aria-label="HUD">
       <div className="hud-topline">{t(phaseMessageKey(state))}</div>
       {phaseHint && <div className="hud-hint">{phaseHint}</div>}
+      {windHint && <div className="hud-hint hud-hint-wind">{windHint}</div>}
       <div className="hud-grid">
         <div className="hud-item">
           <span>{t('hud.speed')}</span>

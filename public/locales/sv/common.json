@@ -11,9 +11,21 @@
   "javelin.runupHint": "Tajma klicken till det gröna området. Kvar till linjen",
   "javelin.throwLine": "Kastlinje",
   "javelin.speedPassiveHint": "Grundfarten ökar även utan klick.",
+  "javelin.windHintHeadwind": "Motvind - sikta högre för distans",
+  "javelin.windHintTailwind": "Medvind - lägre vinkel bär längre",
+  "javelin.attempt": "Försök",
+  "javelin.sessionBest": "Bästa",
+  "action.nextAttempt": "Nästa försök",
+  "action.newSession": "Ny serie (6 försök)",
+  "help.touch1": "Tryck: bygg rytmfart",
+  "help.touch2": "Håll: ladda kastkraft",
+  "help.touch3": "Dra medan du håller: sikta vinkel",
+  "help.touch4": "Släpp: kasta",
   "javelin.landingTipFirst": "Spetsen först",
   "javelin.landingFlat": "Platt landning",
   "javelin.result.foul_line": "Ogiltigt: linjen överträdd",
   "javelin.result.foul_sector": "Ogiltigt: utanför sektorn",
-  "javelin.result.foul_tip_first": "Ogiltigt: spetsen landade inte först"
+  "javelin.result.foul_tip_first": "Ogiltigt: spetsen landade inte först",
+  "result.notSavedInvalid": "Ogiltigt kast - resultatet sparas inte",
+  "result.notHighscore": "Inte nytt rekord - resultatet sparas inte"
 }

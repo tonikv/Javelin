@@ -11,9 +11,21 @@
   "javelin.runupHint": "Time clicks to the green zone. Distance to line",
   "javelin.throwLine": "Throw Line",
   "javelin.speedPassiveHint": "Base speed also builds without clicking.",
+  "javelin.windHintHeadwind": "Headwind - aim higher for distance",
+  "javelin.windHintTailwind": "Tailwind - lower angle carries further",
+  "javelin.attempt": "Attempt",
+  "javelin.sessionBest": "Best",
+  "action.nextAttempt": "Next Attempt",
+  "action.newSession": "New Session (6 attempts)",
+  "help.touch1": "Tap: build rhythm speed",
+  "help.touch2": "Hold: charge throw force",
+  "help.touch3": "Drag while holding: aim angle",
+  "help.touch4": "Release: throw",
   "javelin.landingTipFirst": "Tip-first landing",
   "javelin.landingFlat": "Flat landing",
   "javelin.result.foul_line": "Foul: line crossed",
   "javelin.result.foul_sector": "Foul: outside sector",
-  "javelin.result.foul_tip_first": "Foul: tip did not land first"
+  "javelin.result.foul_tip_first": "Foul: tip did not land first",
+  "result.notSavedInvalid": "Invalid throw - result is not saved",
+  "result.notHighscore": "Not a highscore - result is not saved"
 }

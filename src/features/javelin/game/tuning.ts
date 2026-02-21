@@ -19,7 +19,7 @@ type SpeedUpTuning = {
 
 type ThrowPhaseTuning = {
   chargeFillDurationMs: number;
-  chargeOverfillFault01: number;
+  chargeMaxCycles: number;
   faultJavelinLaunchSpeedMs: number;
   chargePerfectWindow: MeterWindow;
   chargeGoodWindow: MeterWindow;
@@ -69,7 +69,7 @@ export const GAMEPLAY_TUNING: GameplayTuning = {
   },
   throwPhase: {
     chargeFillDurationMs: 800,
-    chargeOverfillFault01: 1.03,
+    chargeMaxCycles: 3,
     faultJavelinLaunchSpeedMs: 8.4,
     chargePerfectWindow: { start: 0.78, end: 0.98 },
     chargeGoodWindow: { start: 0.56, end: 0.98 },
@@ -113,7 +113,7 @@ export const CHARGEAIM_SPEED_DECAY_PER_SECOND = CHARGE_AIM_SPEED_DECAY_PER_SECON
 export const CHARGEAIM_STOP_SPEED_NORM = CHARGE_AIM_STOP_SPEED_NORM;
 
 export const CHARGE_FILL_DURATION_MS = GAMEPLAY_TUNING.throwPhase.chargeFillDurationMs;
-export const CHARGE_OVERFILL_FAULT_01 = GAMEPLAY_TUNING.throwPhase.chargeOverfillFault01;
+export const CHARGE_MAX_CYCLES = GAMEPLAY_TUNING.throwPhase.chargeMaxCycles;
 export const FAULT_JAVELIN_LAUNCH_SPEED_MS = GAMEPLAY_TUNING.throwPhase.faultJavelinLaunchSpeedMs;
 export const CHARGE_PERFECT_WINDOW = GAMEPLAY_TUNING.throwPhase.chargePerfectWindow;
 export const CHARGE_GOOD_WINDOW = GAMEPLAY_TUNING.throwPhase.chargeGoodWindow;

@@ -7,7 +7,7 @@ import { gameReducer } from './reducer';
 import {
   BEAT_INTERVAL_MS,
   CHARGE_FILL_DURATION_MS,
-  CHARGE_OVERFILL_FAULT_01,
+  CHARGE_MAX_CYCLES,
   RUNUP_PASSIVE_MAX_SPEED,
   RUNUP_PASSIVE_TO_HALF_MS,
   RUNUP_START_X_M,
@@ -221,11 +221,40 @@ describe('gameReducer', () => {
     }
   });
 
-  it('overfilling charge triggers late-release fault with fall animation', () => {
+  it('sets release flash timestamp on charge release', () => {
     let state = createInitialGameState();
     state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0 });
     state = gameReducer(state, { type: 'beginChargeAim', atMs: 1200 });
-    const overfillMs = Math.ceil(CHARGE_FILL_DURATION_MS * CHARGE_OVERFILL_FAULT_01) + 10;
+    state = gameReducer(state, { type: 'tick', dtMs: 120, nowMs: 1320 });
+    state = gameReducer(state, { type: 'releaseCharge', atMs: 1320 });
+    expect(state.phase.tag).toBe('throwAnim');
+    if (state.phase.tag === 'throwAnim') {
+      expect(state.phase.releaseFlashAtMs).toBe(1320);
+    }
+  });
+
+  it('allows release on second cycle with correct quality', () => {
+    let state = createInitialGameState();
+    state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0 });
+    state = gameReducer(state, { type: 'beginChargeAim', atMs: 1200 });
+    const releaseMs = 1200 + Math.round(CHARGE_FILL_DURATION_MS * 1.85);
+    state = gameReducer(state, {
+      type: 'tick',
+      dtMs: releaseMs - 1200,
+      nowMs: releaseMs
+    });
+    state = gameReducer(state, { type: 'releaseCharge', atMs: releaseMs });
+    expect(state.phase.tag).toBe('throwAnim');
+    if (state.phase.tag === 'throwAnim') {
+      expect(state.phase.releaseQuality).toBe('perfect');
+    }
+  });
+
+  it('faults after exceeding max charge cycles', () => {
+    let state = createInitialGameState();
+    state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0 });
+    state = gameReducer(state, { type: 'beginChargeAim', atMs: 1200 });
+    const overfillMs = CHARGE_FILL_DURATION_MS * CHARGE_MAX_CYCLES + 10;
     state = gameReducer(state, { type: 'tick', dtMs: overfillMs, nowMs: 1200 + overfillMs });
 
     expect(state.phase.tag).toBe('fault');
