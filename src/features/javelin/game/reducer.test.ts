@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RUNUP_PASSIVE_TO_HALF_MS, THROW_LINE_X_M } from './constants';
+import { RUNUP_PASSIVE_TO_HALF_MS, THROW_ANIM_DURATION_MS, THROW_LINE_X_M } from './constants';
 import { gameReducer } from './reducer';
 import { createInitialGameState } from './update';
 
@@ -11,13 +11,23 @@ describe('gameReducer', () => {
     expect(next.windMs).toBe(1.2);
   });
 
-  it('builds passive speed to around 50% without taps', () => {
+  it('stays still before first tap and then builds passive speed', () => {
     let state = createInitialGameState();
     state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0 });
+    state = gameReducer(state, { type: 'tick', dtMs: 2000, nowMs: 3000 });
+    expect(state.phase.tag).toBe('runup');
+    if (state.phase.tag === 'runup') {
+      expect(state.phase.speedNorm).toBe(0);
+      expect(state.phase.runupDistanceM).toBe(2.8);
+      expect(state.phase.athletePose.animTag).toBe('idle');
+      expect(state.phase.athletePose.animT).toBe(0);
+    }
+
+    state = gameReducer(state, { type: 'rhythmTap', atMs: 3200 });
     state = gameReducer(state, {
       type: 'tick',
       dtMs: RUNUP_PASSIVE_TO_HALF_MS,
-      nowMs: 1000 + RUNUP_PASSIVE_TO_HALF_MS
+      nowMs: 3200 + RUNUP_PASSIVE_TO_HALF_MS
     });
     expect(state.phase.tag).toBe('runup');
     if (state.phase.tag === 'runup') {
@@ -29,10 +39,11 @@ describe('gameReducer', () => {
   it('perfect timing tap boosts speed above passive baseline', () => {
     let state = createInitialGameState();
     state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0 });
+    state = gameReducer(state, { type: 'rhythmTap', atMs: 1300 });
     state = gameReducer(state, {
       type: 'tick',
       dtMs: RUNUP_PASSIVE_TO_HALF_MS,
-      nowMs: 1000 + RUNUP_PASSIVE_TO_HALF_MS
+      nowMs: 1300 + RUNUP_PASSIVE_TO_HALF_MS
     });
     const baseline = state.phase.tag === 'runup' ? state.phase.speedNorm : 0;
     state = gameReducer(state, { type: 'rhythmTap', atMs: 6280 });
@@ -57,6 +68,7 @@ describe('gameReducer', () => {
   it('runup locomotion advances and can cross throw line', () => {
     let state = createInitialGameState();
     state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0 });
+    state = gameReducer(state, { type: 'rhythmTap', atMs: 1300 });
     state = gameReducer(state, { type: 'tick', dtMs: 9000, nowMs: 10000 });
     expect(state.phase.tag).toBe('runup');
     if (state.phase.tag === 'runup') {
@@ -64,16 +76,68 @@ describe('gameReducer', () => {
     }
   });
 
-  it('allows early throw start before line', () => {
+  it('allows immediate throw start before line without taps', () => {
+    let state = createInitialGameState();
+    state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0.2 });
+    state = gameReducer(state, { type: 'beginChargeAim', atMs: 1080 });
+    expect(state.phase.tag).toBe('chargeAim');
+    if (state.phase.tag === 'chargeAim') {
+      expect(state.phase.athleteXM).toBeLessThan(THROW_LINE_X_M);
+    }
+  });
+
+  it('crosses release threshold once and enters flight', () => {
     let state = createInitialGameState();
     state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0.2 });
     state = gameReducer(state, { type: 'rhythmTap', atMs: 1880 });
     state = gameReducer(state, { type: 'rhythmTap', atMs: 2760 });
     state = gameReducer(state, { type: 'rhythmTap', atMs: 3640 });
     state = gameReducer(state, { type: 'beginChargeAim', atMs: 3700 });
+    state = gameReducer(state, { type: 'tick', dtMs: 280, nowMs: 3980 });
+    state = gameReducer(state, { type: 'releaseCharge', atMs: 3990 });
+    expect(state.phase.tag).toBe('throwAnim');
+
+    state = gameReducer(state, {
+      type: 'tick',
+      dtMs: Math.round(THROW_ANIM_DURATION_MS * 0.72),
+      nowMs: 4610
+    });
+
+    expect(state.phase.tag).toBe('flight');
+    if (state.phase.tag === 'flight') {
+      const releasedAt = state.phase.javelin.releasedAtMs;
+      state = gameReducer(state, { type: 'tick', dtMs: 16, nowMs: 4626 });
+      expect(state.phase.tag).toBe('flight');
+      if (state.phase.tag === 'flight') {
+        expect(state.phase.javelin.releasedAtMs).toBe(releasedAt);
+      }
+    }
+  });
+
+  it('sets absolute angle and clamps to allowed range', () => {
+    let state = createInitialGameState();
+    state = gameReducer(state, { type: 'setAngle', angleDeg: 15 });
+    expect(state.aimAngleDeg).toBe(15);
+
+    state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0.1 });
+    state = gameReducer(state, { type: 'setAngle', angleDeg: 66 });
+    expect(state.aimAngleDeg).toBe(66);
+    state = gameReducer(state, { type: 'beginChargeAim', atMs: 1080 });
     expect(state.phase.tag).toBe('chargeAim');
     if (state.phase.tag === 'chargeAim') {
-      expect(state.phase.athleteXM).toBeLessThan(THROW_LINE_X_M);
+      expect(state.phase.angleDeg).toBe(66);
+    }
+
+    state = gameReducer(state, { type: 'setAngle', angleDeg: 90 });
+    expect(state.phase.tag).toBe('chargeAim');
+    if (state.phase.tag === 'chargeAim') {
+      expect(state.phase.angleDeg).toBe(90);
+    }
+
+    state = gameReducer(state, { type: 'setAngle', angleDeg: -150 });
+    expect(state.phase.tag).toBe('chargeAim');
+    if (state.phase.tag === 'chargeAim') {
+      expect(state.phase.angleDeg).toBe(-90);
     }
   });
 

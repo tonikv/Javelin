@@ -1,5 +1,39 @@
-import { computeAthletePoseGeometry, type AthletePoseGeometry } from './athletePose';
-import { FIELD_MAX_DISTANCE_M, JAVELIN_LENGTH_M, THROW_LINE_X_M } from './constants';
+import {
+  computeAthletePoseGeometry,
+  getRunToAimBlend01,
+  sampleThrowSubphase,
+  type AthletePoseGeometry
+} from './athletePose';
+import {
+  CAMERA_DEFAULT_VIEW_WIDTH_M,
+  CAMERA_FLIGHT_TARGET_AHEAD,
+  CAMERA_FLIGHT_VIEW_WIDTH_M,
+  CAMERA_GROUND_BOTTOM_PADDING,
+  CAMERA_RESULT_TARGET_AHEAD,
+  CAMERA_RESULT_VIEW_WIDTH_M,
+  CAMERA_RUNUP_TARGET_AHEAD,
+  CAMERA_RUNUP_VIEW_WIDTH_M,
+  CAMERA_THROW_TARGET_AHEAD,
+  CAMERA_THROW_VIEW_WIDTH_M,
+  CAMERA_Y_SCALE_FLIGHT,
+  CAMERA_Y_SCALE_RESULT,
+  CAMERA_Y_SCALE_RUNUP,
+  CAMERA_Y_SCALE_THROW,
+  FIELD_MAX_DISTANCE_M,
+  JAVELIN_LENGTH_M,
+  RUN_TO_AIM_BLEND_MS,
+  THROW_LINE_X_M,
+  WORLD_METER_CURSOR_RADIUS_PX,
+  WORLD_METER_LINE_WIDTH_PX,
+  WORLD_METER_OFFSET_Y_PX,
+  WORLD_METER_RADIUS_PX
+} from './constants';
+import {
+  getRhythmHotZones,
+  getRunupFeedback,
+  getRunupMeterPhase01,
+  getSpeedPercent
+} from './selectors';
 import type { GameState } from './types';
 
 type WorldToScreenInput = {
@@ -9,12 +43,20 @@ type WorldToScreenInput = {
 
 type WorldToScreen = (input: WorldToScreenInput) => { x: number; y: number };
 
+type HeadAnchor = {
+  x: number;
+  y: number;
+};
+
 const RUNWAY_OFFSET_X = 60;
-const GROUND_BOTTOM_PADDING = 56;
-const DEFAULT_Y_SCALE = 18;
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value));
+
+const wrap01 = (value: number): number => {
+  const wrapped = value % 1;
+  return wrapped < 0 ? wrapped + 1 : wrapped;
+};
 
 const drawBackground = (ctx: CanvasRenderingContext2D, width: number, height: number): void => {
   const sky = ctx.createLinearGradient(0, 0, 0, height);
@@ -47,13 +89,51 @@ const getCameraTargetX = (state: GameState): number => {
 };
 
 const getViewWidthM = (state: GameState): number => {
+  if (state.phase.tag === 'runup') {
+    return CAMERA_RUNUP_VIEW_WIDTH_M;
+  }
+  if (state.phase.tag === 'chargeAim' || state.phase.tag === 'throwAnim') {
+    return CAMERA_THROW_VIEW_WIDTH_M;
+  }
   if (state.phase.tag === 'flight') {
-    return 34;
+    return CAMERA_FLIGHT_VIEW_WIDTH_M;
   }
   if (state.phase.tag === 'result') {
-    return 30;
+    return CAMERA_RESULT_VIEW_WIDTH_M;
   }
-  return 28;
+  return CAMERA_DEFAULT_VIEW_WIDTH_M;
+};
+
+const getCameraAheadRatio = (state: GameState): number => {
+  if (state.phase.tag === 'runup') {
+    return CAMERA_RUNUP_TARGET_AHEAD;
+  }
+  if (state.phase.tag === 'chargeAim' || state.phase.tag === 'throwAnim') {
+    return CAMERA_THROW_TARGET_AHEAD;
+  }
+  if (state.phase.tag === 'flight') {
+    return CAMERA_FLIGHT_TARGET_AHEAD;
+  }
+  if (state.phase.tag === 'result') {
+    return CAMERA_RESULT_TARGET_AHEAD;
+  }
+  return CAMERA_RUNUP_TARGET_AHEAD;
+};
+
+const getVerticalScale = (state: GameState): number => {
+  if (state.phase.tag === 'runup' || state.phase.tag === 'chargeAim') {
+    return CAMERA_Y_SCALE_RUNUP;
+  }
+  if (state.phase.tag === 'throwAnim') {
+    return CAMERA_Y_SCALE_THROW;
+  }
+  if (state.phase.tag === 'flight') {
+    return CAMERA_Y_SCALE_FLIGHT;
+  }
+  if (state.phase.tag === 'result') {
+    return CAMERA_Y_SCALE_RESULT;
+  }
+  return CAMERA_Y_SCALE_RUNUP;
 };
 
 const createWorldToScreen = (
@@ -63,13 +143,15 @@ const createWorldToScreen = (
 ): { toScreen: WorldToScreen; worldMinX: number; worldMaxX: number } => {
   const viewWidthM = getViewWidthM(state);
   const targetX = getCameraTargetX(state);
-  const worldMinX = clamp(targetX - viewWidthM * 0.3, 0, FIELD_MAX_DISTANCE_M - viewWidthM);
+  const ahead = getCameraAheadRatio(state);
+  const worldMinX = clamp(targetX - viewWidthM * ahead, 0, FIELD_MAX_DISTANCE_M - viewWidthM);
   const worldMaxX = worldMinX + viewWidthM;
   const playableWidth = width - RUNWAY_OFFSET_X - 24;
+  const yScale = getVerticalScale(state);
 
   const toScreen: WorldToScreen = ({ xM, yM }) => {
     const x = RUNWAY_OFFSET_X + ((xM - worldMinX) / viewWidthM) * playableWidth;
-    const y = height - GROUND_BOTTOM_PADDING - yM * DEFAULT_Y_SCALE;
+    const y = height - CAMERA_GROUND_BOTTOM_PADDING - yM * yScale;
     return { x, y };
   };
 
@@ -82,7 +164,7 @@ const drawThrowLine = (
   height: number,
   label: string
 ): void => {
-  const groundY = height - GROUND_BOTTOM_PADDING;
+  const groundY = height - CAMERA_GROUND_BOTTOM_PADDING;
   const line = toScreen({ xM: THROW_LINE_X_M, yM: 0 });
   ctx.strokeStyle = '#ff5d4e';
   ctx.lineWidth = 3;
@@ -105,9 +187,9 @@ const drawTrackAndField = (
   worldMinX: number,
   worldMaxX: number
 ): void => {
-  const groundY = height - GROUND_BOTTOM_PADDING;
+  const groundY = height - CAMERA_GROUND_BOTTOM_PADDING;
   ctx.fillStyle = '#88d37f';
-  ctx.fillRect(0, groundY, width, GROUND_BOTTOM_PADDING);
+  ctx.fillRect(0, groundY, width, CAMERA_GROUND_BOTTOM_PADDING);
 
   ctx.strokeStyle = '#ffffff';
   ctx.lineWidth = 2;
@@ -116,13 +198,15 @@ const drawTrackAndField = (
   ctx.lineTo(width - 20, groundY);
   ctx.stroke();
 
-  const meterStart = Math.floor(worldMinX / 5) * 5;
-  for (let m = meterStart; m <= worldMaxX + 5; m += 5) {
-    if (m < 0 || m > FIELD_MAX_DISTANCE_M) {
+  const relativeStart = Math.max(0, Math.floor((worldMinX - THROW_LINE_X_M) / 5) * 5);
+  const relativeEnd = Math.max(0, worldMaxX - THROW_LINE_X_M + 5);
+  for (let relativeM = relativeStart; relativeM <= relativeEnd; relativeM += 5) {
+    const xM = THROW_LINE_X_M + relativeM;
+    if (xM < THROW_LINE_X_M || xM > FIELD_MAX_DISTANCE_M) {
       continue;
     }
-    const { x } = toScreen({ xM: m, yM: 0 });
-    const isMajor = m % 10 === 0;
+    const { x } = toScreen({ xM, yM: 0 });
+    const isMajor = relativeM % 10 === 0;
     ctx.strokeStyle = isMajor ? 'rgba(255, 255, 255, 0.85)' : 'rgba(255, 255, 255, 0.4)';
     ctx.lineWidth = isMajor ? 2 : 1;
     ctx.beginPath();
@@ -133,7 +217,7 @@ const drawTrackAndField = (
     if (isMajor) {
       ctx.fillStyle = '#0b2238';
       ctx.font = 'bold 12px ui-sans-serif';
-      ctx.fillText(`${m} m`, x - 12, groundY + 32);
+      ctx.fillText(`${relativeM} m`, x - 12, groundY + 32);
     }
   }
 
@@ -220,18 +304,26 @@ const drawJavelinWorld = (
   ctx.moveTo(tailScreen.x, tailScreen.y);
   ctx.lineTo(tipScreen.x, tipScreen.y);
   ctx.stroke();
+};
 
-  ctx.fillStyle = '#000000';
-  ctx.beginPath();
-  ctx.arc(tipScreen.x, tipScreen.y, 2.2, 0, Math.PI * 2);
-  ctx.fill();
+const drawFrontArm = (
+  ctx: CanvasRenderingContext2D,
+  points: {
+    shoulderCenter: { x: number; y: number };
+    elbowFront: { x: number; y: number };
+    handFront: { x: number; y: number };
+  }
+): void => {
+  drawLimb(ctx, points.shoulderCenter, points.elbowFront, 5, '#0a2f4d');
+  drawLimb(ctx, points.elbowFront, points.handFront, 4, '#103c5e');
 };
 
 const drawAthlete = (
   ctx: CanvasRenderingContext2D,
   toScreen: WorldToScreen,
-  pose: AthletePoseGeometry
-): void => {
+  pose: AthletePoseGeometry,
+  drawFrontArmOverHead: boolean
+): HeadAnchor => {
   const shadowCenter = toScreen({ xM: pose.pelvis.xM + 0.06, yM: 0.02 });
   ctx.fillStyle = 'rgba(5, 28, 42, 0.18)';
   ctx.beginPath();
@@ -263,8 +355,10 @@ const drawAthlete = (
 
   drawLimb(ctx, p.shoulderCenter, p.elbowBack, 5, '#124468');
   drawLimb(ctx, p.elbowBack, p.handBack, 4, '#1b5b83');
-  drawLimb(ctx, p.shoulderCenter, p.elbowFront, 5, '#0a2f4d');
-  drawLimb(ctx, p.elbowFront, p.handFront, 4, '#103c5e');
+
+  if (!drawFrontArmOverHead) {
+    drawFrontArm(ctx, p);
+  }
 
   ctx.fillStyle = '#ffe3bc';
   ctx.beginPath();
@@ -281,6 +375,133 @@ const drawAthlete = (
   ctx.beginPath();
   ctx.arc(p.head.x - 1.4, p.head.y - 0.7, 1.2, 0, Math.PI * 2);
   ctx.fill();
+
+  if (drawFrontArmOverHead) {
+    drawFrontArm(ctx, p);
+  }
+
+  return p.head;
+};
+
+const phaseToSemicircleAngle = (phase01: number): number => Math.PI - wrap01(phase01) * Math.PI;
+
+const drawSemicircleArc = (
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  radius: number,
+  start01: number,
+  end01: number,
+  color: string,
+  lineWidth: number
+): void => {
+  const drawSegment = (start: number, end: number): void => {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lineWidth;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(
+      cx,
+      cy,
+      radius,
+      phaseToSemicircleAngle(start),
+      phaseToSemicircleAngle(end),
+      true
+    );
+    ctx.stroke();
+  };
+
+  const start = wrap01(start01);
+  const end = wrap01(end01);
+  if (start <= end) {
+    drawSegment(start, end);
+    return;
+  }
+  drawSegment(start, 1);
+  drawSegment(0, end);
+};
+
+export const getHeadMeterScreenAnchor = (headScreen: HeadAnchor): HeadAnchor => ({
+  x: headScreen.x,
+  y: headScreen.y - WORLD_METER_OFFSET_Y_PX
+});
+
+const drawWorldRhythmMeter = (
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  headScreen: HeadAnchor
+): void => {
+  const meterPhase = getRunupMeterPhase01(state);
+  if (meterPhase === null) {
+    return;
+  }
+
+  const anchor = getHeadMeterScreenAnchor(headScreen);
+  if (!Number.isFinite(anchor.x) || !Number.isFinite(anchor.y)) {
+    return;
+  }
+
+  const zones = getRhythmHotZones();
+  const feedback = getRunupFeedback(state);
+  const speedPercent = getSpeedPercent(state);
+
+  ctx.save();
+  ctx.globalAlpha = 0.96;
+
+  drawSemicircleArc(
+    ctx,
+    anchor.x,
+    anchor.y,
+    WORLD_METER_RADIUS_PX,
+    0,
+    1,
+    'rgba(10, 46, 77, 0.34)',
+    WORLD_METER_LINE_WIDTH_PX
+  );
+
+  drawSemicircleArc(
+    ctx,
+    anchor.x,
+    anchor.y,
+    WORLD_METER_RADIUS_PX,
+    zones.good.start,
+    zones.good.end,
+    'rgba(30, 142, 247, 0.82)',
+    WORLD_METER_LINE_WIDTH_PX
+  );
+
+  drawSemicircleArc(
+    ctx,
+    anchor.x,
+    anchor.y,
+    WORLD_METER_RADIUS_PX,
+    zones.perfect.start,
+    zones.perfect.end,
+    'rgba(18, 196, 119, 0.98)',
+    WORLD_METER_LINE_WIDTH_PX + 0.8
+  );
+
+  const cursorAngle = phaseToSemicircleAngle(meterPhase);
+  const cursorX = anchor.x + Math.cos(cursorAngle) * WORLD_METER_RADIUS_PX;
+  const cursorY = anchor.y + Math.sin(cursorAngle) * WORLD_METER_RADIUS_PX;
+
+  const cursorFill =
+    feedback === 'perfect' ? '#22c272' : feedback === 'good' ? '#329cf5' : '#f6d255';
+
+  ctx.fillStyle = cursorFill;
+  ctx.strokeStyle = '#0f3b61';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(cursorX, cursorY, WORLD_METER_CURSOR_RADIUS_PX, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = 'rgba(6, 32, 57, 0.9)';
+  ctx.font = '700 11px ui-sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(`${speedPercent}%`, anchor.x, anchor.y + 16);
+
+  ctx.restore();
 };
 
 type JavelinRenderState =
@@ -335,16 +556,24 @@ const getPoseForState = (state: GameState): AthletePoseGeometry => {
     return computeAthletePoseGeometry(
       state.phase.athletePose,
       state.phase.speedNorm,
-      22,
+      state.aimAngleDeg,
       state.phase.runupDistanceM
     );
   }
   if (state.phase.tag === 'chargeAim') {
+    const runToAimBlend01 =
+      state.phase.speedNorm > 0.01
+        ? getRunToAimBlend01(state.phase.chargeStartedAtMs, state.nowMs, RUN_TO_AIM_BLEND_MS)
+        : 1;
     return computeAthletePoseGeometry(
       state.phase.athletePose,
       state.phase.speedNorm,
       state.phase.angleDeg,
-      state.phase.athleteXM
+      state.phase.athleteXM,
+      {
+        runBlendFromAnimT: state.phase.runEntryAnimT,
+        runToAimBlend01
+      }
     );
   }
   if (state.phase.tag === 'throwAnim') {
@@ -371,8 +600,35 @@ const getPoseForState = (state: GameState): AthletePoseGeometry => {
       state.phase.athleteXM
     );
   }
-  return computeAthletePoseGeometry({ animTag: 'idle', animT: 0 }, 0, 20, 2.8);
+  return computeAthletePoseGeometry({ animTag: 'idle', animT: 0 }, 0, state.aimAngleDeg, 2.8);
 };
+
+export const getPlayerAngleAnchorScreen = (
+  state: GameState,
+  width: number,
+  height: number
+): { x: number; y: number } => {
+  const camera = createWorldToScreen(state, width, height);
+  const pose = getPoseForState(state);
+  return camera.toScreen(pose.shoulderCenter);
+};
+
+const shouldDrawFrontArmOverHead = (state: GameState): boolean => {
+  if (state.phase.tag === 'chargeAim') {
+    return false;
+  }
+  if (state.phase.tag === 'throwAnim') {
+    return sampleThrowSubphase(state.phase.animProgress).stage !== 'windup';
+  }
+  if (state.phase.tag === 'flight') {
+    return false;
+  }
+  return true;
+};
+
+const shouldDrawAttachedJavelinBehindAthlete = (state: GameState): boolean =>
+  state.phase.tag === 'chargeAim' ||
+  (state.phase.tag === 'throwAnim' && sampleThrowSubphase(state.phase.animProgress).stage === 'windup');
 
 export const renderGame = (
   ctx: CanvasRenderingContext2D,
@@ -390,10 +646,20 @@ export const renderGame = (
   drawWindVane(ctx, width, state.windMs, numberFormat);
 
   const pose = getPoseForState(state);
-  drawAthlete(ctx, toScreen, pose);
-
   const javelin = getVisibleJavelinRenderState(state, pose);
-  if (javelin.mode !== 'none') {
+  const attachedBehind = javelin.mode === 'attached' && shouldDrawAttachedJavelinBehindAthlete(state);
+
+  if (attachedBehind && javelin.mode === 'attached') {
     drawJavelinWorld(ctx, toScreen, javelin.xM, javelin.yM, javelin.angleRad, javelin.lengthM);
+  }
+
+  const headScreen = drawAthlete(ctx, toScreen, pose, shouldDrawFrontArmOverHead(state));
+
+  if (javelin.mode !== 'none' && !attachedBehind) {
+    drawJavelinWorld(ctx, toScreen, javelin.xM, javelin.yM, javelin.angleRad, javelin.lengthM);
+  }
+
+  if (state.phase.tag === 'runup') {
+    drawWorldRhythmMeter(ctx, state, headScreen);
   }
 };

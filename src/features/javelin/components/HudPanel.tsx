@@ -1,17 +1,12 @@
 import type { ReactElement } from 'react';
 import {
   CHARGE_GOOD_WINDOW,
-  CHARGE_PERFECT_WINDOW,
-  GOOD_WINDOW_MS,
-  PERFECT_WINDOW_MS
+  CHARGE_PERFECT_WINDOW
 } from '../game/constants';
 import type { GameState, TimingQuality } from '../game/types';
 import {
   getAngleDeg,
   getForcePreviewPercent,
-  getRhythmHotZones,
-  getRunupFeedback,
-  getRunupMeterPhase01,
   getSpeedPercent,
   getThrowLineRemainingM
 } from '../game/selectors';
@@ -44,9 +39,6 @@ const phaseMessageKey = (state: GameState): string => {
 };
 
 const meterFeedback = (state: GameState): TimingQuality | null => {
-  if (state.phase.tag === 'runup') {
-    return getRunupFeedback(state);
-  }
   if (state.phase.tag === 'chargeAim') {
     return state.phase.chargeMeter.lastQuality;
   }
@@ -57,8 +49,6 @@ export const HudPanel = ({ state }: HudPanelProps): ReactElement => {
   const { t, formatNumber } = useI18n();
   const speed = getSpeedPercent(state);
   const angle = getAngleDeg(state);
-  const rhythmPhase = getRunupMeterPhase01(state);
-  const rhythmHotZones = getRhythmHotZones();
   const forcePercent = getForcePreviewPercent(state);
   const throwLineRemainingM = getThrowLineRemainingM(state);
 
@@ -91,34 +81,19 @@ export const HudPanel = ({ state }: HudPanelProps): ReactElement => {
         </div>
       </div>
 
-      {(state.phase.tag === 'runup' || state.phase.tag === 'chargeAim' || state.phase.tag === 'throwAnim') && (
+      {(state.phase.tag === 'chargeAim' || state.phase.tag === 'throwAnim') && (
         <div className="meter-row">
-          {rhythmPhase !== null && (
-            <CircularTimingMeter
-              labelKey="hud.rhythm"
-              phase01={rhythmPhase}
-              hitFeedback={meterFeedback(state)}
-              hotZones={[
-                { ...rhythmHotZones.good, kind: 'good' },
-                { ...rhythmHotZones.perfect, kind: 'perfect' }
-              ]}
-              valueText={`±${GOOD_WINDOW_MS}ms / ±${PERFECT_WINDOW_MS}ms`}
-            />
-          )}
-
-          {(state.phase.tag === 'chargeAim' || state.phase.tag === 'throwAnim') && (
-            <CircularTimingMeter
-              labelKey="hud.force"
-              phase01={state.phase.tag === 'chargeAim' ? state.phase.chargeMeter.phase01 : state.phase.forceNorm}
-              hitFeedback={meterFeedback(state)}
-              hotZones={[
-                { ...CHARGE_GOOD_WINDOW, kind: 'good' },
-                { ...CHARGE_PERFECT_WINDOW, kind: 'perfect' }
-              ]}
-              valueText={forcePercent === null ? '' : `${forcePercent}%`}
-              active={state.phase.tag === 'chargeAim'}
-            />
-          )}
+          <CircularTimingMeter
+            labelKey="hud.force"
+            phase01={state.phase.tag === 'chargeAim' ? state.phase.chargeMeter.phase01 : state.phase.forceNorm}
+            hitFeedback={meterFeedback(state)}
+            hotZones={[
+              { ...CHARGE_GOOD_WINDOW, kind: 'good' },
+              { ...CHARGE_PERFECT_WINDOW, kind: 'perfect' }
+            ]}
+            valueText={forcePercent === null ? '' : `${forcePercent}%`}
+            active={state.phase.tag === 'chargeAim'}
+          />
         </div>
       )}
     </section>

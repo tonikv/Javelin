@@ -27,13 +27,16 @@ export const getSpeedPercent = (state: GameState): number => {
 };
 
 export const getAngleDeg = (state: GameState): number => {
+  if (state.phase.tag === 'idle' || state.phase.tag === 'runup') {
+    return state.aimAngleDeg;
+  }
   if (state.phase.tag === 'chargeAim' || state.phase.tag === 'throwAnim') {
     return state.phase.angleDeg;
   }
   if (state.phase.tag === 'flight') {
     return state.phase.launchedFrom.angleDeg;
   }
-  return 36;
+  return state.aimAngleDeg;
 };
 
 export const getRunupMeterPhase01 = (state: GameState): number | null => {

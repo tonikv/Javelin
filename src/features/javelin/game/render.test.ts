@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { computeAthletePoseGeometry } from './athletePose';
-import { getVisibleJavelinRenderState } from './render';
+import { getHeadMeterScreenAnchor, getVisibleJavelinRenderState } from './render';
 import type { GameState } from './types';
 
-const baseState: Pick<GameState, 'nowMs' | 'roundId' | 'windMs'> = {
+const baseState: Pick<GameState, 'nowMs' | 'roundId' | 'windMs' | 'aimAngleDeg'> = {
   nowMs: 2000,
   roundId: 1,
-  windMs: 0.2
+  windMs: 0.2,
+  aimAngleDeg: 18
 };
 
 describe('javelin visibility state', () => {
@@ -20,6 +21,7 @@ describe('javelin visibility state', () => {
         tapCount: 4,
         runupDistanceM: 10,
         rhythm: {
+          firstTapAtMs: 1200,
           lastTapAtMs: 1880,
           perfectHits: 2,
           goodHits: 3,
@@ -37,6 +39,7 @@ describe('javelin visibility state', () => {
         tag: 'chargeAim',
         speedNorm: 0.72,
         athleteXM: 17.4,
+        runEntryAnimT: 0.78,
         angleDeg: 35,
         chargeStartedAtMs: 1800,
         chargeMeter: {
@@ -121,5 +124,12 @@ describe('javelin visibility state', () => {
     if (visible.mode === 'flight') {
       expect(visible.xM).toBeGreaterThan(flightState.phase.athleteXM);
     }
+  });
+
+  it('computes finite meter anchor from head screen point', () => {
+    const anchor = getHeadMeterScreenAnchor({ x: 220, y: 140 });
+    expect(Number.isFinite(anchor.x)).toBe(true);
+    expect(Number.isFinite(anchor.y)).toBe(true);
+    expect(anchor.y).toBeLessThan(140);
   });
 });

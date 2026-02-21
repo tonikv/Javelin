@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
-import { keyboardAngleDelta, pointerMovementToAngleDelta } from '../game/controls';
-import type { GameAction, GamePhase } from '../game/types';
+import { useEffect, useRef } from 'react';
+import { keyboardAngleDelta, pointerFromAnchorToAngleDeg } from '../game/controls';
+import { getPlayerAngleAnchorScreen } from '../game/render';
+import type { GameAction, GamePhase, GameState } from '../game/types';
 
 type Dispatch = (action: GameAction) => void;
 
@@ -8,15 +9,35 @@ type UsePointerControlsArgs = {
   canvas: HTMLCanvasElement | null;
   dispatch: Dispatch;
   phaseTag: GamePhase['tag'];
+  state: GameState;
 };
 
-export const usePointerControls = ({ canvas, dispatch, phaseTag }: UsePointerControlsArgs): void => {
+export const usePointerControls = ({ canvas, dispatch, phaseTag, state }: UsePointerControlsArgs): void => {
+  const stateRef = useRef(state);
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
   useEffect(() => {
     if (!canvas) {
       return;
     }
 
     const now = (): number => performance.now();
+    const dispatchAngleFromPointer = (clientX: number, clientY: number): void => {
+      const rect = canvas.getBoundingClientRect();
+      const anchor = getPlayerAngleAnchorScreen(stateRef.current, rect.width, rect.height);
+      dispatch({
+        type: 'setAngle',
+        angleDeg: pointerFromAnchorToAngleDeg(
+          clientX,
+          clientY,
+          rect.left + anchor.x,
+          rect.top + anchor.y
+        )
+      });
+    };
 
     const onMouseDown = (event: MouseEvent): void => {
       if (event.button === 0) {
@@ -25,6 +46,7 @@ export const usePointerControls = ({ canvas, dispatch, phaseTag }: UsePointerCon
       if (event.button === 2) {
         event.preventDefault();
         dispatch({ type: 'beginChargeAim', atMs: now() });
+        dispatchAngleFromPointer(event.clientX, event.clientY);
       }
     };
 
@@ -35,11 +57,13 @@ export const usePointerControls = ({ canvas, dispatch, phaseTag }: UsePointerCon
     };
 
     const onMouseMove = (event: MouseEvent): void => {
-      if ((event.buttons & 2) !== 0) {
-        dispatch({
-          type: 'adjustAngle',
-          deltaDeg: pointerMovementToAngleDelta(event.movementY)
-        });
+      const shouldTrackPointerAngle =
+        phaseTag === 'idle' ||
+        phaseTag === 'runup' ||
+        phaseTag === 'chargeAim' ||
+        (phaseTag === 'throwAnim' && (event.buttons & 2) !== 0);
+      if (shouldTrackPointerAngle) {
+        dispatchAngleFromPointer(event.clientX, event.clientY);
       }
     };
 
@@ -79,17 +103,17 @@ export const usePointerControls = ({ canvas, dispatch, phaseTag }: UsePointerCon
     };
 
     canvas.addEventListener('mousedown', onMouseDown);
-    canvas.addEventListener('mouseup', onMouseUp);
     canvas.addEventListener('mousemove', onMouseMove);
     canvas.addEventListener('contextmenu', onContextMenu);
+    window.addEventListener('mouseup', onMouseUp);
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
 
     return () => {
       canvas.removeEventListener('mousedown', onMouseDown);
-      canvas.removeEventListener('mouseup', onMouseUp);
       canvas.removeEventListener('mousemove', onMouseMove);
       canvas.removeEventListener('contextmenu', onContextMenu);
+      window.removeEventListener('mouseup', onMouseUp);
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };

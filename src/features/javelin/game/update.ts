@@ -10,13 +10,13 @@ import {
   PERFECT_WINDOW_MS,
   RUNUP_MAX_TAPS,
   RUNUP_MAX_X_M,
-  RUNUP_MIN_TAPS_FOR_THROW,
   RUNUP_PASSIVE_MAX_SPEED,
   RUNUP_PASSIVE_TO_HALF_MS,
   RUNUP_SPEED_DECAY_PER_SECOND,
   RUNUP_SPEED_MAX_MS,
   RUNUP_SPEED_MIN_MS,
   RUNUP_START_X_M,
+  RUN_TO_AIM_BLEND_MS,
   SPAM_PENALTY_MS,
   SPAM_THRESHOLD_MS,
   THROW_ANIM_DURATION_MS,
@@ -84,12 +84,9 @@ const passiveSpeedTarget = (startedAtMs: number, nowMs: number): number => {
 const runSpeedMsFromNorm = (speedNorm: number): number =>
   RUNUP_SPEED_MIN_MS + (RUNUP_SPEED_MAX_MS - RUNUP_SPEED_MIN_MS) * speedNorm;
 
-const getFaultForRelease = (angleDeg: number): FaultReason | null => {
-  if (angleDeg <= ANGLE_MIN_DEG + 0.2) {
-    return 'lowAngle';
-  }
-  return null;
-};
+const isRunning = (speedNorm: number): boolean => speedNorm > 0.01;
+
+const getFaultForRelease = (_angleDeg: number): FaultReason | null => null;
 
 const lateralVelocityFromRelease = (
   quality: TimingQuality,
@@ -106,6 +103,7 @@ export const createInitialGameState = (): GameState => ({
   nowMs: performance.now(),
   roundId: 0,
   windMs: 0,
+  aimAngleDeg: ANGLE_DEFAULT_DEG,
   phase: { tag: 'idle' }
 });
 
@@ -124,6 +122,7 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
           tapCount: 0,
           runupDistanceM: RUNUP_START_X_M,
           rhythm: {
+            firstTapAtMs: null,
             lastTapAtMs: null,
             perfectHits: 0,
             goodHits: 0,
@@ -132,7 +131,7 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
             lastQualityAtMs: 0
           },
           athletePose: {
-            animTag: 'run',
+            animTag: 'idle',
             animT: 0
           }
         }
@@ -165,6 +164,7 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
           speedNorm,
           tapCount: Math.min(phase.tapCount + 1, RUNUP_MAX_TAPS),
           rhythm: {
+            firstTapAtMs: phase.rhythm.firstTapAtMs ?? action.atMs,
             lastTapAtMs: action.atMs,
             perfectHits,
             goodHits,
@@ -173,17 +173,14 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
             lastQualityAtMs: action.atMs
           },
           athletePose: {
-            animTag: 'run',
-            animT: runAnimT(phase.startedAtMs, action.atMs, speedNorm)
+            animTag: isRunning(speedNorm) ? 'run' : 'idle',
+            animT: isRunning(speedNorm) ? runAnimT(phase.startedAtMs, action.atMs, speedNorm) : 0
           }
         }
       };
     }
     case 'beginChargeAim': {
       if (state.phase.tag !== 'runup') {
-        return state;
-      }
-      if (state.phase.tapCount < RUNUP_MIN_TAPS_FOR_THROW) {
         return state;
       }
       return {
@@ -193,7 +190,8 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
           tag: 'chargeAim',
           speedNorm: state.phase.speedNorm,
           athleteXM: state.phase.runupDistanceM,
-          angleDeg: ANGLE_DEFAULT_DEG,
+          runEntryAnimT: state.phase.athletePose.animT,
+          angleDeg: state.aimAngleDeg,
           chargeStartedAtMs: action.atMs,
           chargeMeter: {
             phase01: 0,
@@ -212,16 +210,48 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
       };
     }
     case 'adjustAngle': {
-      if (state.phase.tag !== 'chargeAim') {
-        return state;
+      if (state.phase.tag === 'chargeAim') {
+        const nextAngleDeg = clamp(
+          state.phase.angleDeg + action.deltaDeg,
+          ANGLE_MIN_DEG,
+          ANGLE_MAX_DEG
+        );
+        return {
+          ...state,
+          aimAngleDeg: nextAngleDeg,
+          phase: {
+            ...state.phase,
+            angleDeg: nextAngleDeg
+          }
+        };
       }
-      return {
-        ...state,
-        phase: {
-          ...state.phase,
-          angleDeg: clamp(state.phase.angleDeg + action.deltaDeg, ANGLE_MIN_DEG, ANGLE_MAX_DEG)
-        }
-      };
+      if (state.phase.tag === 'runup' || state.phase.tag === 'idle') {
+        return {
+          ...state,
+          aimAngleDeg: clamp(state.aimAngleDeg + action.deltaDeg, ANGLE_MIN_DEG, ANGLE_MAX_DEG)
+        };
+      }
+      return state;
+    }
+    case 'setAngle': {
+      const nextAngleDeg = clamp(action.angleDeg, ANGLE_MIN_DEG, ANGLE_MAX_DEG);
+      if (state.phase.tag === 'chargeAim') {
+        return {
+          ...state,
+          aimAngleDeg: nextAngleDeg,
+          phase: {
+            ...state.phase,
+            angleDeg: nextAngleDeg
+          }
+        };
+      }
+      if (state.phase.tag === 'runup' || state.phase.tag === 'idle') {
+        return {
+          ...state,
+          aimAngleDeg: nextAngleDeg
+        };
+      }
+      return state;
     }
     case 'releaseCharge': {
       if (state.phase.tag !== 'chargeAim') {
@@ -273,14 +303,18 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
 
       const nextState: GameState = { ...state, nowMs: action.nowMs };
       if (nextState.phase.tag === 'runup') {
-        const passiveTarget = passiveSpeedTarget(nextState.phase.startedAtMs, action.nowMs);
+        const hasStartedRunup = nextState.phase.rhythm.firstTapAtMs !== null;
+        const passiveTarget =
+          nextState.phase.rhythm.firstTapAtMs === null
+            ? 0
+            : passiveSpeedTarget(nextState.phase.rhythm.firstTapAtMs, action.nowMs);
         const speedAfterDecay = clamp(
           nextState.phase.speedNorm - (action.dtMs / 1000) * RUNUP_SPEED_DECAY_PER_SECOND,
           0,
           1
         );
         const speedNorm = Math.max(speedAfterDecay, passiveTarget);
-        const runSpeedMs = runSpeedMsFromNorm(speedNorm);
+        const runSpeedMs = hasStartedRunup ? runSpeedMsFromNorm(speedNorm) : 0;
         const runupDistanceM = clamp(
           nextState.phase.runupDistanceM + runSpeedMs * (action.dtMs / 1000),
           RUNUP_START_X_M,
@@ -294,8 +328,10 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
             speedNorm,
             runupDistanceM,
             athletePose: {
-              animTag: 'run',
-              animT: runAnimT(nextState.phase.startedAtMs, action.nowMs, speedNorm)
+              animTag: isRunning(speedNorm) ? 'run' : 'idle',
+              animT: isRunning(speedNorm)
+                ? runAnimT(nextState.phase.startedAtMs, action.nowMs, speedNorm)
+                : 0
             }
           }
         };
@@ -304,6 +340,8 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
       if (nextState.phase.tag === 'chargeAim') {
         const elapsedMs = Math.max(0, action.nowMs - nextState.phase.chargeStartedAtMs);
         const phase01 = wrap01(elapsedMs / CHARGE_FORCE_CYCLE_MS);
+        const blend01 = clamp(elapsedMs / RUN_TO_AIM_BLEND_MS, 0, 1);
+        const aimAnimT = blend01 < 1 ? blend01 * 0.2 : phase01;
         const forceNormPreview = computeForcePreview(phase01);
         const quality = getTimingQuality(
           phase01,
@@ -324,7 +362,7 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
             },
             athletePose: {
               animTag: 'aim',
-              animT: phase01
+              animT: aimAnimT
             }
           }
         };

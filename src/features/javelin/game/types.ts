@@ -10,6 +10,7 @@ export type MeterWindow = {
 };
 
 export type RhythmState = {
+  firstTapAtMs: number | null;
   lastTapAtMs: number | null;
   perfectHits: number;
   goodHits: number;
@@ -80,6 +81,7 @@ export type GamePhase =
       tag: 'chargeAim';
       speedNorm: number;
       athleteXM: number;
+      runEntryAnimT: number;
       angleDeg: number;
       chargeStartedAtMs: number;
       chargeMeter: ChargeMeterState;
@@ -121,6 +123,7 @@ export type GameState = {
   nowMs: number;
   roundId: number;
   windMs: number;
+  aimAngleDeg: number;
   phase: GamePhase;
 };
 
@@ -128,6 +131,7 @@ export type GameAction =
   | { type: 'startRound'; atMs: number; windMs: number }
   | { type: 'rhythmTap'; atMs: number }
   | { type: 'beginChargeAim'; atMs: number }
+  | { type: 'setAngle'; angleDeg: number }
   | { type: 'adjustAngle'; deltaDeg: number }
   | { type: 'releaseCharge'; atMs: number }
   | { type: 'tick'; dtMs: number; nowMs: number }
