@@ -30,9 +30,13 @@ export const JavelinPage = (): ReactElement => {
     if (state.phase.tag !== 'result') {
       return;
     }
+    const shouldBeHighscore = isHighscore(state.phase.distanceM);
+    if (state.phase.isHighscore === shouldBeHighscore) {
+      return;
+    }
     dispatch({
       type: 'setResultHighscoreFlag',
-      isHighscore: isHighscore(state.phase.distanceM)
+      isHighscore: shouldBeHighscore
     });
   }, [state.phase, isHighscore]);
 

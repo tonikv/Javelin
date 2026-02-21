@@ -1,13 +1,13 @@
 import { useEffect } from 'react';
 import { keyboardAngleDelta, pointerMovementToAngleDelta } from '../game/controls';
-import type { GameAction } from '../game/types';
+import type { GameAction, GamePhase } from '../game/types';
 
 type Dispatch = (action: GameAction) => void;
 
 type UsePointerControlsArgs = {
   canvas: HTMLCanvasElement | null;
   dispatch: Dispatch;
-  phaseTag: string;
+  phaseTag: GamePhase['tag'];
 };
 
 export const usePointerControls = ({ canvas, dispatch, phaseTag }: UsePointerControlsArgs): void => {
@@ -16,18 +16,21 @@ export const usePointerControls = ({ canvas, dispatch, phaseTag }: UsePointerCon
       return;
     }
 
+    const now = (): number => performance.now();
+
     const onMouseDown = (event: MouseEvent): void => {
       if (event.button === 0) {
-        dispatch({ type: 'rhythmTap', atMs: performance.now() });
+        dispatch({ type: 'rhythmTap', atMs: now() });
       }
       if (event.button === 2) {
-        dispatch({ type: 'beginThrowPrep' });
+        event.preventDefault();
+        dispatch({ type: 'beginChargeAim', atMs: now() });
       }
     };
 
     const onMouseUp = (event: MouseEvent): void => {
       if (event.button === 2) {
-        dispatch({ type: 'releaseThrow' });
+        dispatch({ type: 'releaseCharge', atMs: now() });
       }
     };
 
@@ -47,15 +50,13 @@ export const usePointerControls = ({ canvas, dispatch, phaseTag }: UsePointerCon
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.code === 'Space' && !event.repeat) {
         event.preventDefault();
-        dispatch({ type: 'rhythmTap', atMs: performance.now() });
+        dispatch({ type: 'rhythmTap', atMs: now() });
         return;
       }
       if (event.code === 'Enter' && !event.repeat) {
         event.preventDefault();
-        if (phaseTag === 'throwPrep') {
-          dispatch({ type: 'releaseThrow' });
-        } else {
-          dispatch({ type: 'beginThrowPrep' });
+        if (phaseTag === 'runup') {
+          dispatch({ type: 'beginChargeAim', atMs: now() });
         }
         return;
       }
@@ -70,11 +71,19 @@ export const usePointerControls = ({ canvas, dispatch, phaseTag }: UsePointerCon
       }
     };
 
+    const onKeyUp = (event: KeyboardEvent): void => {
+      if (event.code === 'Enter') {
+        event.preventDefault();
+        dispatch({ type: 'releaseCharge', atMs: now() });
+      }
+    };
+
     canvas.addEventListener('mousedown', onMouseDown);
     canvas.addEventListener('mouseup', onMouseUp);
     canvas.addEventListener('mousemove', onMouseMove);
     canvas.addEventListener('contextmenu', onContextMenu);
     window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
 
     return () => {
       canvas.removeEventListener('mousedown', onMouseDown);
@@ -82,6 +91,7 @@ export const usePointerControls = ({ canvas, dispatch, phaseTag }: UsePointerCon
       canvas.removeEventListener('mousemove', onMouseMove);
       canvas.removeEventListener('contextmenu', onContextMenu);
       window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
     };
   }, [canvas, dispatch, phaseTag]);
 };

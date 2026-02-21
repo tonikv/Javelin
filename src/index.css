@@ -133,6 +133,82 @@ h1 {
   height: 8px;
 }
 
+.meter-row {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.timing-meter {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: rgba(11, 61, 98, 0.08);
+}
+
+.timing-meter svg {
+  width: 94px;
+  height: 94px;
+}
+
+.timing-track {
+  fill: none;
+  stroke: rgba(11, 34, 56, 0.2);
+  stroke-width: 8;
+}
+
+.timing-zone {
+  fill: none;
+  stroke-linecap: round;
+}
+
+.zone-good {
+  stroke: rgba(30, 142, 247, 0.7);
+  stroke-width: 8;
+}
+
+.zone-perfect {
+  stroke: rgba(18, 196, 119, 0.95);
+  stroke-width: 9;
+}
+
+.timing-cursor {
+  fill: #f6d255;
+  stroke: #0f3b61;
+  stroke-width: 2;
+}
+
+.timing-meter-meta {
+  display: grid;
+  gap: 2px;
+}
+
+.timing-meter-meta span {
+  color: var(--text-soft);
+  font-size: 0.83rem;
+}
+
+.timing-meter-meta strong {
+  font-size: 1rem;
+}
+
+.timing-meter-meta small {
+  color: #0e4f77;
+  font-weight: 700;
+}
+
+.timing-meter.feedback-perfect {
+  background: rgba(18, 196, 119, 0.16);
+}
+
+.timing-meter.feedback-good {
+  background: rgba(30, 142, 247, 0.13);
+}
+
 .canvas-frame {
   border-radius: var(--radius);
   overflow: hidden;

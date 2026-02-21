@@ -2,16 +2,34 @@ export type Locale = 'fi' | 'sv' | 'en';
 
 export type FaultReason = 'lateRelease' | 'invalidRelease' | 'lowAngle';
 
+export type TimingQuality = 'perfect' | 'good' | 'miss';
+
+export type MeterWindow = {
+  start: number;
+  end: number;
+};
+
 export type RhythmState = {
   lastTapAtMs: number | null;
   perfectHits: number;
   goodHits: number;
   penaltyUntilMs: number;
+  lastQuality: TimingQuality | null;
+  lastQualityAtMs: number;
 };
 
-export type ReleaseWindow = {
-  start: number;
-  end: number;
+export type ChargeMeterState = {
+  phase01: number;
+  cycles: number;
+  perfectWindow: MeterWindow;
+  goodWindow: MeterWindow;
+  lastQuality: TimingQuality | null;
+  lastSampleAtMs: number;
+};
+
+export type AthletePoseState = {
+  animTag: 'idle' | 'run' | 'aim' | 'throw' | 'followThrough';
+  animT: number;
 };
 
 export type ThrowInput = {
@@ -24,18 +42,19 @@ export type ThrowInput = {
 export type LaunchSnapshot = {
   speedNorm: number;
   angleDeg: number;
-  releaseTiming: number;
+  forceNorm: number;
   windMs: number;
-  expectedDistanceM: number;
+  launchSpeedMs: number;
 };
 
-export type ProjectileState = {
-  elapsedMs: number;
-  durationMs: number;
-  distanceTargetM: number;
-  peakHeightM: number;
+export type PhysicalJavelinState = {
   xM: number;
   yM: number;
+  vxMs: number;
+  vyMs: number;
+  angleRad: number;
+  angularVelRad: number;
+  releasedAtMs: number;
 };
 
 export type GamePhase =
@@ -46,18 +65,31 @@ export type GamePhase =
       startedAtMs: number;
       tapCount: number;
       rhythm: RhythmState;
+      athletePose: AthletePoseState;
     }
   | {
-      tag: 'throwPrep';
+      tag: 'chargeAim';
       speedNorm: number;
       angleDeg: number;
-      armPhase: number;
-      releaseWindow: ReleaseWindow;
+      chargeStartedAtMs: number;
+      chargeMeter: ChargeMeterState;
+      forceNormPreview: number;
+      athletePose: AthletePoseState;
+    }
+  | {
+      tag: 'throwAnim';
+      speedNorm: number;
+      angleDeg: number;
+      forceNorm: number;
+      animProgress: number;
+      released: boolean;
+      athletePose: AthletePoseState;
     }
   | {
       tag: 'flight';
-      projectile: ProjectileState;
+      javelin: PhysicalJavelinState;
       launchedFrom: LaunchSnapshot;
+      athletePose: AthletePoseState;
     }
   | {
       tag: 'result';
@@ -79,9 +111,9 @@ export type GameState = {
 export type GameAction =
   | { type: 'startRound'; atMs: number; windMs: number }
   | { type: 'rhythmTap'; atMs: number }
-  | { type: 'beginThrowPrep' }
+  | { type: 'beginChargeAim'; atMs: number }
   | { type: 'adjustAngle'; deltaDeg: number }
-  | { type: 'releaseThrow' }
+  | { type: 'releaseCharge'; atMs: number }
   | { type: 'tick'; dtMs: number; nowMs: number }
   | { type: 'setResultHighscoreFlag'; isHighscore: boolean }
   | { type: 'resetToIdle' };

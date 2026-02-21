@@ -1,8 +1,22 @@
-import { ARM_RELEASE_WINDOW } from './constants';
-import type { GameState } from './types';
+import {
+  BEAT_INTERVAL_MS,
+  GOOD_WINDOW_MS,
+  PERFECT_WINDOW_MS,
+  RHYTHM_TARGET_PHASE01
+} from './constants';
+import type { GameState, TimingQuality } from './types';
+
+const wrap01 = (value: number): number => {
+  const wrapped = value % 1;
+  return wrapped < 0 ? wrapped + 1 : wrapped;
+};
 
 export const getSpeedPercent = (state: GameState): number => {
-  if (state.phase.tag === 'runup' || state.phase.tag === 'throwPrep') {
+  if (
+    state.phase.tag === 'runup' ||
+    state.phase.tag === 'chargeAim' ||
+    state.phase.tag === 'throwAnim'
+  ) {
     return Math.round(state.phase.speedNorm * 100);
   }
   if (state.phase.tag === 'flight') {
@@ -12,7 +26,7 @@ export const getSpeedPercent = (state: GameState): number => {
 };
 
 export const getAngleDeg = (state: GameState): number => {
-  if (state.phase.tag === 'throwPrep') {
+  if (state.phase.tag === 'chargeAim' || state.phase.tag === 'throwAnim') {
     return state.phase.angleDeg;
   }
   if (state.phase.tag === 'flight') {
@@ -21,15 +35,44 @@ export const getAngleDeg = (state: GameState): number => {
   return 36;
 };
 
-export const getReleaseProgress = (state: GameState): number | null =>
-  state.phase.tag === 'throwPrep' ? state.phase.armPhase : null;
-
-export const isReleaseWindowOpen = (state: GameState): boolean => {
-  if (state.phase.tag !== 'throwPrep') {
-    return false;
+export const getRunupMeterPhase01 = (state: GameState): number | null => {
+  if (state.phase.tag !== 'runup') {
+    return null;
   }
-  return (
-    state.phase.armPhase >= ARM_RELEASE_WINDOW.start &&
-    state.phase.armPhase <= ARM_RELEASE_WINDOW.end
-  );
+  const rawPhase = wrap01((state.nowMs - state.phase.startedAtMs) / BEAT_INTERVAL_MS);
+  return wrap01(rawPhase + RHYTHM_TARGET_PHASE01);
+};
+
+export const getRunupFeedback = (state: GameState): TimingQuality | null =>
+  state.phase.tag === 'runup' ? state.phase.rhythm.lastQuality : null;
+
+export const getForcePreviewPercent = (state: GameState): number | null => {
+  if (state.phase.tag === 'chargeAim') {
+    return Math.round(state.phase.forceNormPreview * 100);
+  }
+  if (state.phase.tag === 'throwAnim') {
+    return Math.round(state.phase.forceNorm * 100);
+  }
+  if (state.phase.tag === 'flight') {
+    return Math.round(state.phase.launchedFrom.forceNorm * 100);
+  }
+  return null;
+};
+
+export const getRhythmHotZones = (): {
+  perfect: { start: number; end: number };
+  good: { start: number; end: number };
+} => {
+  const perfectRadius = PERFECT_WINDOW_MS / BEAT_INTERVAL_MS;
+  const goodRadius = GOOD_WINDOW_MS / BEAT_INTERVAL_MS;
+  return {
+    perfect: {
+      start: RHYTHM_TARGET_PHASE01 - perfectRadius,
+      end: RHYTHM_TARGET_PHASE01 + perfectRadius
+    },
+    good: {
+      start: RHYTHM_TARGET_PHASE01 - goodRadius,
+      end: RHYTHM_TARGET_PHASE01 + goodRadius
+    }
+  };
 };
