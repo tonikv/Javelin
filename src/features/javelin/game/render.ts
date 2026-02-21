@@ -198,13 +198,15 @@ const drawTrackAndField = (
   ctx.lineTo(width - 20, groundY);
   ctx.stroke();
 
-  const meterStart = Math.floor(worldMinX / 5) * 5;
-  for (let m = meterStart; m <= worldMaxX + 5; m += 5) {
-    if (m < 0 || m > FIELD_MAX_DISTANCE_M) {
+  const relativeStart = Math.max(0, Math.floor((worldMinX - THROW_LINE_X_M) / 5) * 5);
+  const relativeEnd = Math.max(0, worldMaxX - THROW_LINE_X_M + 5);
+  for (let relativeM = relativeStart; relativeM <= relativeEnd; relativeM += 5) {
+    const xM = THROW_LINE_X_M + relativeM;
+    if (xM < THROW_LINE_X_M || xM > FIELD_MAX_DISTANCE_M) {
       continue;
     }
-    const { x } = toScreen({ xM: m, yM: 0 });
-    const isMajor = m % 10 === 0;
+    const { x } = toScreen({ xM, yM: 0 });
+    const isMajor = relativeM % 10 === 0;
     ctx.strokeStyle = isMajor ? 'rgba(255, 255, 255, 0.85)' : 'rgba(255, 255, 255, 0.4)';
     ctx.lineWidth = isMajor ? 2 : 1;
     ctx.beginPath();
@@ -215,7 +217,7 @@ const drawTrackAndField = (
     if (isMajor) {
       ctx.fillStyle = '#0b2238';
       ctx.font = 'bold 12px ui-sans-serif';
-      ctx.fillText(`${m} m`, x - 12, groundY + 32);
+      ctx.fillText(`${relativeM} m`, x - 12, groundY + 32);
     }
   }
 

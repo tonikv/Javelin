@@ -84,12 +84,7 @@ const passiveSpeedTarget = (startedAtMs: number, nowMs: number): number => {
 const runSpeedMsFromNorm = (speedNorm: number): number =>
   RUNUP_SPEED_MIN_MS + (RUNUP_SPEED_MAX_MS - RUNUP_SPEED_MIN_MS) * speedNorm;
 
-const getFaultForRelease = (angleDeg: number): FaultReason | null => {
-  if (angleDeg <= ANGLE_MIN_DEG + 0.2) {
-    return 'lowAngle';
-  }
-  return null;
-};
+const getFaultForRelease = (_angleDeg: number): FaultReason | null => null;
 
 const lateralVelocityFromRelease = (
   quality: TimingQuality,
