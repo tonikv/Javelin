@@ -1,4 +1,4 @@
-import type { MeterWindow } from "./types";
+import type { MeterWindow } from './types';
 
 type SpeedUpTuning = {
   beatIntervalMs: number;
@@ -103,10 +103,14 @@ export const RHYTHM_SPEED_DELTA_SPAM = GAMEPLAY_TUNING.speedUp.hitSpeedDelta.spa
 
 export const RUNUP_START_X_M = GAMEPLAY_TUNING.movement.runupStartXM;
 export const RUNUP_SPEED_DECAY_PER_SECOND = GAMEPLAY_TUNING.movement.runupSpeedDecayPerSecond;
-export const CHARGEAIM_SPEED_DECAY_PER_SECOND = GAMEPLAY_TUNING.movement.chargeAimSpeedDecayPerSecond;
-export const CHARGEAIM_STOP_SPEED_NORM = GAMEPLAY_TUNING.movement.chargeAimStopSpeedNorm;
+export const CHARGE_AIM_SPEED_DECAY_PER_SECOND = GAMEPLAY_TUNING.movement.chargeAimSpeedDecayPerSecond;
+export const CHARGE_AIM_STOP_SPEED_NORM = GAMEPLAY_TUNING.movement.chargeAimStopSpeedNorm;
 export const FOLLOW_THROUGH_STEP_DISTANCE_M = GAMEPLAY_TUNING.movement.followThroughStepDistanceM;
 export const FAULT_STUMBLE_DISTANCE_M = GAMEPLAY_TUNING.movement.faultStumbleDistanceM;
+
+// Deprecated aliases kept for compatibility during transition.
+export const CHARGEAIM_SPEED_DECAY_PER_SECOND = CHARGE_AIM_SPEED_DECAY_PER_SECOND;
+export const CHARGEAIM_STOP_SPEED_NORM = CHARGE_AIM_STOP_SPEED_NORM;
 
 export const CHARGE_FILL_DURATION_MS = GAMEPLAY_TUNING.throwPhase.chargeFillDurationMs;
 export const CHARGE_OVERFILL_FAULT_01 = GAMEPLAY_TUNING.throwPhase.chargeOverfillFault01;

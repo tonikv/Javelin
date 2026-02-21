@@ -16,7 +16,7 @@ import {
   getTimingQuality
 } from './chargeMeter';
 import { computeAthletePoseGeometry } from './athletePose';
-import { clamp, easeOutQuad, wrap01 } from './math';
+import { clamp, easeOutQuad, toRad, wrap01 } from './math';
 import { computeLaunchSpeedMs, createPhysicalJavelin, updatePhysicalJavelin } from './physics';
 import {
   computeCompetitionDistanceM,
@@ -24,8 +24,8 @@ import {
 } from './scoring';
 import {
   BEAT_INTERVAL_MS,
-  CHARGEAIM_SPEED_DECAY_PER_SECOND,
-  CHARGEAIM_STOP_SPEED_NORM,
+  CHARGE_AIM_SPEED_DECAY_PER_SECOND,
+  CHARGE_AIM_STOP_SPEED_NORM,
   CHARGE_FILL_DURATION_MS,
   CHARGE_GOOD_WINDOW,
   CHARGE_OVERFILL_FAULT_01,
@@ -122,7 +122,7 @@ const createFaultJavelinFromCharge = (
       runToAimBlend01: 1
     }
   );
-  const launchAngleRad = Math.max(0.02, (Math.min(24, phase.angleDeg) * Math.PI) / 180);
+  const launchAngleRad = Math.max(0.02, toRad(Math.min(24, phase.angleDeg)));
   const athleteForwardMs = runSpeedMsFromNorm(phase.speedNorm) * 0.12;
   return createPhysicalJavelin({
     xM: releasePose.javelinGrip.xM + Math.cos(launchAngleRad) * JAVELIN_GRIP_OFFSET_M,
@@ -150,6 +150,21 @@ const lateralVelocityFromRelease = (
   return sign * qualityBase + angleBias;
 };
 
+const createLateReleaseFaultPhase = (
+  phase: Extract<GameState['phase'], { tag: 'chargeAim' }>,
+  nowMs: number
+): Extract<GameState['phase'], { tag: 'fault' }> => ({
+  tag: 'fault',
+  reason: 'lateRelease',
+  athleteXM: phase.runupDistanceM,
+  athletePose: {
+    animTag: 'fall',
+    animT: 0
+  },
+  javelin: createFaultJavelinFromCharge(phase, nowMs),
+  javelinLanded: false
+});
+
 export const createInitialGameState = (): GameState => ({
   nowMs: performance.now(),
   roundId: 0,
@@ -163,7 +178,11 @@ const tickFault = (state: GameState, dtMs: number): GameState => {
     return state;
   }
 
-  const nextFaultAnimT = clamp(state.phase.athletePose.animT + dtMs / FALL_ANIM_DURATION_MS, 0, 1);
+  const nextFaultAnimT = clamp(
+    state.phase.athletePose.animT + dtMs / FALL_ANIM_DURATION_MS,
+    0,
+    1
+  );
   const stumbleDeltaM =
     faultStumbleOffsetM(nextFaultAnimT) - faultStumbleOffsetM(state.phase.athletePose.animT);
   const javelinUpdate = state.phase.javelinLanded
@@ -206,7 +225,11 @@ const tickRunup = (state: GameState, dtMs: number, nowMs: number): GameState => 
     state.phase.rhythm.firstTapAtMs === null
       ? 0
       : passiveSpeedTarget(state.phase.rhythm.firstTapAtMs, nowMs);
-  const speedAfterDecay = clamp(state.phase.speedNorm - (dtMs / 1000) * RUNUP_SPEED_DECAY_PER_SECOND, 0, 1);
+  const speedAfterDecay = clamp(
+    state.phase.speedNorm - (dtMs / 1000) * RUNUP_SPEED_DECAY_PER_SECOND,
+    0,
+    1
+  );
   const speedNorm = Math.max(speedAfterDecay, passiveTarget);
   const runSpeedMs = hasStartedRunup ? runSpeedMsFromNorm(speedNorm) : 0;
   const runupDistanceM = clamp(
@@ -241,24 +264,18 @@ const tickChargeAim = (state: GameState, dtMs: number, nowMs: number): GameState
   if (rawFill01 >= CHARGE_OVERFILL_FAULT_01) {
     return {
       ...state,
-      phase: {
-        tag: 'fault',
-        reason: 'lateRelease',
-        athleteXM: state.phase.runupDistanceM,
-        athletePose: {
-          animTag: 'fall',
-          animT: 0
-        },
-        javelin: createFaultJavelinFromCharge(state.phase, nowMs),
-        javelinLanded: false
-      }
+      phase: createLateReleaseFaultPhase(state.phase, nowMs)
     };
   }
 
   const phase01 = clamp(rawFill01, 0, 1);
-  const speedAfterDecay = clamp(state.phase.speedNorm - (dtMs / 1000) * CHARGEAIM_SPEED_DECAY_PER_SECOND, 0, 1);
+  const speedAfterDecay = clamp(
+    state.phase.speedNorm - (dtMs / 1000) * CHARGE_AIM_SPEED_DECAY_PER_SECOND,
+    0,
+    1
+  );
   const speedNorm = Math.max(speedAfterDecay, 0);
-  const stillRunning = speedNorm > CHARGEAIM_STOP_SPEED_NORM;
+  const stillRunning = speedNorm > CHARGE_AIM_STOP_SPEED_NORM;
   const runSpeedMs = stillRunning ? runSpeedMsFromNorm(speedNorm) : 0;
   const runupDistanceM = clamp(
     state.phase.runupDistanceM + runSpeedMs * (dtMs / 1000),
@@ -317,7 +334,7 @@ const tickThrowAnim = (state: GameState, dtMs: number, nowMs: number): GameState
       state.phase.athleteXM
     );
     const launchSpeedMs = computeLaunchSpeedMs(state.phase.speedNorm, state.phase.forceNorm);
-    const launchAngleRad = (state.phase.angleDeg * Math.PI) / 180;
+    const launchAngleRad = toRad(state.phase.angleDeg);
     const athleteForwardMs = runSpeedMsFromNorm(state.phase.speedNorm) * 0.34;
     const lateralVelMs = lateralVelocityFromRelease(
       state.phase.releaseQuality,
@@ -380,7 +397,9 @@ const tickFlight = (state: GameState, dtMs: number): GameState => {
   }
 
   const nextFollowAnimT = clamp(state.phase.athletePose.animT + dtMs / 650, 0, 1);
-  const stepDeltaM = followThroughStepOffsetM(nextFollowAnimT) - followThroughStepOffsetM(state.phase.athletePose.animT);
+  const stepDeltaM =
+    followThroughStepOffsetM(nextFollowAnimT) -
+    followThroughStepOffsetM(state.phase.athletePose.animT);
   const athleteXM = state.phase.athleteXM + stepDeltaM;
   const updated = updatePhysicalJavelin(state.phase.javelin, dtMs, state.windMs);
   if (updated.landed) {
@@ -587,17 +606,7 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
         return {
           ...state,
           nowMs: action.atMs,
-          phase: {
-            tag: 'fault',
-            reason: 'lateRelease',
-            athleteXM: state.phase.runupDistanceM,
-            athletePose: {
-              animTag: 'fall',
-              animT: 0
-            },
-            javelin: createFaultJavelinFromCharge(state.phase, action.atMs),
-            javelinLanded: false
-          }
+          phase: createLateReleaseFaultPhase(state.phase, action.atMs)
         };
       }
       const phase01 = clamp(rawFill01, 0, 1);

@@ -72,25 +72,22 @@ const PHASE_CAMERA_CONFIG: Record<GamePhase['tag'], PhaseCameraConfig> = {
 };
 
 export const getCameraTargetX = (state: GameState): number => {
-  if (state.phase.tag === 'runup') {
-    return state.phase.runupDistanceM;
+  switch (state.phase.tag) {
+    case 'runup':
+    case 'chargeAim':
+      return state.phase.runupDistanceM;
+    case 'throwAnim':
+      return state.phase.athleteXM;
+    case 'flight':
+      return state.phase.javelin.xM;
+    case 'result':
+      return state.phase.landingXM;
+    case 'fault':
+      return state.phase.athleteXM;
+    case 'idle':
+    default:
+      return 5;
   }
-  if (state.phase.tag === 'chargeAim') {
-    return state.phase.runupDistanceM;
-  }
-  if (state.phase.tag === 'throwAnim') {
-    return state.phase.athleteXM;
-  }
-  if (state.phase.tag === 'flight') {
-    return state.phase.javelin.xM;
-  }
-  if (state.phase.tag === 'result') {
-    return state.phase.landingXM;
-  }
-  if (state.phase.tag === 'fault') {
-    return state.phase.athleteXM;
-  }
-  return 5;
 };
 
 export const getViewWidthM = (state: GameState): number =>

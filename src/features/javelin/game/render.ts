@@ -300,19 +300,19 @@ export const getPlayerAngleAnchorScreen = (
 };
 
 const shouldDrawFrontArmOverHead = (state: GameState): boolean => {
-  if (state.phase.tag === 'chargeAim') {
-    return false;
+  switch (state.phase.tag) {
+    case 'chargeAim':
+    case 'flight':
+    case 'fault':
+      return false;
+    case 'throwAnim':
+      return sampleThrowSubphase(state.phase.animProgress).stage !== 'windup';
+    case 'idle':
+    case 'runup':
+    case 'result':
+    default:
+      return true;
   }
-  if (state.phase.tag === 'throwAnim') {
-    return sampleThrowSubphase(state.phase.animProgress).stage !== 'windup';
-  }
-  if (state.phase.tag === 'flight') {
-    return false;
-  }
-  if (state.phase.tag === 'fault') {
-    return false;
-  }
-  return true;
 };
 
 export const renderGame = (

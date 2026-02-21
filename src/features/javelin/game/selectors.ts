@@ -1,7 +1,4 @@
-import {
-  RHYTHM_TARGET_PHASE01,
-  THROW_LINE_X_M
-} from './constants';
+import { RHYTHM_TARGET_PHASE01, THROW_LINE_X_M } from './constants';
 import { wrap01 } from './math';
 import { BEAT_INTERVAL_MS, GOOD_WINDOW_MS, PERFECT_WINDOW_MS } from './tuning';
 import type { GameState, TimingQuality } from './types';
@@ -21,16 +18,19 @@ export const getSpeedPercent = (state: GameState): number => {
 };
 
 export const getAngleDeg = (state: GameState): number => {
-  if (state.phase.tag === 'idle' || state.phase.tag === 'runup') {
-    return state.aimAngleDeg;
+  switch (state.phase.tag) {
+    case 'chargeAim':
+    case 'throwAnim':
+      return state.phase.angleDeg;
+    case 'flight':
+      return state.phase.launchedFrom.angleDeg;
+    case 'idle':
+    case 'runup':
+    case 'result':
+    case 'fault':
+    default:
+      return state.aimAngleDeg;
   }
-  if (state.phase.tag === 'chargeAim' || state.phase.tag === 'throwAnim') {
-    return state.phase.angleDeg;
-  }
-  if (state.phase.tag === 'flight') {
-    return state.phase.launchedFrom.angleDeg;
-  }
-  return state.aimAngleDeg;
 };
 
 export const getRunupMeterPhase01 = (state: GameState): number | null => {
@@ -76,19 +76,19 @@ export const getRhythmHotZones = (): {
 };
 
 export const getRunupDistanceM = (state: GameState): number | null => {
-  if (state.phase.tag === 'runup') {
-    return state.phase.runupDistanceM;
+  switch (state.phase.tag) {
+    case 'runup':
+    case 'chargeAim':
+      return state.phase.runupDistanceM;
+    case 'throwAnim':
+    case 'flight':
+    case 'result':
+      return state.phase.athleteXM;
+    case 'idle':
+    case 'fault':
+    default:
+      return null;
   }
-  if (state.phase.tag === 'chargeAim') {
-    return state.phase.runupDistanceM;
-  }
-  if (state.phase.tag === 'throwAnim' || state.phase.tag === 'flight') {
-    return state.phase.athleteXM;
-  }
-  if (state.phase.tag === 'result') {
-    return state.phase.athleteXM;
-  }
-  return null;
 };
 
 export const getThrowLineRemainingM = (state: GameState): number | null => {
