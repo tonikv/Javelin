@@ -1,0 +1,11 @@
+{
+  "app.title": "Selain Games 2026",
+  "javelin.title": "Keihäänheitto",
+  "hud.speed": "Vauhti",
+  "hud.angle": "Kulma",
+  "hud.wind": "Tuuli",
+  "action.start": "Aloita kierros",
+  "action.playAgain": "Uusi kierros",
+  "result.distance": "Tulos",
+  "scoreboard.title": "Paikallinen ennätystaulukko"
+}

@@ -1,0 +1,11 @@
+{
+  "app.title": "Browser Games 2026",
+  "javelin.title": "Spjutkastning",
+  "hud.speed": "Fart",
+  "hud.angle": "Vinkel",
+  "hud.wind": "Vind",
+  "action.start": "Starta runda",
+  "action.playAgain": "Ny runda",
+  "result.distance": "Resultat",
+  "scoreboard.title": "Lokal topplista"
+}

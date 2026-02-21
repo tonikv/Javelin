@@ -1,0 +1,5 @@
+- Prefer pure functions and immutable updates.
+- Use discriminated unions for game phases.
+- Keep Canvas rendering stateless with respect to business logic.
+- Do not hardcode user-facing strings; use i18n keys.
+- Write tests for scoring, reducer transitions, and highscore sorting.

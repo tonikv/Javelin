@@ -1,0 +1,11 @@
+{
+  "app.title": "Browser Games 2026",
+  "javelin.title": "Javelin Throw",
+  "hud.speed": "Speed",
+  "hud.angle": "Angle",
+  "hud.wind": "Wind",
+  "action.start": "Start round",
+  "action.playAgain": "Play again",
+  "result.distance": "Result",
+  "scoreboard.title": "Local leaderboard"
+}
