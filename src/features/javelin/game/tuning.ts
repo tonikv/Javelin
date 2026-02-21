@@ -31,6 +31,7 @@ type MovementTuning = {
   runupSpeedDecayPerSecond: number;
   chargeAimSpeedDecayPerSecond: number;
   chargeAimStopSpeedNorm: number;
+  followThroughStepDistanceM: number;
 };
 
 export type GameplayTuning = {
@@ -67,8 +68,8 @@ export const GAMEPLAY_TUNING: GameplayTuning = {
     chargeForceCycleMs: 1100,
     chargePerfectWindow: { start: 0.44, end: 0.56 },
     chargeGoodWindow: { start: 0.34, end: 0.66 },
-    runToDrawbackBlendMs: 520,
-    throwAnimDurationMs: 920,
+    runToDrawbackBlendMs: 420,
+    throwAnimDurationMs: 320,
     throwReleaseProgress01: 0.56,
   },
   movement: {
@@ -76,5 +77,6 @@ export const GAMEPLAY_TUNING: GameplayTuning = {
     runupSpeedDecayPerSecond: 0.012,
     chargeAimSpeedDecayPerSecond: 0.2,
     chargeAimStopSpeedNorm: 0.03,
+    followThroughStepDistanceM: 0.75,
   },
 };

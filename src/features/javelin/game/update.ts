@@ -8,6 +8,7 @@ import {
   CHARGE_FORCE_CYCLE_MS,
   CHARGE_GOOD_WINDOW,
   CHARGE_PERFECT_WINDOW,
+  FOLLOW_THROUGH_STEP_DISTANCE_M,
   GOOD_WINDOW_MS,
   JAVELIN_GRIP_OFFSET_M,
   JAVELIN_RELEASE_OFFSET_Y_M,
@@ -93,6 +94,12 @@ const runSpeedMsFromNorm = (speedNorm: number): number =>
   RUNUP_SPEED_MIN_MS + (RUNUP_SPEED_MAX_MS - RUNUP_SPEED_MIN_MS) * speedNorm;
 
 const isRunning = (speedNorm: number): boolean => speedNorm > 0.01;
+
+const followThroughStepOffsetM = (animT: number): number => {
+  const t = clamp(animT, 0, 1);
+  const step01 = t < 0.78 ? easeOutQuad(t / 0.78) : 1;
+  return FOLLOW_THROUGH_STEP_DISTANCE_M * step01;
+};
 
 const getFaultForRelease = (_angleDeg: number): FaultReason | null => null;
 
@@ -485,6 +492,11 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
       }
 
       if (nextState.phase.tag === 'flight') {
+        const nextFollowAnimT = clamp(nextState.phase.athletePose.animT + action.dtMs / 650, 0, 1);
+        const stepDeltaM =
+          followThroughStepOffsetM(nextFollowAnimT) -
+          followThroughStepOffsetM(nextState.phase.athletePose.animT);
+        const athleteXM = nextState.phase.athleteXM + stepDeltaM;
         const updated = updatePhysicalJavelin(nextState.phase.javelin, action.dtMs, nextState.windMs);
         if (updated.landed) {
           const landingTipXM = updated.landingTipXM ?? updated.javelin.xM;
@@ -500,7 +512,7 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
             ...nextState,
             phase: {
               tag: 'result',
-              athleteXM: nextState.phase.athleteXM,
+              athleteXM,
               distanceM: computeCompetitionDistanceM(landingTipXM),
               isHighscore: false,
               resultKind: legality.resultKind,
@@ -515,10 +527,11 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
           ...nextState,
           phase: {
             ...nextState.phase,
+            athleteXM,
             javelin: updated.javelin,
             athletePose: {
               animTag: 'followThrough',
-              animT: clamp(nextState.phase.athletePose.animT + action.dtMs / 650, 0, 1)
+              animT: nextFollowAnimT
             }
           }
         };

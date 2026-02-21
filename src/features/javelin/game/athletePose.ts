@@ -253,18 +253,20 @@ const throwCurves = (t01: number, aimAngleDeg: number): MotionCurves => {
 
 const followThroughCurves = (t01: number): MotionCurves => {
   const t = clamp01(t01);
+  const step01 = easeOutQuad(Math.min(1, t / 0.78));
+  const settle01 = easeInOutSine(clamp01((t - 0.38) / 0.62));
   return {
-    leanRad: 0.3,
-    pelvisShiftXM: 0.16 * t,
-    pelvisBobYM: 0.01,
-    hipFront: 0.56,
-    hipBack: -0.52,
-    kneeFront: 0.35,
-    kneeBack: 0.82,
-    shoulderFront: 0.26,
-    shoulderBack: -0.52,
-    elbowFront: -0.12,
-    elbowBack: 0.22,
+    leanRad: lerp(0.16, -0.05, settle01),
+    pelvisShiftXM: lerp(0.02, 0.22, step01),
+    pelvisBobYM: 0.006 + 0.014 * Math.sin(t * Math.PI),
+    hipFront: lerp(0.52, 0.38, settle01),
+    hipBack: lerp(-0.44, -0.3, settle01),
+    kneeFront: lerp(0.3, 0.42, settle01),
+    kneeBack: lerp(0.82, 0.68, settle01),
+    shoulderFront: lerp(0.32, 0.16, settle01),
+    shoulderBack: lerp(-0.48, -0.3, settle01),
+    elbowFront: lerp(-0.18, -0.06, settle01),
+    elbowBack: lerp(0.24, 0.16, settle01),
     javelinAngleRad: toRad(-20)
   };
 };

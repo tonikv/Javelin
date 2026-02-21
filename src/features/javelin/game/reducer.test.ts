@@ -182,10 +182,12 @@ describe('gameReducer', () => {
     expect(state.phase.tag).toBe('flight');
     if (state.phase.tag === 'flight') {
       const releasedAt = state.phase.javelin.releasedAtMs;
+      const athleteXAtRelease = state.phase.athleteXM;
       state = gameReducer(state, { type: 'tick', dtMs: 16, nowMs: 4626 });
       expect(state.phase.tag).toBe('flight');
       if (state.phase.tag === 'flight') {
         expect(state.phase.javelin.releasedAtMs).toBe(releasedAt);
+        expect(state.phase.athleteXM).toBeGreaterThan(athleteXAtRelease);
       }
     }
   });
