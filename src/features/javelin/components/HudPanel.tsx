@@ -1,8 +1,21 @@
 import type { ReactElement } from 'react';
-import { ARM_RELEASE_WINDOW } from '../game/constants';
-import type { GameState } from '../game/types';
-import { getAngleDeg, getReleaseProgress, getSpeedPercent, isReleaseWindowOpen } from '../game/selectors';
+import {
+  CHARGE_GOOD_WINDOW,
+  CHARGE_PERFECT_WINDOW,
+  GOOD_WINDOW_MS,
+  PERFECT_WINDOW_MS
+} from '../game/constants';
+import type { GameState, TimingQuality } from '../game/types';
+import {
+  getAngleDeg,
+  getForcePreviewPercent,
+  getRhythmHotZones,
+  getRunupFeedback,
+  getRunupMeterPhase01,
+  getSpeedPercent
+} from '../game/selectors';
 import { useI18n } from '../../../i18n/init';
+import { CircularTimingMeter } from './CircularTimingMeter';
 
 type HudPanelProps = {
   state: GameState;
@@ -14,8 +27,10 @@ const phaseMessageKey = (state: GameState): string => {
       return 'phase.idle';
     case 'runup':
       return 'phase.runup';
-    case 'throwPrep':
-      return 'phase.throwPrep';
+    case 'chargeAim':
+      return 'phase.chargeAim';
+    case 'throwAnim':
+      return 'phase.throwAnim';
     case 'flight':
       return 'phase.flight';
     case 'result':
@@ -27,12 +42,23 @@ const phaseMessageKey = (state: GameState): string => {
   }
 };
 
+const meterFeedback = (state: GameState): TimingQuality | null => {
+  if (state.phase.tag === 'runup') {
+    return getRunupFeedback(state);
+  }
+  if (state.phase.tag === 'chargeAim') {
+    return state.phase.chargeMeter.lastQuality;
+  }
+  return null;
+};
+
 export const HudPanel = ({ state }: HudPanelProps): ReactElement => {
   const { t, formatNumber } = useI18n();
   const speed = getSpeedPercent(state);
   const angle = getAngleDeg(state);
-  const releaseProgress = getReleaseProgress(state);
-  const releaseReady = isReleaseWindowOpen(state);
+  const rhythmPhase = getRunupMeterPhase01(state);
+  const rhythmHotZones = getRhythmHotZones();
+  const forcePercent = getForcePreviewPercent(state);
 
   return (
     <section className="card hud-panel" aria-label="HUD">
@@ -54,15 +80,35 @@ export const HudPanel = ({ state }: HudPanelProps): ReactElement => {
           </strong>
         </div>
       </div>
-      {releaseProgress !== null && (
-        <div className="release-box">
-          <div>
-            {t('hud.release')} {releaseReady ? t('phase.throwPrep') : ''}
-          </div>
-          <progress value={Math.max(0, Math.min(1, releaseProgress))} max={1} />
-          <small>
-            {Math.round(ARM_RELEASE_WINDOW.start * 100)}-{Math.round(ARM_RELEASE_WINDOW.end * 100)}%
-          </small>
+
+      {(state.phase.tag === 'runup' || state.phase.tag === 'chargeAim' || state.phase.tag === 'throwAnim') && (
+        <div className="meter-row">
+          {rhythmPhase !== null && (
+            <CircularTimingMeter
+              labelKey="hud.rhythm"
+              phase01={rhythmPhase}
+              hitFeedback={meterFeedback(state)}
+              hotZones={[
+                { ...rhythmHotZones.good, kind: 'good' },
+                { ...rhythmHotZones.perfect, kind: 'perfect' }
+              ]}
+              valueText={`±${GOOD_WINDOW_MS}ms / ±${PERFECT_WINDOW_MS}ms`}
+            />
+          )}
+
+          {(state.phase.tag === 'chargeAim' || state.phase.tag === 'throwAnim') && (
+            <CircularTimingMeter
+              labelKey="hud.force"
+              phase01={state.phase.tag === 'chargeAim' ? state.phase.chargeMeter.phase01 : state.phase.forceNorm}
+              hitFeedback={meterFeedback(state)}
+              hotZones={[
+                { ...CHARGE_GOOD_WINDOW, kind: 'good' },
+                { ...CHARGE_PERFECT_WINDOW, kind: 'perfect' }
+              ]}
+              valueText={forcePercent === null ? '' : `${forcePercent}%`}
+              active={state.phase.tag === 'chargeAim'}
+            />
+          )}
         </div>
       )}
     </section>

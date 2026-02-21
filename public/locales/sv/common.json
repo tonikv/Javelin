@@ -1,11 +1,11 @@
 {
   "app.title": "Browser Games 2026",
   "javelin.title": "Spjutkastning",
-  "hud.speed": "Fart",
-  "hud.angle": "Vinkel",
-  "hud.wind": "Vind",
-  "action.start": "Starta runda",
-  "action.playAgain": "Ny runda",
-  "result.distance": "Resultat",
-  "scoreboard.title": "Lokal topplista"
+  "phase.runup": "Bygg fart i rytm",
+  "phase.chargeAim": "Ladda kastkraft",
+  "phase.throwAnim": "Kaströrelse",
+  "hud.rhythm": "Rytm",
+  "hud.force": "Kraft",
+  "help.mouse4": "Högerknapp upp: släpp kastet",
+  "help.kbd4": "Enter upp: släpp kastet"
 }

@@ -2,20 +2,34 @@ import {
   ANGLE_DEFAULT_DEG,
   ANGLE_MAX_DEG,
   ANGLE_MIN_DEG,
-  ARM_PREP_DURATION_MS,
-  ARM_RELEASE_WINDOW,
   BEAT_INTERVAL_MS,
+  CHARGE_FORCE_CYCLE_MS,
+  CHARGE_GOOD_WINDOW,
+  CHARGE_PERFECT_WINDOW,
   GOOD_WINDOW_MS,
   PERFECT_WINDOW_MS,
   RUNUP_MAX_TAPS,
   RUNUP_MIN_TAPS_FOR_THROW,
   RUNUP_SPEED_DECAY_PER_SECOND,
   SPAM_PENALTY_MS,
-  SPAM_THRESHOLD_MS
+  SPAM_THRESHOLD_MS,
+  THROW_ANIM_DURATION_MS,
+  THROW_RELEASE_PROGRESS
 } from './constants';
-import { createProjectile, updateProjectile } from './physics';
-import { computeThrowDistance } from './scoring';
-import type { FaultReason, GameAction, GameState } from './types';
+import {
+  applyForceQualityBonus,
+  computeForcePreview,
+  getTimingQuality,
+  wrap01
+} from './chargeMeter';
+import { computeAthletePoseGeometry } from './athletePose';
+import {
+  computeLaunchSpeedMs,
+  createPhysicalJavelin,
+  distanceFromJavelin,
+  updatePhysicalJavelin
+} from './physics';
+import type { FaultReason, GameAction, GameState, TimingQuality } from './types';
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value));
@@ -27,25 +41,35 @@ const nearestBeatDeltaMs = (startedAtMs: number, atMs: number): number => {
   return Math.abs(atMs - beatTime);
 };
 
-const rhythmTapSpeedDelta = (deltaMs: number): number => {
+const timingQualityFromBeatDelta = (deltaMs: number): TimingQuality => {
   if (deltaMs <= PERFECT_WINDOW_MS) {
-    return 0.11;
+    return 'perfect';
   }
   if (deltaMs <= GOOD_WINDOW_MS) {
+    return 'good';
+  }
+  return 'miss';
+};
+
+const rhythmTapSpeedDelta = (quality: TimingQuality): number => {
+  if (quality === 'perfect') {
+    return 0.11;
+  }
+  if (quality === 'good') {
     return 0.07;
   }
   return 0.025;
 };
 
-const getFaultForRelease = (angleDeg: number, releaseTiming: number): FaultReason | null => {
+const runAnimT = (startedAtMs: number, nowMs: number, speedNorm: number): number => {
+  const elapsedSec = Math.max(0, (nowMs - startedAtMs) / 1000);
+  const strideHz = 1.45 + speedNorm * 2.4;
+  return wrap01(elapsedSec * strideHz);
+};
+
+const getFaultForRelease = (angleDeg: number): FaultReason | null => {
   if (angleDeg <= ANGLE_MIN_DEG + 0.2) {
     return 'lowAngle';
-  }
-  if (releaseTiming < 0.12) {
-    return 'invalidRelease';
-  }
-  if (releaseTiming > 1.02) {
-    return 'lateRelease';
   }
   return null;
 };
@@ -74,7 +98,13 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
             lastTapAtMs: null,
             perfectHits: 0,
             goodHits: 0,
-            penaltyUntilMs: 0
+            penaltyUntilMs: 0,
+            lastQuality: null,
+            lastQualityAtMs: 0
+          },
+          athletePose: {
+            animTag: 'run',
+            animT: 0
           }
         }
       };
@@ -85,13 +115,17 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
       }
       const phase = state.phase;
       const inPenalty = action.atMs < phase.rhythm.penaltyUntilMs;
-      const tapInterval = phase.rhythm.lastTapAtMs === null ? Number.POSITIVE_INFINITY : action.atMs - phase.rhythm.lastTapAtMs;
+      const tapInterval =
+        phase.rhythm.lastTapAtMs === null
+          ? Number.POSITIVE_INFINITY
+          : action.atMs - phase.rhythm.lastTapAtMs;
       const isSpam = tapInterval < SPAM_THRESHOLD_MS;
       const beatDelta = nearestBeatDeltaMs(phase.startedAtMs, action.atMs);
-      const baseDelta = inPenalty || isSpam ? -0.05 : rhythmTapSpeedDelta(beatDelta);
+      const quality = timingQualityFromBeatDelta(beatDelta);
+      const baseDelta = inPenalty || isSpam ? -0.05 : rhythmTapSpeedDelta(quality);
       const speedNorm = clamp(phase.speedNorm + baseDelta, 0, 1);
-      const perfectHits = phase.rhythm.perfectHits + (beatDelta <= PERFECT_WINDOW_MS ? 1 : 0);
-      const goodHits = phase.rhythm.goodHits + (beatDelta <= GOOD_WINDOW_MS ? 1 : 0);
+      const perfectHits = phase.rhythm.perfectHits + (quality === 'perfect' ? 1 : 0);
+      const goodHits = phase.rhythm.goodHits + (quality !== 'miss' ? 1 : 0);
       const penaltyUntilMs = isSpam ? action.atMs + SPAM_PENALTY_MS : phase.rhythm.penaltyUntilMs;
 
       return {
@@ -105,12 +139,18 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
             lastTapAtMs: action.atMs,
             perfectHits,
             goodHits,
-            penaltyUntilMs
+            penaltyUntilMs,
+            lastQuality: isSpam ? 'miss' : quality,
+            lastQualityAtMs: action.atMs
+          },
+          athletePose: {
+            animTag: 'run',
+            animT: runAnimT(phase.startedAtMs, action.atMs, speedNorm)
           }
         }
       };
     }
-    case 'beginThrowPrep': {
+    case 'beginChargeAim': {
       if (state.phase.tag !== 'runup') {
         return state;
       }
@@ -119,17 +159,30 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
       }
       return {
         ...state,
+        nowMs: action.atMs,
         phase: {
-          tag: 'throwPrep',
+          tag: 'chargeAim',
           speedNorm: state.phase.speedNorm,
           angleDeg: ANGLE_DEFAULT_DEG,
-          armPhase: 0,
-          releaseWindow: ARM_RELEASE_WINDOW
+          chargeStartedAtMs: action.atMs,
+          chargeMeter: {
+            phase01: 0,
+            cycles: 0,
+            perfectWindow: CHARGE_PERFECT_WINDOW,
+            goodWindow: CHARGE_GOOD_WINDOW,
+            lastQuality: null,
+            lastSampleAtMs: action.atMs
+          },
+          forceNormPreview: computeForcePreview(0),
+          athletePose: {
+            animTag: 'aim',
+            animT: 0
+          }
         }
       };
     }
     case 'adjustAngle': {
-      if (state.phase.tag !== 'throwPrep') {
+      if (state.phase.tag !== 'chargeAim') {
         return state;
       }
       return {
@@ -140,37 +193,39 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
         }
       };
     }
-    case 'releaseThrow': {
-      if (state.phase.tag !== 'throwPrep') {
+    case 'releaseCharge': {
+      if (state.phase.tag !== 'chargeAim') {
         return state;
       }
-      const releaseTiming = clamp(state.phase.armPhase, 0, 1.1);
-      const fault = getFaultForRelease(state.phase.angleDeg, releaseTiming);
+      const fault = getFaultForRelease(state.phase.angleDeg);
       if (fault !== null) {
         return {
           ...state,
+          nowMs: action.atMs,
           phase: { tag: 'fault', reason: fault }
         };
       }
 
-      const distanceM = computeThrowDistance({
-        speedNorm: state.phase.speedNorm,
-        angleDeg: state.phase.angleDeg,
-        releaseTiming,
-        windMs: state.windMs
-      });
+      const quality = getTimingQuality(
+        state.phase.chargeMeter.phase01,
+        state.phase.chargeMeter.perfectWindow,
+        state.phase.chargeMeter.goodWindow
+      );
+      const forceNorm = applyForceQualityBonus(state.phase.forceNormPreview, quality);
 
       return {
         ...state,
+        nowMs: action.atMs,
         phase: {
-          tag: 'flight',
-          projectile: createProjectile(distanceM),
-          launchedFrom: {
-            speedNorm: state.phase.speedNorm,
-            angleDeg: state.phase.angleDeg,
-            releaseTiming,
-            windMs: state.windMs,
-            expectedDistanceM: distanceM
+          tag: 'throwAnim',
+          speedNorm: state.phase.speedNorm,
+          angleDeg: state.phase.angleDeg,
+          forceNorm,
+          animProgress: 0,
+          released: false,
+          athletePose: {
+            animTag: 'throw',
+            animT: 0
           }
         }
       };
@@ -195,34 +250,113 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
           ...nextState,
           phase: {
             ...nextState.phase,
-            speedNorm
+            speedNorm,
+            athletePose: {
+              animTag: 'run',
+              animT: runAnimT(nextState.phase.startedAtMs, action.nowMs, speedNorm)
+            }
           }
         };
       }
-      if (nextState.phase.tag === 'throwPrep') {
-        const armPhase = nextState.phase.armPhase + action.dtMs / ARM_PREP_DURATION_MS;
-        if (armPhase > 1.05) {
-          return {
-            ...nextState,
-            phase: { tag: 'fault', reason: 'lateRelease' }
-          };
-        }
+
+      if (nextState.phase.tag === 'chargeAim') {
+        const elapsedMs = Math.max(0, action.nowMs - nextState.phase.chargeStartedAtMs);
+        const phase01 = wrap01(elapsedMs / CHARGE_FORCE_CYCLE_MS);
+        const forceNormPreview = computeForcePreview(phase01);
+        const quality = getTimingQuality(
+          phase01,
+          nextState.phase.chargeMeter.perfectWindow,
+          nextState.phase.chargeMeter.goodWindow
+        );
         return {
           ...nextState,
           phase: {
             ...nextState.phase,
-            armPhase
+            forceNormPreview,
+            chargeMeter: {
+              ...nextState.phase.chargeMeter,
+              phase01,
+              cycles: Math.floor(elapsedMs / CHARGE_FORCE_CYCLE_MS),
+              lastQuality: quality,
+              lastSampleAtMs: action.nowMs
+            },
+            athletePose: {
+              animTag: 'aim',
+              animT: phase01
+            }
           }
         };
       }
+
+      if (nextState.phase.tag === 'throwAnim') {
+        const nextProgress = clamp(
+          nextState.phase.animProgress + action.dtMs / THROW_ANIM_DURATION_MS,
+          0,
+          1
+        );
+        const released = nextProgress >= THROW_RELEASE_PROGRESS;
+        if (released && !nextState.phase.released) {
+          const releasePose = computeAthletePoseGeometry(
+            {
+              animTag: 'throw',
+              animT: THROW_RELEASE_PROGRESS
+            },
+            nextState.phase.speedNorm,
+            nextState.phase.angleDeg
+          );
+          const launchSpeedMs = computeLaunchSpeedMs(
+            nextState.phase.speedNorm,
+            nextState.phase.forceNorm
+          );
+          const launchAngleRad = (nextState.phase.angleDeg * Math.PI) / 180;
+
+          return {
+            ...nextState,
+            phase: {
+              tag: 'flight',
+              javelin: createPhysicalJavelin({
+                xM: releasePose.javelinGrip.xM + Math.cos(launchAngleRad) * 0.45,
+                yM: Math.max(1.35, releasePose.javelinGrip.yM + Math.sin(launchAngleRad) * 0.2),
+                launchAngleRad,
+                launchSpeedMs,
+                releasedAtMs: action.nowMs
+              }),
+              launchedFrom: {
+                speedNorm: nextState.phase.speedNorm,
+                angleDeg: nextState.phase.angleDeg,
+                forceNorm: nextState.phase.forceNorm,
+                windMs: nextState.windMs,
+                launchSpeedMs
+              },
+              athletePose: {
+                animTag: 'followThrough',
+                animT: 0
+              }
+            }
+          };
+        }
+
+        return {
+          ...nextState,
+          phase: {
+            ...nextState.phase,
+            animProgress: nextProgress,
+            athletePose: {
+              animTag: 'throw',
+              animT: nextProgress
+            }
+          }
+        };
+      }
+
       if (nextState.phase.tag === 'flight') {
-        const updated = updateProjectile(nextState.phase.projectile, action.dtMs);
+        const updated = updatePhysicalJavelin(nextState.phase.javelin, action.dtMs, nextState.windMs);
         if (updated.landed) {
           return {
             ...nextState,
             phase: {
               tag: 'result',
-              distanceM: nextState.phase.launchedFrom.expectedDistanceM,
+              distanceM: distanceFromJavelin(updated.javelin),
               isHighscore: false
             }
           };
@@ -231,7 +365,11 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
           ...nextState,
           phase: {
             ...nextState.phase,
-            projectile: updated.projectile
+            javelin: updated.javelin,
+            athletePose: {
+              animTag: 'followThrough',
+              animT: clamp(nextState.phase.athletePose.animT + action.dtMs / 650, 0, 1)
+            }
           }
         };
       }

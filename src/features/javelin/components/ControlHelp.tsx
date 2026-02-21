@@ -11,9 +11,11 @@ export const ControlHelp = (): ReactElement => {
         <li>{t('help.mouse1')}</li>
         <li>{t('help.mouse2')}</li>
         <li>{t('help.mouse3')}</li>
+        <li>{t('help.mouse4')}</li>
         <li>{t('help.kbd1')}</li>
         <li>{t('help.kbd2')}</li>
         <li>{t('help.kbd3')}</li>
+        <li>{t('help.kbd4')}</li>
       </ul>
     </section>
   );
