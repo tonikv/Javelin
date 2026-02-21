@@ -138,10 +138,11 @@ const mixCurves = (from: MotionCurves, to: MotionCurves, t: number): MotionCurve
   javelinAngleRad: lerp(from.javelinAngleRad, to.javelinAngleRad, t)
 });
 
-const runCurves = (t01: number, speedNorm: number): MotionCurves => {
+const runCurves = (t01: number, speedNorm: number, aimAngleDeg: number): MotionCurves => {
   const cycle = clamp01(t01) * Math.PI * 2;
   const stride = Math.sin(cycle);
   const counter = Math.sin(cycle + Math.PI);
+  const runJavelinAngleDeg = Math.max(-90, Math.min(90, aimAngleDeg));
   return {
     leanRad: -0.18 - 0.18 * speedNorm,
     pelvisShiftXM: 0.08 * stride,
@@ -154,7 +155,7 @@ const runCurves = (t01: number, speedNorm: number): MotionCurves => {
     shoulderBack: 0.74 * counter + 0.12,
     elbowFront: 0.14,
     elbowBack: -0.12,
-    javelinAngleRad: toRad(9)
+    javelinAngleRad: toRad(runJavelinAngleDeg)
   };
 };
 
@@ -246,7 +247,7 @@ const followThroughCurves = (t01: number): MotionCurves => {
   };
 };
 
-const idleCurves = (): MotionCurves => ({
+const idleCurves = (aimAngleDeg: number): MotionCurves => ({
   leanRad: -0.04,
   pelvisShiftXM: 0,
   pelvisBobYM: 0,
@@ -258,7 +259,7 @@ const idleCurves = (): MotionCurves => ({
   shoulderBack: 0.2,
   elbowFront: 0.14,
   elbowBack: -0.08,
-  javelinAngleRad: toRad(4)
+  javelinAngleRad: toRad(Math.max(-90, Math.min(90, aimAngleDeg)))
 });
 
 const curvesForPose = (
@@ -270,7 +271,7 @@ const curvesForPose = (
   const t = clamp01(pose.animT);
 
   if (pose.animTag === 'run') {
-    return runCurves(t, speedNorm);
+    return runCurves(t, speedNorm, aimAngleDeg);
   }
 
   if (pose.animTag === 'aim') {
@@ -280,7 +281,7 @@ const curvesForPose = (
       typeof options.runToAimBlend01 === 'number' &&
       options.runToAimBlend01 < 1
     ) {
-      const runSource = runCurves(options.runBlendFromAnimT, speedNorm);
+      const runSource = runCurves(options.runBlendFromAnimT, speedNorm, aimAngleDeg);
       return mixCurves(runSource, targetAim, easeInOutSine(options.runToAimBlend01));
     }
     return targetAim;
@@ -294,7 +295,7 @@ const curvesForPose = (
     return followThroughCurves(t);
   }
 
-  return idleCurves();
+  return idleCurves(aimAngleDeg);
 };
 
 export const computeAthletePoseGeometry = (

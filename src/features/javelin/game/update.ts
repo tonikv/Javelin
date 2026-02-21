@@ -103,6 +103,7 @@ export const createInitialGameState = (): GameState => ({
   nowMs: performance.now(),
   roundId: 0,
   windMs: 0,
+  aimAngleDeg: ANGLE_DEFAULT_DEG,
   phase: { tag: 'idle' }
 });
 
@@ -190,7 +191,7 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
           speedNorm: state.phase.speedNorm,
           athleteXM: state.phase.runupDistanceM,
           runEntryAnimT: state.phase.athletePose.animT,
-          angleDeg: ANGLE_DEFAULT_DEG,
+          angleDeg: state.aimAngleDeg,
           chargeStartedAtMs: action.atMs,
           chargeMeter: {
             phase01: 0,
@@ -209,28 +210,48 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
       };
     }
     case 'adjustAngle': {
-      if (state.phase.tag !== 'chargeAim') {
-        return state;
+      if (state.phase.tag === 'chargeAim') {
+        const nextAngleDeg = clamp(
+          state.phase.angleDeg + action.deltaDeg,
+          ANGLE_MIN_DEG,
+          ANGLE_MAX_DEG
+        );
+        return {
+          ...state,
+          aimAngleDeg: nextAngleDeg,
+          phase: {
+            ...state.phase,
+            angleDeg: nextAngleDeg
+          }
+        };
       }
-      return {
-        ...state,
-        phase: {
-          ...state.phase,
-          angleDeg: clamp(state.phase.angleDeg + action.deltaDeg, ANGLE_MIN_DEG, ANGLE_MAX_DEG)
-        }
-      };
+      if (state.phase.tag === 'runup' || state.phase.tag === 'idle') {
+        return {
+          ...state,
+          aimAngleDeg: clamp(state.aimAngleDeg + action.deltaDeg, ANGLE_MIN_DEG, ANGLE_MAX_DEG)
+        };
+      }
+      return state;
     }
     case 'setAngle': {
-      if (state.phase.tag !== 'chargeAim') {
-        return state;
+      const nextAngleDeg = clamp(action.angleDeg, ANGLE_MIN_DEG, ANGLE_MAX_DEG);
+      if (state.phase.tag === 'chargeAim') {
+        return {
+          ...state,
+          aimAngleDeg: nextAngleDeg,
+          phase: {
+            ...state.phase,
+            angleDeg: nextAngleDeg
+          }
+        };
       }
-      return {
-        ...state,
-        phase: {
-          ...state.phase,
-          angleDeg: clamp(action.angleDeg, ANGLE_MIN_DEG, ANGLE_MAX_DEG)
-        }
-      };
+      if (state.phase.tag === 'runup' || state.phase.tag === 'idle') {
+        return {
+          ...state,
+          aimAngleDeg: nextAngleDeg
+        };
+      }
+      return state;
     }
     case 'releaseCharge': {
       if (state.phase.tag !== 'chargeAim') {

@@ -3,10 +3,11 @@ import { computeAthletePoseGeometry } from './athletePose';
 import { getHeadMeterScreenAnchor, getVisibleJavelinRenderState } from './render';
 import type { GameState } from './types';
 
-const baseState: Pick<GameState, 'nowMs' | 'roundId' | 'windMs'> = {
+const baseState: Pick<GameState, 'nowMs' | 'roundId' | 'windMs' | 'aimAngleDeg'> = {
   nowMs: 2000,
   roundId: 1,
-  windMs: 0.2
+  windMs: 0.2,
+  aimAngleDeg: 18
 };
 
 describe('javelin visibility state', () => {

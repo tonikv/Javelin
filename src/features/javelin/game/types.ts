@@ -123,6 +123,7 @@ export type GameState = {
   nowMs: number;
   roundId: number;
   windMs: number;
+  aimAngleDeg: number;
   phase: GamePhase;
 };
 

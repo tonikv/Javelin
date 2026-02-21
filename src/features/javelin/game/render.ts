@@ -304,11 +304,6 @@ const drawJavelinWorld = (
   ctx.moveTo(tailScreen.x, tailScreen.y);
   ctx.lineTo(tipScreen.x, tipScreen.y);
   ctx.stroke();
-
-  ctx.fillStyle = '#000000';
-  ctx.beginPath();
-  ctx.arc(tipScreen.x, tipScreen.y, 2.2, 0, Math.PI * 2);
-  ctx.fill();
 };
 
 const drawFrontArm = (
@@ -561,7 +556,7 @@ const getPoseForState = (state: GameState): AthletePoseGeometry => {
     return computeAthletePoseGeometry(
       state.phase.athletePose,
       state.phase.speedNorm,
-      22,
+      state.aimAngleDeg,
       state.phase.runupDistanceM
     );
   }
@@ -605,7 +600,7 @@ const getPoseForState = (state: GameState): AthletePoseGeometry => {
       state.phase.athleteXM
     );
   }
-  return computeAthletePoseGeometry({ animTag: 'idle', animT: 0 }, 0, 20, 2.8);
+  return computeAthletePoseGeometry({ animTag: 'idle', animT: 0 }, 0, state.aimAngleDeg, 2.8);
 };
 
 const shouldDrawFrontArmOverHead = (state: GameState): boolean => {

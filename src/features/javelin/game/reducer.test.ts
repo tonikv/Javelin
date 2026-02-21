@@ -116,9 +116,17 @@ describe('gameReducer', () => {
 
   it('sets absolute angle and clamps to allowed range', () => {
     let state = createInitialGameState();
+    state = gameReducer(state, { type: 'setAngle', angleDeg: 15 });
+    expect(state.aimAngleDeg).toBe(15);
+
     state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0.1 });
+    state = gameReducer(state, { type: 'setAngle', angleDeg: 66 });
+    expect(state.aimAngleDeg).toBe(66);
     state = gameReducer(state, { type: 'beginChargeAim', atMs: 1080 });
     expect(state.phase.tag).toBe('chargeAim');
+    if (state.phase.tag === 'chargeAim') {
+      expect(state.phase.angleDeg).toBe(66);
+    }
 
     state = gameReducer(state, { type: 'setAngle', angleDeg: 90 });
     expect(state.phase.tag).toBe('chargeAim');

@@ -43,7 +43,12 @@ export const usePointerControls = ({ canvas, dispatch, phaseTag }: UsePointerCon
     };
 
     const onMouseMove = (event: MouseEvent): void => {
-      if ((event.buttons & 2) !== 0) {
+      const shouldTrackPointerAngle =
+        phaseTag === 'idle' ||
+        phaseTag === 'runup' ||
+        phaseTag === 'chargeAim' ||
+        (phaseTag === 'throwAnim' && (event.buttons & 2) !== 0);
+      if (shouldTrackPointerAngle) {
         dispatchAngleFromPointer(event.clientY);
       }
     };
