@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { computeAthletePoseGeometry } from './athletePose';
-import { getHeadMeterScreenAnchor, getVisibleJavelinRenderState } from './render';
+import { getCameraTargetX, getHeadMeterScreenAnchor, getVisibleJavelinRenderState } from './render';
 import type { GameState } from './types';
 
 const baseState: Pick<GameState, 'nowMs' | 'roundId' | 'windMs' | 'aimAngleDeg'> = {
@@ -131,5 +131,33 @@ describe('javelin visibility state', () => {
     expect(Number.isFinite(anchor.x)).toBe(true);
     expect(Number.isFinite(anchor.y)).toBe(true);
     expect(anchor.y).toBeLessThan(140);
+  });
+
+  it('keeps landed javelin and camera target near athlete on short/zero throws', () => {
+    const resultState: GameState = {
+      ...baseState,
+      phase: {
+        tag: 'result',
+        athleteXM: 2.8,
+        distanceM: 0,
+        isHighscore: false,
+        resultKind: 'foul_tip_first',
+        tipFirst: false,
+        landingXM: 3.1,
+        landingYM: 0,
+        landingAngleRad: -0.4
+      }
+    };
+
+    const pose = computeAthletePoseGeometry({ animTag: 'followThrough', animT: 1 }, 0.72, 24, 2.8);
+    const visible = getVisibleJavelinRenderState(resultState, pose);
+    expect(visible.mode).toBe('landed');
+    if (visible.mode === 'landed') {
+      expect(visible.xM).toBe(3.1);
+    }
+
+    const cameraTargetX = getCameraTargetX(resultState);
+    expect(cameraTargetX).toBeGreaterThan(2.8);
+    expect(cameraTargetX).toBeLessThan(5);
   });
 });

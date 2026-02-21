@@ -7,6 +7,8 @@ import {
   CHARGE_GOOD_WINDOW,
   CHARGE_PERFECT_WINDOW,
   GOOD_WINDOW_MS,
+  JAVELIN_GRIP_OFFSET_M,
+  JAVELIN_RELEASE_OFFSET_Y_M,
   PERFECT_WINDOW_MS,
   RUNUP_MAX_TAPS,
   RUNUP_MAX_X_M,
@@ -403,8 +405,11 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
               tag: 'flight',
               athleteXM: nextState.phase.athleteXM,
               javelin: createPhysicalJavelin({
-                xM: releasePose.javelinGrip.xM + Math.cos(launchAngleRad) * 0.45,
-                yM: Math.max(1.35, releasePose.javelinGrip.yM + Math.sin(launchAngleRad) * 0.2),
+                xM: releasePose.javelinGrip.xM + Math.cos(launchAngleRad) * JAVELIN_GRIP_OFFSET_M,
+                yM: Math.max(
+                  1.35,
+                  releasePose.javelinGrip.yM + Math.sin(launchAngleRad) * JAVELIN_RELEASE_OFFSET_Y_M
+                ),
                 zM: 0,
                 launchAngleRad,
                 launchSpeedMs,
@@ -463,7 +468,10 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
               distanceM: computeCompetitionDistanceM(landingTipXM),
               isHighscore: false,
               resultKind: legality.resultKind,
-              tipFirst: updated.tipFirst
+              tipFirst: updated.tipFirst,
+              landingXM: updated.javelin.xM,
+              landingYM: Math.max(0, updated.javelin.yM),
+              landingAngleRad: updated.javelin.angleRad
             }
           };
         }

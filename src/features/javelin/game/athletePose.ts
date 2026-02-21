@@ -81,6 +81,52 @@ const add = (a: PointM, b: { x: number; y: number }): PointM => ({
   yM: a.yM + b.y
 });
 
+const solveArm2BoneIK = (
+  shoulder: PointM,
+  target: PointM,
+  upperLen: number,
+  lowerLen: number
+): { elbow: PointM; hand: PointM } => {
+  const dx = target.xM - shoulder.xM;
+  const dy = target.yM - shoulder.yM;
+  const dist = Math.hypot(dx, dy);
+  const maxReach = upperLen + lowerLen;
+
+  if (dist >= maxReach - 0.001 || dist < 0.001) {
+    const dirX = dist > 0.001 ? dx / dist : 1;
+    const dirY = dist > 0.001 ? dy / dist : 0;
+    return {
+      elbow: {
+        xM: shoulder.xM + dirX * upperLen,
+        yM: shoulder.yM + dirY * upperLen
+      },
+      hand: {
+        xM: shoulder.xM + dirX * maxReach,
+        yM: shoulder.yM + dirY * maxReach
+      }
+    };
+  }
+
+  const cosShoulderAngle =
+    (upperLen * upperLen + dist * dist - lowerLen * lowerLen) / (2 * upperLen * dist);
+  const clampedCos = Math.max(-1, Math.min(1, cosShoulderAngle));
+  const baseAngle = Math.atan2(dy, dx);
+  const shoulderAngle = baseAngle - Math.acos(clampedCos);
+
+  const elbow: PointM = {
+    xM: shoulder.xM + Math.cos(shoulderAngle) * upperLen,
+    yM: shoulder.yM + Math.sin(shoulderAngle) * upperLen
+  };
+
+  const elbowToTarget = Math.atan2(target.yM - elbow.yM, target.xM - elbow.xM);
+  const hand: PointM = {
+    xM: elbow.xM + Math.cos(elbowToTarget) * lowerLen,
+    yM: elbow.yM + Math.sin(elbowToTarget) * lowerLen
+  };
+
+  return { elbow, hand };
+};
+
 export const getRunToAimBlend01 = (
   chargeStartedAtMs: number,
   nowMs: number,
@@ -334,10 +380,26 @@ export const computeAthletePoseGeometry = (
 
   const armFrontAngle = torsoAngle + curves.shoulderFront;
   const armBackAngle = torsoAngle + curves.shoulderBack;
-  const elbowFront = add(shoulderFront, polar(armFrontAngle, 0.33));
+  const elbowFrontCurve = add(shoulderFront, polar(armFrontAngle, 0.33));
   const elbowBack = add(shoulderBack, polar(armBackAngle, 0.3));
-  const handFront = add(elbowFront, polar(armFrontAngle + curves.elbowFront, 0.31));
+  const handFrontCurve = add(elbowFrontCurve, polar(armFrontAngle + curves.elbowFront, 0.31));
   const handBack = add(elbowBack, polar(armBackAngle + curves.elbowBack, 0.29));
+
+  const ikTarget: PointM = {
+    xM: shoulderFront.xM + Math.cos(curves.javelinAngleRad) * 0.56,
+    yM: shoulderFront.yM + Math.sin(curves.javelinAngleRad) * 0.56
+  };
+  const ikResult = solveArm2BoneIK(shoulderFront, ikTarget, 0.33, 0.31);
+  const ikBlend =
+    pose.animTag === 'idle' ? 0.7 : pose.animTag === 'run' ? 0.6 : pose.animTag === 'aim' ? 0.85 : 0;
+  const elbowFront: PointM = {
+    xM: lerp(elbowFrontCurve.xM, ikResult.elbow.xM, ikBlend),
+    yM: lerp(elbowFrontCurve.yM, ikResult.elbow.yM, ikBlend)
+  };
+  const handFront: PointM = {
+    xM: lerp(handFrontCurve.xM, ikResult.hand.xM, ikBlend),
+    yM: lerp(handFrontCurve.yM, ikResult.hand.yM, ikBlend)
+  };
 
   const forearmAngle = Math.atan2(handFront.yM - elbowFront.yM, handFront.xM - elbowFront.xM);
   const armTrackedAngle = forearmAngle - toRad(7);
