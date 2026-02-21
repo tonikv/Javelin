@@ -19,11 +19,14 @@ import {
   CAMERA_Y_SCALE_RESULT,
   CAMERA_Y_SCALE_RUNUP,
   CAMERA_Y_SCALE_THROW,
+  CHARGE_GOOD_WINDOW,
+  CHARGE_PERFECT_WINDOW,
   FIELD_MAX_DISTANCE_M,
   JAVELIN_GRIP_OFFSET_M,
   JAVELIN_GRIP_OFFSET_Y_M,
   JAVELIN_LENGTH_M,
-  RUN_TO_AIM_BLEND_MS,
+  RUNUP_START_X_M,
+  RUN_TO_DRAWBACK_BLEND_MS,
   THROW_LINE_X_M,
   WORLD_METER_CURSOR_RADIUS_PX,
   WORLD_METER_LINE_WIDTH_PX,
@@ -31,12 +34,13 @@ import {
   WORLD_METER_RADIUS_PX
 } from './constants';
 import {
+  getForcePreviewPercent,
   getRhythmHotZones,
   getRunupFeedback,
   getRunupMeterPhase01,
   getSpeedPercent
 } from './selectors';
-import type { GameState } from './types';
+import type { GameState, TimingQuality } from './types';
 
 type WorldToScreenInput = {
   xM: number;
@@ -60,6 +64,8 @@ const wrap01 = (value: number): number => {
   return wrapped < 0 ? wrapped + 1 : wrapped;
 };
 
+const clamp01 = (value: number): number => clamp(value, 0, 1);
+
 const drawBackground = (ctx: CanvasRenderingContext2D, width: number, height: number): void => {
   const sky = ctx.createLinearGradient(0, 0, 0, height);
   sky.addColorStop(0, '#e9f7ff');
@@ -78,15 +84,17 @@ export const getCameraTargetX = (state: GameState): number => {
   if (state.phase.tag === 'runup') {
     return state.phase.runupDistanceM;
   }
-  if (state.phase.tag === 'chargeAim' || state.phase.tag === 'throwAnim') {
+  if (state.phase.tag === 'chargeAim') {
+    return state.phase.runupDistanceM;
+  }
+  if (state.phase.tag === 'throwAnim') {
     return state.phase.athleteXM;
   }
   if (state.phase.tag === 'flight') {
     return state.phase.javelin.xM;
   }
   if (state.phase.tag === 'result') {
-    const javelinWorldX = state.phase.landingXM;
-    return state.phase.athleteXM * 0.3 + javelinWorldX * 0.7;
+    return state.phase.landingXM;
   }
   return 5;
 };
@@ -147,7 +155,12 @@ const createWorldToScreen = (
   const viewWidthM = getViewWidthM(state);
   const targetX = getCameraTargetX(state);
   const ahead = getCameraAheadRatio(state);
-  const worldMinX = clamp(targetX - viewWidthM * ahead, 0, FIELD_MAX_DISTANCE_M - viewWidthM);
+  const worldMinLimit = -viewWidthM * ahead;
+  const worldMinX = clamp(
+    targetX - viewWidthM * ahead,
+    worldMinLimit,
+    FIELD_MAX_DISTANCE_M - viewWidthM
+  );
   const worldMaxX = worldMinX + viewWidthM;
   const playableWidth = width - RUNWAY_OFFSET_X - 24;
   const yScale = getVerticalScale(state);
@@ -386,7 +399,18 @@ const drawAthlete = (
   return p.head;
 };
 
-const phaseToSemicircleAngle = (phase01: number): number => Math.PI - wrap01(phase01) * Math.PI;
+const normalizeMeterPhase01 = (phase01: number): number => {
+  if (phase01 <= 0) {
+    return 0;
+  }
+  if (phase01 >= 1) {
+    return 1;
+  }
+  return wrap01(phase01);
+};
+
+const phaseToSemicircleAngle = (phase01: number): number =>
+  Math.PI + clamp01(phase01) * Math.PI;
 
 const drawSemicircleArc = (
   ctx: CanvasRenderingContext2D,
@@ -409,10 +433,15 @@ const drawSemicircleArc = (
       radius,
       phaseToSemicircleAngle(start),
       phaseToSemicircleAngle(end),
-      true
+      false
     );
     ctx.stroke();
   };
+
+  if (Math.abs(end01 - start01) >= 1) {
+    drawSegment(0, 1);
+    return;
+  }
 
   const start = wrap01(start01);
   const end = wrap01(end01);
@@ -429,13 +458,66 @@ export const getHeadMeterScreenAnchor = (headScreen: HeadAnchor): HeadAnchor => 
   y: headScreen.y - WORLD_METER_OFFSET_Y_PX
 });
 
-const drawWorldRhythmMeter = (
+type MeterZones = {
+  perfect: { start: number; end: number };
+  good: { start: number; end: number };
+};
+
+type WorldMeterState = {
+  phase01: number;
+  zones: MeterZones;
+  feedback: TimingQuality | null;
+  valuePercent: number;
+};
+
+const getWorldMeterState = (state: GameState): WorldMeterState | null => {
+  if (state.phase.tag === 'runup') {
+    const meterPhase = getRunupMeterPhase01(state);
+    if (meterPhase === null) {
+      return null;
+    }
+    return {
+      phase01: meterPhase,
+      zones: getRhythmHotZones(),
+      feedback: getRunupFeedback(state),
+      valuePercent: getSpeedPercent(state)
+    };
+  }
+
+  if (state.phase.tag === 'chargeAim') {
+    return {
+      phase01: state.phase.chargeMeter.phase01,
+      zones: {
+        perfect: CHARGE_PERFECT_WINDOW,
+        good: CHARGE_GOOD_WINDOW
+      },
+      feedback: state.phase.chargeMeter.lastQuality,
+      valuePercent: getForcePreviewPercent(state) ?? Math.round(state.phase.forceNormPreview * 100)
+    };
+  }
+
+  if (state.phase.tag === 'throwAnim') {
+    return {
+      phase01: state.phase.forceNorm,
+      zones: {
+        perfect: CHARGE_PERFECT_WINDOW,
+        good: CHARGE_GOOD_WINDOW
+      },
+      feedback: state.phase.releaseQuality,
+      valuePercent: getForcePreviewPercent(state) ?? Math.round(state.phase.forceNorm * 100)
+    };
+  }
+
+  return null;
+};
+
+const drawWorldTimingMeter = (
   ctx: CanvasRenderingContext2D,
   state: GameState,
   headScreen: HeadAnchor
 ): void => {
-  const meterPhase = getRunupMeterPhase01(state);
-  if (meterPhase === null) {
+  const meterState = getWorldMeterState(state);
+  if (meterState === null) {
     return;
   }
 
@@ -443,10 +525,6 @@ const drawWorldRhythmMeter = (
   if (!Number.isFinite(anchor.x) || !Number.isFinite(anchor.y)) {
     return;
   }
-
-  const zones = getRhythmHotZones();
-  const feedback = getRunupFeedback(state);
-  const speedPercent = getSpeedPercent(state);
 
   ctx.save();
   ctx.globalAlpha = 0.96;
@@ -467,8 +545,8 @@ const drawWorldRhythmMeter = (
     anchor.x,
     anchor.y,
     WORLD_METER_RADIUS_PX,
-    zones.good.start,
-    zones.good.end,
+    meterState.zones.good.start,
+    meterState.zones.good.end,
     'rgba(30, 142, 247, 0.82)',
     WORLD_METER_LINE_WIDTH_PX
   );
@@ -478,18 +556,22 @@ const drawWorldRhythmMeter = (
     anchor.x,
     anchor.y,
     WORLD_METER_RADIUS_PX,
-    zones.perfect.start,
-    zones.perfect.end,
+    meterState.zones.perfect.start,
+    meterState.zones.perfect.end,
     'rgba(18, 196, 119, 0.98)',
     WORLD_METER_LINE_WIDTH_PX + 0.8
   );
 
-  const cursorAngle = phaseToSemicircleAngle(meterPhase);
+  const cursorAngle = phaseToSemicircleAngle(normalizeMeterPhase01(meterState.phase01));
   const cursorX = anchor.x + Math.cos(cursorAngle) * WORLD_METER_RADIUS_PX;
   const cursorY = anchor.y + Math.sin(cursorAngle) * WORLD_METER_RADIUS_PX;
 
   const cursorFill =
-    feedback === 'perfect' ? '#22c272' : feedback === 'good' ? '#329cf5' : '#f6d255';
+    meterState.feedback === 'perfect'
+      ? '#22c272'
+      : meterState.feedback === 'good'
+        ? '#329cf5'
+        : '#f6d255';
 
   ctx.fillStyle = cursorFill;
   ctx.strokeStyle = '#0f3b61';
@@ -502,7 +584,7 @@ const drawWorldRhythmMeter = (
   ctx.fillStyle = 'rgba(6, 32, 57, 0.9)';
   ctx.font = '700 11px ui-sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText(`${speedPercent}%`, anchor.x, anchor.y + 16);
+  ctx.fillText(`${meterState.valuePercent}%`, anchor.x, anchor.y + 16);
 
   ctx.restore();
 };
@@ -566,13 +648,13 @@ const getPoseForState = (state: GameState): AthletePoseGeometry => {
   if (state.phase.tag === 'chargeAim') {
     const runToAimBlend01 =
       state.phase.speedNorm > 0.01
-        ? getRunToAimBlend01(state.phase.chargeStartedAtMs, state.nowMs, RUN_TO_AIM_BLEND_MS)
+        ? getRunToAimBlend01(state.phase.chargeStartedAtMs, state.nowMs, RUN_TO_DRAWBACK_BLEND_MS)
         : 1;
     return computeAthletePoseGeometry(
       state.phase.athletePose,
       state.phase.speedNorm,
       state.phase.angleDeg,
-      state.phase.athleteXM,
+      state.phase.runupDistanceM,
       {
         runBlendFromAnimT: state.phase.runEntryAnimT,
         runToAimBlend01
@@ -603,7 +685,7 @@ const getPoseForState = (state: GameState): AthletePoseGeometry => {
       state.phase.athleteXM
     );
   }
-  return computeAthletePoseGeometry({ animTag: 'idle', animT: 0 }, 0, state.aimAngleDeg, 2.8);
+  return computeAthletePoseGeometry({ animTag: 'idle', animT: 0 }, 0, state.aimAngleDeg, RUNUP_START_X_M);
 };
 
 export const getPlayerAngleAnchorScreen = (
@@ -629,10 +711,6 @@ const shouldDrawFrontArmOverHead = (state: GameState): boolean => {
   return true;
 };
 
-const shouldDrawAttachedJavelinBehindAthlete = (state: GameState): boolean =>
-  state.phase.tag === 'chargeAim' ||
-  (state.phase.tag === 'throwAnim' && sampleThrowSubphase(state.phase.animProgress).stage === 'windup');
-
 export const renderGame = (
   ctx: CanvasRenderingContext2D,
   state: GameState,
@@ -650,19 +728,11 @@ export const renderGame = (
 
   const pose = getPoseForState(state);
   const javelin = getVisibleJavelinRenderState(state, pose);
-  const attachedBehind = javelin.mode === 'attached' && shouldDrawAttachedJavelinBehindAthlete(state);
-
-  if (attachedBehind && javelin.mode === 'attached') {
-    drawJavelinWorld(ctx, toScreen, javelin.xM, javelin.yM, javelin.angleRad, javelin.lengthM);
-  }
-
   const headScreen = drawAthlete(ctx, toScreen, pose, shouldDrawFrontArmOverHead(state));
 
-  if (javelin.mode !== 'none' && !attachedBehind) {
+  if (javelin.mode !== 'none') {
     drawJavelinWorld(ctx, toScreen, javelin.xM, javelin.yM, javelin.angleRad, javelin.lengthM);
   }
 
-  if (state.phase.tag === 'runup') {
-    drawWorldRhythmMeter(ctx, state, headScreen);
-  }
+  drawWorldTimingMeter(ctx, state, headScreen);
 };

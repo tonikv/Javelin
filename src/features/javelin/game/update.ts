@@ -3,6 +3,8 @@ import {
   ANGLE_MAX_DEG,
   ANGLE_MIN_DEG,
   BEAT_INTERVAL_MS,
+  CHARGEAIM_SPEED_DECAY_PER_SECOND,
+  CHARGEAIM_STOP_SPEED_NORM,
   CHARGE_FORCE_CYCLE_MS,
   CHARGE_GOOD_WINDOW,
   CHARGE_PERFECT_WINDOW,
@@ -10,6 +12,11 @@ import {
   JAVELIN_GRIP_OFFSET_M,
   JAVELIN_RELEASE_OFFSET_Y_M,
   PERFECT_WINDOW_MS,
+  RHYTHM_SPEED_DELTA_GOOD,
+  RHYTHM_SPEED_DELTA_IN_PENALTY,
+  RHYTHM_SPEED_DELTA_MISS,
+  RHYTHM_SPEED_DELTA_PERFECT,
+  RHYTHM_SPEED_DELTA_SPAM,
   RUNUP_MAX_TAPS,
   RUNUP_MAX_X_M,
   RUNUP_PASSIVE_MAX_SPEED,
@@ -18,7 +25,7 @@ import {
   RUNUP_SPEED_MAX_MS,
   RUNUP_SPEED_MIN_MS,
   RUNUP_START_X_M,
-  RUN_TO_AIM_BLEND_MS,
+  RUN_TO_DRAWBACK_BLEND_MS,
   SPAM_PENALTY_MS,
   SPAM_THRESHOLD_MS,
   THROW_ANIM_DURATION_MS,
@@ -63,19 +70,18 @@ const timingQualityFromBeatDelta = (deltaMs: number): TimingQuality => {
 
 const rhythmTapSpeedDelta = (quality: TimingQuality): number => {
   if (quality === 'perfect') {
-    return 0.085;
+    return RHYTHM_SPEED_DELTA_PERFECT;
   }
   if (quality === 'good') {
-    return 0.05;
+    return RHYTHM_SPEED_DELTA_GOOD;
   }
-  return -0.014;
+  return RHYTHM_SPEED_DELTA_MISS;
 };
 
-const runAnimT = (startedAtMs: number, nowMs: number, speedNorm: number): number => {
-  const elapsedSec = Math.max(0, (nowMs - startedAtMs) / 1000);
-  const strideHz = 1 + speedNorm * 2.2;
-  return wrap01(elapsedSec * strideHz);
-};
+const runStrideHz = (speedNorm: number): number => 1 + speedNorm * 2.2;
+
+const advanceRunAnimT = (currentAnimT: number, dtMs: number, speedNorm: number): number =>
+  wrap01(currentAnimT + (Math.max(0, dtMs) / 1000) * runStrideHz(speedNorm));
 
 const passiveSpeedTarget = (startedAtMs: number, nowMs: number): number => {
   const elapsedMs = Math.max(0, nowMs - startedAtMs);
@@ -152,7 +158,11 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
       const isSpam = tapInterval < SPAM_THRESHOLD_MS;
       const beatDelta = nearestBeatDeltaMs(phase.startedAtMs, action.atMs);
       const quality = timingQualityFromBeatDelta(beatDelta);
-      const baseDelta = isSpam ? -0.095 : inPenalty ? -0.05 : rhythmTapSpeedDelta(quality);
+      const baseDelta = isSpam
+        ? RHYTHM_SPEED_DELTA_SPAM
+        : inPenalty
+          ? RHYTHM_SPEED_DELTA_IN_PENALTY
+          : rhythmTapSpeedDelta(quality);
       const speedNorm = clamp(phase.speedNorm + baseDelta, 0, 1);
       const perfectHits = phase.rhythm.perfectHits + (quality === 'perfect' ? 1 : 0);
       const goodHits = phase.rhythm.goodHits + (quality !== 'miss' ? 1 : 0);
@@ -176,7 +186,11 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
           },
           athletePose: {
             animTag: isRunning(speedNorm) ? 'run' : 'idle',
-            animT: isRunning(speedNorm) ? runAnimT(phase.startedAtMs, action.atMs, speedNorm) : 0
+            animT: isRunning(speedNorm)
+              ? phase.athletePose.animTag === 'run'
+                ? phase.athletePose.animT
+                : 0
+              : 0
           }
         }
       };
@@ -192,6 +206,8 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
           tag: 'chargeAim',
           speedNorm: state.phase.speedNorm,
           athleteXM: state.phase.runupDistanceM,
+          runupDistanceM: state.phase.runupDistanceM,
+          startedAtMs: state.phase.startedAtMs,
           runEntryAnimT: state.phase.athletePose.animT,
           angleDeg: state.aimAngleDeg,
           chargeStartedAtMs: action.atMs,
@@ -332,7 +348,7 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
             athletePose: {
               animTag: isRunning(speedNorm) ? 'run' : 'idle',
               animT: isRunning(speedNorm)
-                ? runAnimT(nextState.phase.startedAtMs, action.nowMs, speedNorm)
+                ? advanceRunAnimT(nextState.phase.athletePose.animT, action.dtMs, speedNorm)
                 : 0
             }
           }
@@ -342,8 +358,24 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
       if (nextState.phase.tag === 'chargeAim') {
         const elapsedMs = Math.max(0, action.nowMs - nextState.phase.chargeStartedAtMs);
         const phase01 = wrap01(elapsedMs / CHARGE_FORCE_CYCLE_MS);
-        const blend01 = clamp(elapsedMs / RUN_TO_AIM_BLEND_MS, 0, 1);
+        const speedAfterDecay = clamp(
+          nextState.phase.speedNorm - (action.dtMs / 1000) * CHARGEAIM_SPEED_DECAY_PER_SECOND,
+          0,
+          1
+        );
+        const speedNorm = Math.max(speedAfterDecay, 0);
+        const stillRunning = speedNorm > CHARGEAIM_STOP_SPEED_NORM;
+        const runSpeedMs = stillRunning ? runSpeedMsFromNorm(speedNorm) : 0;
+        const runupDistanceM = clamp(
+          nextState.phase.runupDistanceM + runSpeedMs * (action.dtMs / 1000),
+          RUNUP_START_X_M,
+          RUNUP_MAX_X_M
+        );
+        const blend01 = clamp(elapsedMs / RUN_TO_DRAWBACK_BLEND_MS, 0, 1);
         const aimAnimT = blend01 < 1 ? blend01 * 0.2 : phase01;
+        const legAnimT = stillRunning
+          ? advanceRunAnimT(nextState.phase.runEntryAnimT, action.dtMs, speedNorm)
+          : nextState.phase.runEntryAnimT;
         const forceNormPreview = computeForcePreview(phase01);
         const quality = getTimingQuality(
           phase01,
@@ -354,6 +386,10 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
           ...nextState,
           phase: {
             ...nextState.phase,
+            speedNorm,
+            athleteXM: runupDistanceM,
+            runupDistanceM,
+            runEntryAnimT: legAnimT,
             forceNormPreview,
             chargeMeter: {
               ...nextState.phase.chargeMeter,

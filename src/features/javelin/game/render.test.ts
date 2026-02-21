@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { computeAthletePoseGeometry } from './athletePose';
+import { RUNUP_START_X_M } from './constants';
 import { getCameraTargetX, getHeadMeterScreenAnchor, getVisibleJavelinRenderState } from './render';
 import type { GameState } from './types';
 
@@ -39,6 +40,8 @@ describe('javelin visibility state', () => {
         tag: 'chargeAim',
         speedNorm: 0.72,
         athleteXM: 17.4,
+        runupDistanceM: 17.4,
+        startedAtMs: 1200,
         runEntryAnimT: 0.78,
         angleDeg: 35,
         chargeStartedAtMs: 1800,
@@ -133,12 +136,49 @@ describe('javelin visibility state', () => {
     expect(anchor.y).toBeLessThan(140);
   });
 
-  it('keeps landed javelin and camera target near athlete on short/zero throws', () => {
+  it('camera follows chargeAim runup distance', () => {
+    const chargePhaseBase: Extract<GameState['phase'], { tag: 'chargeAim' }> = {
+      tag: 'chargeAim',
+      speedNorm: 0.55,
+      athleteXM: 10,
+      runupDistanceM: 10,
+      startedAtMs: 1000,
+      runEntryAnimT: 0.4,
+      angleDeg: 34,
+      chargeStartedAtMs: 1800,
+      chargeMeter: {
+        phase01: 0.25,
+        cycles: 0,
+        perfectWindow: { start: 0.47, end: 0.53 },
+        goodWindow: { start: 0.4, end: 0.6 },
+        lastQuality: 'good',
+        lastSampleAtMs: 1980
+      },
+      forceNormPreview: 0.5,
+      athletePose: { animTag: 'aim', animT: 0.1 }
+    };
+
+    const chargeState1: GameState = {
+      ...baseState,
+      phase: chargePhaseBase
+    };
+    const chargeState2: GameState = {
+      ...chargeState1,
+      phase: {
+        ...chargePhaseBase,
+        athleteXM: 12,
+        runupDistanceM: 12
+      }
+    };
+    expect(getCameraTargetX(chargeState2)).toBeGreaterThan(getCameraTargetX(chargeState1));
+  });
+
+  it('keeps result camera target at landed javelin position', () => {
     const resultState: GameState = {
       ...baseState,
       phase: {
         tag: 'result',
-        athleteXM: 2.8,
+        athleteXM: RUNUP_START_X_M,
         distanceM: 0,
         isHighscore: false,
         resultKind: 'foul_tip_first',
@@ -149,7 +189,12 @@ describe('javelin visibility state', () => {
       }
     };
 
-    const pose = computeAthletePoseGeometry({ animTag: 'followThrough', animT: 1 }, 0.72, 24, 2.8);
+    const pose = computeAthletePoseGeometry(
+      { animTag: 'followThrough', animT: 1 },
+      0.72,
+      24,
+      RUNUP_START_X_M
+    );
     const visible = getVisibleJavelinRenderState(resultState, pose);
     expect(visible.mode).toBe('landed');
     if (visible.mode === 'landed') {
@@ -157,7 +202,6 @@ describe('javelin visibility state', () => {
     }
 
     const cameraTargetX = getCameraTargetX(resultState);
-    expect(cameraTargetX).toBeGreaterThan(2.8);
-    expect(cameraTargetX).toBeLessThan(5);
+    expect(cameraTargetX).toBe(3.1);
   });
 });

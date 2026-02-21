@@ -1,3 +1,4 @@
+import { RUNUP_START_X_M } from './constants';
 import type { AthletePoseState } from './types';
 
 type PointM = {
@@ -169,19 +170,24 @@ export const sampleThrowSubphase = (progress01: number): ThrowSubphaseSample => 
   };
 };
 
-const mixCurves = (from: MotionCurves, to: MotionCurves, t: number): MotionCurves => ({
-  leanRad: lerp(from.leanRad, to.leanRad, t),
-  pelvisShiftXM: lerp(from.pelvisShiftXM, to.pelvisShiftXM, t),
-  pelvisBobYM: lerp(from.pelvisBobYM, to.pelvisBobYM, t),
-  hipFront: lerp(from.hipFront, to.hipFront, t),
-  hipBack: lerp(from.hipBack, to.hipBack, t),
-  kneeFront: lerp(from.kneeFront, to.kneeFront, t),
-  kneeBack: lerp(from.kneeBack, to.kneeBack, t),
-  shoulderFront: lerp(from.shoulderFront, to.shoulderFront, t),
-  shoulderBack: lerp(from.shoulderBack, to.shoulderBack, t),
-  elbowFront: lerp(from.elbowFront, to.elbowFront, t),
-  elbowBack: lerp(from.elbowBack, to.elbowBack, t),
-  javelinAngleRad: lerp(from.javelinAngleRad, to.javelinAngleRad, t)
+const splitBodyMix = (
+  from: MotionCurves,
+  to: MotionCurves,
+  lowerBlend: number,
+  upperBlend: number
+): MotionCurves => ({
+  leanRad: lerp(from.leanRad, to.leanRad, lerp(lowerBlend, upperBlend, 0.65)),
+  pelvisShiftXM: lerp(from.pelvisShiftXM, to.pelvisShiftXM, lowerBlend),
+  pelvisBobYM: lerp(from.pelvisBobYM, to.pelvisBobYM, lowerBlend),
+  hipFront: lerp(from.hipFront, to.hipFront, lowerBlend),
+  hipBack: lerp(from.hipBack, to.hipBack, lowerBlend),
+  kneeFront: lerp(from.kneeFront, to.kneeFront, lowerBlend),
+  kneeBack: lerp(from.kneeBack, to.kneeBack, lowerBlend),
+  shoulderFront: lerp(from.shoulderFront, to.shoulderFront, upperBlend),
+  shoulderBack: lerp(from.shoulderBack, to.shoulderBack, upperBlend),
+  elbowFront: lerp(from.elbowFront, to.elbowFront, upperBlend),
+  elbowBack: lerp(from.elbowBack, to.elbowBack, upperBlend),
+  javelinAngleRad: lerp(from.javelinAngleRad, to.javelinAngleRad, upperBlend)
 });
 
 const runCurves = (t01: number, speedNorm: number, aimAngleDeg: number): MotionCurves => {
@@ -298,7 +304,11 @@ const curvesForPose = (
       options.runToAimBlend01 < 1
     ) {
       const runSource = runCurves(options.runBlendFromAnimT, speedNorm, aimAngleDeg);
-      return mixCurves(runSource, targetAim, easeInOutSine(options.runToAimBlend01));
+      const upperBlend = easeInOutSine(options.runToAimBlend01);
+      const lowerBlend = easeInOutSine(
+        clamp01(options.runToAimBlend01 * (1 - Math.min(speedNorm * 6, 1)))
+      );
+      return splitBodyMix(runSource, targetAim, lowerBlend, upperBlend);
     }
     return targetAim;
   }
@@ -318,7 +328,7 @@ export const computeAthletePoseGeometry = (
   pose: AthletePoseState,
   speedNorm: number,
   aimAngleDeg: number,
-  baseXM = 2.8,
+  baseXM = RUNUP_START_X_M,
   options: PoseSamplingOptions = {}
 ): AthletePoseGeometry => {
   const curves = curvesForPose(pose, speedNorm, aimAngleDeg, options);

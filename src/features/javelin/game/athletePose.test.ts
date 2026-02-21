@@ -41,4 +41,18 @@ describe('athlete pose helpers', () => {
     expect(handAngleDeg).toBeGreaterThan(20);
     expect(handAngleDeg).toBeLessThan(70);
   });
+
+  it('keeps legs close to run pose during early aim blend at high speed', () => {
+    const runPose = computeAthletePoseGeometry({ animTag: 'run', animT: 0.5 }, 0.6, 36, 10);
+    const aimBlendPose = computeAthletePoseGeometry(
+      { animTag: 'aim', animT: 0.1 },
+      0.6,
+      36,
+      10,
+      { runBlendFromAnimT: 0.5, runToAimBlend01: 0.3 }
+    );
+
+    expect(Math.abs(aimBlendPose.kneeFront.xM - runPose.kneeFront.xM)).toBeLessThan(0.1);
+    expect(Math.abs(aimBlendPose.kneeBack.xM - runPose.kneeBack.xM)).toBeLessThan(0.1);
+  });
 });

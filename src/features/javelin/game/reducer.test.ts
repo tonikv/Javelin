@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { RUNUP_PASSIVE_TO_HALF_MS, THROW_ANIM_DURATION_MS, THROW_LINE_X_M } from './constants';
+import {
+  BEAT_INTERVAL_MS,
+  CHARGEAIM_STOP_SPEED_NORM,
+  RUNUP_MAX_X_M,
+  RUNUP_PASSIVE_MAX_SPEED,
+  RUNUP_PASSIVE_TO_HALF_MS,
+  RUNUP_START_X_M,
+  THROW_ANIM_DURATION_MS,
+  THROW_LINE_X_M
+} from './constants';
 import { gameReducer } from './reducer';
 import { createInitialGameState } from './update';
 
@@ -18,7 +27,7 @@ describe('gameReducer', () => {
     expect(state.phase.tag).toBe('runup');
     if (state.phase.tag === 'runup') {
       expect(state.phase.speedNorm).toBe(0);
-      expect(state.phase.runupDistanceM).toBe(2.8);
+      expect(state.phase.runupDistanceM).toBe(RUNUP_START_X_M);
       expect(state.phase.athletePose.animTag).toBe('idle');
       expect(state.phase.athletePose.animT).toBe(0);
     }
@@ -31,8 +40,7 @@ describe('gameReducer', () => {
     });
     expect(state.phase.tag).toBe('runup');
     if (state.phase.tag === 'runup') {
-      expect(state.phase.speedNorm).toBeGreaterThanOrEqual(0.46);
-      expect(state.phase.speedNorm).toBeLessThanOrEqual(0.56);
+      expect(state.phase.speedNorm).toBeCloseTo(RUNUP_PASSIVE_MAX_SPEED, 2);
     }
   });
 
@@ -46,7 +54,7 @@ describe('gameReducer', () => {
       nowMs: 1300 + RUNUP_PASSIVE_TO_HALF_MS
     });
     const baseline = state.phase.tag === 'runup' ? state.phase.speedNorm : 0;
-    state = gameReducer(state, { type: 'rhythmTap', atMs: 6280 });
+    state = gameReducer(state, { type: 'rhythmTap', atMs: 1000 + BEAT_INTERVAL_MS * 6 });
     expect(state.phase.tag).toBe('runup');
     if (state.phase.tag === 'runup') {
       expect(state.phase.speedNorm).toBeGreaterThan(baseline);
@@ -83,6 +91,74 @@ describe('gameReducer', () => {
     expect(state.phase.tag).toBe('chargeAim');
     if (state.phase.tag === 'chargeAim') {
       expect(state.phase.athleteXM).toBeLessThan(THROW_LINE_X_M);
+      expect(state.phase.runupDistanceM).toBe(state.phase.athleteXM);
+      expect(state.phase.startedAtMs).toBe(1000);
+    }
+  });
+
+  it('keeps moving and decaying speed during chargeAim', () => {
+    let state = createInitialGameState();
+    state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0 });
+    state = gameReducer(state, { type: 'rhythmTap', atMs: 1880 });
+    state = gameReducer(state, { type: 'rhythmTap', atMs: 2760 });
+    state = gameReducer(state, { type: 'rhythmTap', atMs: 3640 });
+    state = gameReducer(state, { type: 'beginChargeAim', atMs: 3700 });
+
+    expect(state.phase.tag).toBe('chargeAim');
+    if (state.phase.tag !== 'chargeAim') {
+      throw new Error('Expected chargeAim after beginChargeAim');
+    }
+    const startDistance = state.phase.runupDistanceM;
+    const startSpeed = state.phase.speedNorm;
+
+    for (let i = 1; i <= 5; i += 1) {
+      state = gameReducer(state, { type: 'tick', dtMs: 100, nowMs: 3700 + i * 100 });
+    }
+
+    expect(state.phase.tag).toBe('chargeAim');
+    if (state.phase.tag === 'chargeAim') {
+      expect(state.phase.runupDistanceM).toBeGreaterThan(startDistance);
+      expect(state.phase.athleteXM).toBe(state.phase.runupDistanceM);
+      expect(state.phase.speedNorm).toBeLessThan(startSpeed);
+    }
+  });
+
+  it('slows chargeAim near standstill over time', () => {
+    let state = createInitialGameState();
+    state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0 });
+    state = gameReducer(state, { type: 'rhythmTap', atMs: 1880 });
+    state = gameReducer(state, { type: 'rhythmTap', atMs: 2760 });
+    state = gameReducer(state, { type: 'rhythmTap', atMs: 3640 });
+    state = gameReducer(state, { type: 'rhythmTap', atMs: 4520 });
+    state = gameReducer(state, { type: 'beginChargeAim', atMs: 4600 });
+
+    for (let i = 1; i <= 30; i += 1) {
+      state = gameReducer(state, { type: 'tick', dtMs: 100, nowMs: 4600 + i * 100 });
+    }
+
+    expect(state.phase.tag).toBe('chargeAim');
+    if (state.phase.tag === 'chargeAim') {
+      expect(state.phase.speedNorm).toBeLessThanOrEqual(CHARGEAIM_STOP_SPEED_NORM);
+    }
+  });
+
+  it('clamps chargeAim position to runup max distance', () => {
+    let state = createInitialGameState();
+    state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0 });
+    state = gameReducer(state, { type: 'rhythmTap', atMs: 1880 });
+    state = gameReducer(state, { type: 'rhythmTap', atMs: 2760 });
+    state = gameReducer(state, { type: 'rhythmTap', atMs: 3640 });
+    state = gameReducer(state, { type: 'tick', dtMs: 9000, nowMs: 10000 });
+    state = gameReducer(state, { type: 'beginChargeAim', atMs: 10020 });
+
+    for (let i = 1; i <= 15; i += 1) {
+      state = gameReducer(state, { type: 'tick', dtMs: 120, nowMs: 10020 + i * 120 });
+    }
+
+    expect(state.phase.tag).toBe('chargeAim');
+    if (state.phase.tag === 'chargeAim') {
+      expect(state.phase.runupDistanceM).toBeLessThanOrEqual(RUNUP_MAX_X_M);
+      expect(state.phase.athleteXM).toBeLessThanOrEqual(RUNUP_MAX_X_M);
     }
   });
 

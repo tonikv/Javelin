@@ -85,7 +85,10 @@ export const getRunupDistanceM = (state: GameState): number | null => {
   if (state.phase.tag === 'runup') {
     return state.phase.runupDistanceM;
   }
-  if (state.phase.tag === 'chargeAim' || state.phase.tag === 'throwAnim' || state.phase.tag === 'flight') {
+  if (state.phase.tag === 'chargeAim') {
+    return state.phase.runupDistanceM;
+  }
+  if (state.phase.tag === 'throwAnim' || state.phase.tag === 'flight') {
     return state.phase.athleteXM;
   }
   if (state.phase.tag === 'result') {

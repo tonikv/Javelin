@@ -1,17 +1,7 @@
 import type { ReactElement } from 'react';
-import {
-  CHARGE_GOOD_WINDOW,
-  CHARGE_PERFECT_WINDOW
-} from '../game/constants';
-import type { GameState, TimingQuality } from '../game/types';
-import {
-  getAngleDeg,
-  getForcePreviewPercent,
-  getSpeedPercent,
-  getThrowLineRemainingM
-} from '../game/selectors';
+import type { GameState } from '../game/types';
+import { getAngleDeg, getSpeedPercent, getThrowLineRemainingM } from '../game/selectors';
 import { useI18n } from '../../../i18n/init';
-import { CircularTimingMeter } from './CircularTimingMeter';
 
 type HudPanelProps = {
   state: GameState;
@@ -38,18 +28,10 @@ const phaseMessageKey = (state: GameState): string => {
   }
 };
 
-const meterFeedback = (state: GameState): TimingQuality | null => {
-  if (state.phase.tag === 'chargeAim') {
-    return state.phase.chargeMeter.lastQuality;
-  }
-  return null;
-};
-
 export const HudPanel = ({ state }: HudPanelProps): ReactElement => {
   const { t, formatNumber } = useI18n();
   const speed = getSpeedPercent(state);
   const angle = getAngleDeg(state);
-  const forcePercent = getForcePreviewPercent(state);
   const throwLineRemainingM = getThrowLineRemainingM(state);
 
   const phaseHint =
@@ -80,22 +62,6 @@ export const HudPanel = ({ state }: HudPanelProps): ReactElement => {
           </strong>
         </div>
       </div>
-
-      {(state.phase.tag === 'chargeAim' || state.phase.tag === 'throwAnim') && (
-        <div className="meter-row">
-          <CircularTimingMeter
-            labelKey="hud.force"
-            phase01={state.phase.tag === 'chargeAim' ? state.phase.chargeMeter.phase01 : state.phase.forceNorm}
-            hitFeedback={meterFeedback(state)}
-            hotZones={[
-              { ...CHARGE_GOOD_WINDOW, kind: 'good' },
-              { ...CHARGE_PERFECT_WINDOW, kind: 'perfect' }
-            ]}
-            valueText={forcePercent === null ? '' : `${forcePercent}%`}
-            active={state.phase.tag === 'chargeAim'}
-          />
-        </div>
-      )}
     </section>
   );
 };
