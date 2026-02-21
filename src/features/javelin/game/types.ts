@@ -46,18 +46,24 @@ export type LaunchSnapshot = {
   windMs: number;
   launchSpeedMs: number;
   athleteXM: number;
+  releaseQuality: TimingQuality;
+  lineCrossedAtRelease: boolean;
 };
 
 export type PhysicalJavelinState = {
   xM: number;
   yM: number;
+  zM: number;
   vxMs: number;
   vyMs: number;
+  vzMs: number;
   angleRad: number;
   angularVelRad: number;
   releasedAtMs: number;
   lengthM: number;
 };
+
+export type ResultKind = 'valid' | 'foul_line' | 'foul_sector' | 'foul_tip_first';
 
 export type GamePhase =
   | { tag: 'idle' }
@@ -86,6 +92,7 @@ export type GamePhase =
       athleteXM: number;
       angleDeg: number;
       forceNorm: number;
+      releaseQuality: TimingQuality;
       animProgress: number;
       released: boolean;
       athletePose: AthletePoseState;
@@ -102,6 +109,7 @@ export type GamePhase =
       athleteXM: number;
       distanceM: number;
       isHighscore: boolean;
+      resultKind: ResultKind;
       tipFirst: boolean | null;
     }
   | {

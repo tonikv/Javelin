@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RUNUP_MAX_X_M, RUNUP_PASSIVE_TO_HALF_MS } from './constants';
+import { RUNUP_PASSIVE_TO_HALF_MS, THROW_LINE_X_M } from './constants';
 import { gameReducer } from './reducer';
 import { createInitialGameState } from './update';
 
@@ -21,8 +21,8 @@ describe('gameReducer', () => {
     });
     expect(state.phase.tag).toBe('runup');
     if (state.phase.tag === 'runup') {
-      expect(state.phase.speedNorm).toBeGreaterThanOrEqual(0.48);
-      expect(state.phase.speedNorm).toBeLessThanOrEqual(0.52);
+      expect(state.phase.speedNorm).toBeGreaterThanOrEqual(0.46);
+      expect(state.phase.speedNorm).toBeLessThanOrEqual(0.56);
     }
   });
 
@@ -35,7 +35,7 @@ describe('gameReducer', () => {
       nowMs: 1000 + RUNUP_PASSIVE_TO_HALF_MS
     });
     const baseline = state.phase.tag === 'runup' ? state.phase.speedNorm : 0;
-    state = gameReducer(state, { type: 'rhythmTap', atMs: 5400 });
+    state = gameReducer(state, { type: 'rhythmTap', atMs: 6280 });
     expect(state.phase.tag).toBe('runup');
     if (state.phase.tag === 'runup') {
       expect(state.phase.speedNorm).toBeGreaterThan(baseline);
@@ -54,40 +54,52 @@ describe('gameReducer', () => {
     }
   });
 
-  it('runup locomotion advances and clamps at throw line', () => {
+  it('runup locomotion advances and can cross throw line', () => {
     let state = createInitialGameState();
     state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0 });
     state = gameReducer(state, { type: 'tick', dtMs: 9000, nowMs: 10000 });
     expect(state.phase.tag).toBe('runup');
     if (state.phase.tag === 'runup') {
-      expect(state.phase.runupDistanceM).toBeGreaterThan(2.8);
-      expect(state.phase.runupDistanceM).toBeLessThanOrEqual(RUNUP_MAX_X_M);
+      expect(state.phase.runupDistanceM).toBeGreaterThan(THROW_LINE_X_M);
     }
   });
 
-  it('does not allow charge before throw line zone', () => {
+  it('allows early throw start before line', () => {
     let state = createInitialGameState();
     state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0.2 });
     state = gameReducer(state, { type: 'rhythmTap', atMs: 1880 });
     state = gameReducer(state, { type: 'rhythmTap', atMs: 2760 });
     state = gameReducer(state, { type: 'rhythmTap', atMs: 3640 });
-    const next = gameReducer(state, { type: 'beginChargeAim', atMs: 3700 });
-    expect(next.phase.tag).toBe('runup');
+    state = gameReducer(state, { type: 'beginChargeAim', atMs: 3700 });
+    expect(state.phase.tag).toBe('chargeAim');
+    if (state.phase.tag === 'chargeAim') {
+      expect(state.phase.athleteXM).toBeLessThan(THROW_LINE_X_M);
+    }
   });
 
-  it('transitions runup -> chargeAim -> throwAnim -> flight near throw line', () => {
+  it('crossing line at release ends as foul_line', () => {
     let state = createInitialGameState();
-    state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0 });
-    state = gameReducer(state, { type: 'tick', dtMs: 5600, nowMs: 6600 });
-    state = gameReducer(state, { type: 'rhythmTap', atMs: 6280 });
-    state = gameReducer(state, { type: 'rhythmTap', atMs: 7160 });
-    state = gameReducer(state, { type: 'rhythmTap', atMs: 8040 });
-    state = gameReducer(state, { type: 'beginChargeAim', atMs: 8200 });
+    state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0.3 });
+    state = gameReducer(state, { type: 'rhythmTap', atMs: 1880 });
+    state = gameReducer(state, { type: 'rhythmTap', atMs: 2760 });
+    state = gameReducer(state, { type: 'rhythmTap', atMs: 3640 });
+    state = gameReducer(state, { type: 'tick', dtMs: 7800, nowMs: 8800 });
+    state = gameReducer(state, { type: 'beginChargeAim', atMs: 8820 });
     expect(state.phase.tag).toBe('chargeAim');
-    state = gameReducer(state, { type: 'tick', dtMs: 430, nowMs: 8630 });
-    state = gameReducer(state, { type: 'releaseCharge', atMs: 8640 });
+    state = gameReducer(state, { type: 'tick', dtMs: 300, nowMs: 9120 });
+    state = gameReducer(state, { type: 'releaseCharge', atMs: 9130 });
     expect(state.phase.tag).toBe('throwAnim');
-    state = gameReducer(state, { type: 'tick', dtMs: 260, nowMs: 8900 });
-    expect(state.phase.tag).toBe('flight');
+
+    for (let i = 0; i < 700; i += 1) {
+      state = gameReducer(state, { type: 'tick', dtMs: 16, nowMs: 9130 + i * 16 });
+      if (state.phase.tag === 'result') {
+        break;
+      }
+    }
+
+    expect(state.phase.tag).toBe('result');
+    if (state.phase.tag === 'result') {
+      expect(state.phase.resultKind).toBe('foul_line');
+    }
   });
 });

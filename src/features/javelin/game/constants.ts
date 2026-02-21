@@ -11,11 +11,11 @@ export const RUNUP_SPEED_DECAY_PER_SECOND = 0.018;
 export const RUNUP_PASSIVE_MAX_SPEED = 0.5;
 export const RUNUP_PASSIVE_TO_HALF_MS = 4200;
 export const RUNUP_SPEED_MIN_MS = 1.6;
-export const RUNUP_SPEED_MAX_MS = 8.2;
+export const RUNUP_SPEED_MAX_MS = 9.6;
 export const RUNUP_START_X_M = 2.8;
 export const THROW_LINE_X_M = 18.2;
 export const CHARGE_ZONE_MARGIN_M = 1.4;
-export const RUNUP_MAX_X_M = THROW_LINE_X_M - 0.3;
+export const RUNUP_MAX_X_M = 22.4;
 
 export const RHYTHM_TARGET_PHASE01 = 0.5;
 
@@ -32,25 +32,25 @@ export const CHARGE_GOOD_WINDOW: MeterWindow = { start: 0.4, end: 0.6 };
 export const THROW_ANIM_DURATION_MS = 620;
 export const THROW_RELEASE_PROGRESS = 0.35;
 
-export const LAUNCH_SPEED_MIN_MS = 11;
-export const LAUNCH_SPEED_MAX_MS = 40;
-export const LAUNCH_POWER_EXP = 1.2;
+export const LAUNCH_SPEED_MIN_MS = 9;
+export const LAUNCH_SPEED_MAX_MS = 44;
+export const LAUNCH_POWER_EXP = 1.42;
 
-export const DRAG_COEFFICIENT = 0.0098;
-export const LIFT_COEFFICIENT = 0.00022;
+export const DRAG_COEFFICIENT = 0.00835;
+export const LIFT_COEFFICIENT = 0.00024;
 export const AOA_MAX_RAD = 0.75;
 export const MAX_LINEAR_ACCEL = 42;
 export const MAX_ANGULAR_VEL_RAD = 8;
 export const MAX_ANGULAR_ACC_RAD = 80;
-export const ALIGN_TORQUE_BASE = 8.5;
-export const ALIGN_TORQUE_SPEED_FACTOR = 18;
-export const ANGULAR_DAMPING = 7.8;
-export const AERO_NOSE_DOWN_BIAS_RAD = 0.05;
+export const ALIGN_TORQUE_BASE = 7.9;
+export const ALIGN_TORQUE_SPEED_FACTOR = 16;
+export const ANGULAR_DAMPING = 7.2;
+export const AERO_NOSE_DOWN_BIAS_RAD = 0.04;
 export const JAVELIN_LENGTH_M = 2.6;
 
 export const WIND_MIN_MS = -2.5;
 export const WIND_MAX_MS = 2.5;
-export const FIELD_MAX_DISTANCE_M = 98;
+export const FIELD_MAX_DISTANCE_M = 132;
 
 export const MAX_HIGHSCORES = 10;
 export const HIGHSCORE_STORAGE_KEY = 'sg2026-javelin-highscores-v1';

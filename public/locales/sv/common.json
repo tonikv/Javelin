@@ -12,5 +12,8 @@
   "javelin.throwLine": "Kastlinje",
   "javelin.speedPassiveHint": "Grundfarten ökar även utan klick.",
   "javelin.landingTipFirst": "Spetsen först",
-  "javelin.landingFlat": "Platt landning"
+  "javelin.landingFlat": "Platt landning",
+  "javelin.result.foul_line": "Ogiltigt: linjen överträdd",
+  "javelin.result.foul_sector": "Ogiltigt: utanför sektorn",
+  "javelin.result.foul_tip_first": "Ogiltigt: spetsen landade inte först"
 }

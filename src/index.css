@@ -260,6 +260,10 @@ button.ghost {
   font-weight: 700;
 }
 
+.result-live.is-foul {
+  color: #9b2217;
+}
+
 .save-form {
   display: flex;
   gap: 10px;

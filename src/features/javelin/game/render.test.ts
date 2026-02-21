@@ -85,8 +85,10 @@ describe('javelin visibility state', () => {
         javelin: {
           xM: 20,
           yM: 6.1,
+          zM: 0.3,
           vxMs: 18,
           vyMs: 4,
+          vzMs: 0.1,
           angleRad: 0.2,
           angularVelRad: 0.3,
           releasedAtMs: 1900,
@@ -98,7 +100,9 @@ describe('javelin visibility state', () => {
           forceNorm: 0.9,
           windMs: 0.2,
           launchSpeedMs: 28,
-          athleteXM: 17.9
+          athleteXM: 17.9,
+          releaseQuality: 'perfect',
+          lineCrossedAtRelease: false
         },
         athletePose: { animTag: 'followThrough', animT: 0.4 }
       }

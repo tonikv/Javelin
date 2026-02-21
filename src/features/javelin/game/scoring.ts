@@ -1,9 +1,18 @@
-import type { ThrowInput } from './types';
+import { THROW_LINE_X_M } from './constants';
+import type { ResultKind, ThrowInput } from './types';
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value));
 
 const roundTo1 = (value: number): number => Math.round(value * 10) / 10;
+
+export const DISTANCE_MEASURE_MODE = 'throwLineArc' as const;
+export const FOUL_ON_LINE_CROSS = true as const;
+export const REQUIRE_TIP_FIRST = true as const;
+export const REQUIRE_SECTOR = true as const;
+
+export const SECTOR_ANGLE_DEG = 28.96;
+export const SECTOR_HALF_ANGLE_RAD = (SECTOR_ANGLE_DEG / 2) * (Math.PI / 180);
 
 export const angleEfficiency = (angleDeg: number): number => {
   const optimum = 36;
@@ -28,5 +37,50 @@ export const computeThrowDistance = (input: ThrowInput): number => {
     releaseEfficiency(input.releaseTiming) *
     windEfficiency(input.windMs);
 
-  return roundTo1(clamp(raw, 12, 98));
+  return roundTo1(clamp(raw, 12, 110));
+};
+
+export const computeCompetitionDistanceM = (
+  landingTipXM: number,
+  throwLineXM = THROW_LINE_X_M
+): number => roundTo1(Math.max(0, landingTipXM - throwLineXM));
+
+export const isLandingInSector = (
+  landingTipXM: number,
+  landingTipZM: number,
+  throwLineXM = THROW_LINE_X_M
+): boolean => {
+  const forward = landingTipXM - throwLineXM;
+  if (forward <= 0) {
+    return false;
+  }
+  const maxAbsLateral = Math.tan(SECTOR_HALF_ANGLE_RAD) * forward;
+  return Math.abs(landingTipZM) <= maxAbsLateral;
+};
+
+type LegalityInput = {
+  lineCrossedAtRelease: boolean;
+  landingTipXM: number;
+  landingTipZM: number;
+  tipFirst: boolean;
+  throwLineXM?: number;
+};
+
+export const evaluateThrowLegality = ({
+  lineCrossedAtRelease,
+  landingTipXM,
+  landingTipZM,
+  tipFirst,
+  throwLineXM = THROW_LINE_X_M
+}: LegalityInput): { valid: boolean; resultKind: ResultKind } => {
+  if (FOUL_ON_LINE_CROSS && lineCrossedAtRelease) {
+    return { valid: false, resultKind: 'foul_line' };
+  }
+  if (REQUIRE_SECTOR && !isLandingInSector(landingTipXM, landingTipZM, throwLineXM)) {
+    return { valid: false, resultKind: 'foul_sector' };
+  }
+  if (REQUIRE_TIP_FIRST && !tipFirst) {
+    return { valid: false, resultKind: 'foul_tip_first' };
+  }
+  return { valid: true, resultKind: 'valid' };
 };
