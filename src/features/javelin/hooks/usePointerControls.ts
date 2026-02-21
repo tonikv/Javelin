@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { resumeAudioContext } from '../game/audio';
 import { keyboardAngleDelta, pointerFromAnchorToAngleDeg } from '../game/controls';
 import { getPlayerAngleAnchorScreen } from '../game/render';
 import type { GameAction, GamePhase, GameState } from '../game/types';
@@ -25,6 +26,14 @@ export const usePointerControls = ({ canvas, dispatch, phaseTag, state }: UsePoi
     }
 
     const now = (): number => performance.now();
+    let longPressTimer: number | null = null;
+    const LONG_PRESS_MS = 300;
+    const clearLongPressTimer = (): void => {
+      if (longPressTimer !== null) {
+        window.clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+    };
     const dispatchAngleFromPointer = (clientX: number, clientY: number): void => {
       const rect = canvas.getBoundingClientRect();
       const anchor = getPlayerAngleAnchorScreen(stateRef.current, rect.width, rect.height);
@@ -40,6 +49,7 @@ export const usePointerControls = ({ canvas, dispatch, phaseTag, state }: UsePoi
     };
 
     const onMouseDown = (event: MouseEvent): void => {
+      resumeAudioContext();
       if (event.button === 0) {
         dispatch({ type: 'rhythmTap', atMs: now() });
       }
@@ -71,13 +81,54 @@ export const usePointerControls = ({ canvas, dispatch, phaseTag, state }: UsePoi
       event.preventDefault();
     };
 
+    const onTouchStart = (event: TouchEvent): void => {
+      event.preventDefault();
+      resumeAudioContext();
+      const currentPhaseTag = stateRef.current.phase.tag;
+      if (currentPhaseTag === 'runup') {
+        dispatch({ type: 'rhythmTap', atMs: now() });
+        clearLongPressTimer();
+        longPressTimer = window.setTimeout(() => {
+          if (stateRef.current.phase.tag === 'runup') {
+            dispatch({ type: 'beginChargeAim', atMs: now() });
+          }
+          longPressTimer = null;
+        }, LONG_PRESS_MS);
+        return;
+      }
+      if (currentPhaseTag === 'idle' || currentPhaseTag === 'result') {
+        dispatch({ type: 'rhythmTap', atMs: now() });
+      }
+    };
+
+    const onTouchEnd = (): void => {
+      clearLongPressTimer();
+      if (stateRef.current.phase.tag === 'chargeAim') {
+        dispatch({ type: 'releaseCharge', atMs: now() });
+      }
+    };
+
+    const onTouchMove = (event: TouchEvent): void => {
+      event.preventDefault();
+      if (event.touches.length < 1) {
+        return;
+      }
+      const currentPhaseTag = stateRef.current.phase.tag;
+      if (currentPhaseTag === 'chargeAim' || currentPhaseTag === 'runup' || currentPhaseTag === 'idle') {
+        const touch = event.touches[0];
+        dispatchAngleFromPointer(touch.clientX, touch.clientY);
+      }
+    };
+
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.code === 'Space' && !event.repeat) {
+        resumeAudioContext();
         event.preventDefault();
         dispatch({ type: 'rhythmTap', atMs: now() });
         return;
       }
       if (event.code === 'Enter' && !event.repeat) {
+        resumeAudioContext();
         event.preventDefault();
         if (phaseTag === 'runup') {
           dispatch({ type: 'beginChargeAim', atMs: now() });
@@ -105,14 +156,23 @@ export const usePointerControls = ({ canvas, dispatch, phaseTag, state }: UsePoi
     canvas.addEventListener('mousedown', onMouseDown);
     canvas.addEventListener('mousemove', onMouseMove);
     canvas.addEventListener('contextmenu', onContextMenu);
+    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+    canvas.addEventListener('touchend', onTouchEnd, { passive: false });
+    canvas.addEventListener('touchcancel', onTouchEnd, { passive: false });
+    canvas.addEventListener('touchmove', onTouchMove, { passive: false });
     window.addEventListener('mouseup', onMouseUp);
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
 
     return () => {
+      clearLongPressTimer();
       canvas.removeEventListener('mousedown', onMouseDown);
       canvas.removeEventListener('mousemove', onMouseMove);
       canvas.removeEventListener('contextmenu', onContextMenu);
+      canvas.removeEventListener('touchstart', onTouchStart);
+      canvas.removeEventListener('touchend', onTouchEnd);
+      canvas.removeEventListener('touchcancel', onTouchEnd);
+      canvas.removeEventListener('touchmove', onTouchMove);
       window.removeEventListener('mouseup', onMouseUp);
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);

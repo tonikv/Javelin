@@ -1,4 +1,5 @@
 import {
+  RHYTHM_TARGET_PHASE01,
   WORLD_METER_CURSOR_RADIUS_PX,
   WORLD_METER_LINE_WIDTH_PX,
   WORLD_METER_OFFSET_Y_PX,
@@ -171,6 +172,25 @@ export const drawWorldTimingMeter = (
     'rgba(18, 196, 119, 0.98)',
     WORLD_METER_LINE_WIDTH_PX + 0.8
   );
+
+  if (state.phase.tag === 'runup') {
+    const meterPhase = getRunupMeterPhase01(state);
+    if (meterPhase !== null) {
+      const distToTarget = Math.abs(meterPhase - RHYTHM_TARGET_PHASE01);
+      const wrappedDist = Math.min(distToTarget, 1 - distToTarget);
+      if (wrappedDist < 0.06) {
+        const flashAlpha = (1 - wrappedDist / 0.06) * 0.5;
+        ctx.save();
+        ctx.globalAlpha = flashAlpha;
+        ctx.strokeStyle = '#22c272';
+        ctx.lineWidth = WORLD_METER_LINE_WIDTH_PX + 6;
+        ctx.beginPath();
+        ctx.arc(anchor.x, anchor.y, WORLD_METER_RADIUS_PX, Math.PI, Math.PI * 2, false);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+  }
 
   const cursorAngle = phaseToSemicircleAngle(normalizeMeterPhase01(meterState.phase01));
   const cursorX = anchor.x + Math.cos(cursorAngle) * WORLD_METER_RADIUS_PX;

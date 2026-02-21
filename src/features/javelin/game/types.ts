@@ -20,9 +20,9 @@ export type RhythmState = {
 };
 
 /**
- * Tracks linear throw-force charge progress.
- * `phase01` goes from 0 (start) to 1 (fully charged).
- * Overfill past the configured threshold triggers a late-release fault.
+ * Tracks cyclic throw-force charge progress.
+ * `phase01` wraps from 1 back to 0 on each cycle.
+ * Exceeding configured max cycles triggers a late-release fault.
  */
 export type ChargeMeterState = {
   phase01: number;
@@ -100,6 +100,8 @@ export type GamePhase =
       angleDeg: number;
       forceNorm: number;
       releaseQuality: TimingQuality;
+      lineCrossedAtRelease: boolean;
+      releaseFlashAtMs: number;
       animProgress: number;
       released: boolean;
       athletePose: AthletePoseState;

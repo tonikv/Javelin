@@ -11,9 +11,21 @@
   "javelin.runupHint": "Ajoita klikkaukset vihreään alueeseen. Heittoviivalle",
   "javelin.throwLine": "Heittoviiva",
   "javelin.speedPassiveHint": "Perusvauhti kasvaa myös ilman klikkejä.",
+  "javelin.windHintHeadwind": "Vastatuuli - tähtää korkeammalle",
+  "javelin.windHintTailwind": "Myötätuuli - matalampi kulma kantaa pidemmälle",
+  "javelin.attempt": "Yritys",
+  "javelin.sessionBest": "Paras",
+  "action.nextAttempt": "Seuraava yritys",
+  "action.newSession": "Uusi sarja (6 yritystä)",
+  "help.touch1": "Napauta: kiihdytä rytmillä",
+  "help.touch2": "Pidä pohjassa: lataa heittovoima",
+  "help.touch3": "Vedä pitäessä: säädä kulmaa",
+  "help.touch4": "Vapauta: heitä",
   "javelin.landingTipFirst": "Kärki edellä",
   "javelin.landingFlat": "Litteä alastulo",
   "javelin.result.foul_line": "Hylätty: viiva ylitetty",
   "javelin.result.foul_sector": "Hylätty: sektorin ulkopuolella",
-  "javelin.result.foul_tip_first": "Hylätty: kärki ei osunut ensin"
+  "javelin.result.foul_tip_first": "Hylätty: kärki ei osunut ensin",
+  "result.notSavedInvalid": "Virheellinen heitto - tulosta ei tallenneta",
+  "result.notHighscore": "Ei uusi ennätys - tulosta ei tallenneta"
 }

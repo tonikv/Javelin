@@ -28,7 +28,7 @@ import {
   CHARGE_AIM_STOP_SPEED_NORM,
   CHARGE_FILL_DURATION_MS,
   CHARGE_GOOD_WINDOW,
-  CHARGE_OVERFILL_FAULT_01,
+  CHARGE_MAX_CYCLES,
   CHARGE_PERFECT_WINDOW,
   FAULT_JAVELIN_LAUNCH_SPEED_MS,
   FAULT_STUMBLE_DISTANCE_M,
@@ -261,14 +261,15 @@ const tickChargeAim = (state: GameState, dtMs: number, nowMs: number): GameState
 
   const elapsedMs = Math.max(0, nowMs - state.phase.chargeStartedAtMs);
   const rawFill01 = elapsedMs / CHARGE_FILL_DURATION_MS;
-  if (rawFill01 >= CHARGE_OVERFILL_FAULT_01) {
+  const fullCycles = Math.floor(rawFill01);
+  if (fullCycles >= CHARGE_MAX_CYCLES) {
     return {
       ...state,
       phase: createLateReleaseFaultPhase(state.phase, nowMs)
     };
   }
 
-  const phase01 = clamp(rawFill01, 0, 1);
+  const phase01 = clamp(rawFill01 % 1, 0, 1);
   const speedAfterDecay = clamp(
     state.phase.speedNorm - (dtMs / 1000) * CHARGE_AIM_SPEED_DECAY_PER_SECOND,
     0,
@@ -366,7 +367,7 @@ const tickThrowAnim = (state: GameState, dtMs: number, nowMs: number): GameState
           angleDeg: state.phase.angleDeg,
           forceNorm: state.phase.forceNorm,
           releaseQuality: state.phase.releaseQuality,
-          lineCrossedAtRelease: state.phase.athleteXM >= THROW_LINE_X_M,
+          lineCrossedAtRelease: state.phase.lineCrossedAtRelease,
           windMs: state.windMs,
           launchSpeedMs
         },
@@ -405,6 +406,7 @@ const tickFlight = (state: GameState, dtMs: number): GameState => {
   if (updated.landed) {
     const landingTipXM = updated.landingTipXM ?? updated.javelin.xM;
     const landingTipZM = updated.landingTipZM ?? updated.javelin.zM;
+    const distanceM = computeCompetitionDistanceM(landingTipXM);
     const legality = evaluateThrowLegality({
       lineCrossedAtRelease: state.phase.launchedFrom.lineCrossedAtRelease,
       landingTipXM,
@@ -417,7 +419,7 @@ const tickFlight = (state: GameState, dtMs: number): GameState => {
       phase: {
         tag: 'result',
         athleteXM,
-        distanceM: computeCompetitionDistanceM(landingTipXM),
+        distanceM,
         isHighscore: false,
         resultKind: legality.resultKind,
         tipFirst: updated.tipFirst,
@@ -602,20 +604,37 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
       }
       const elapsedMs = Math.max(0, action.atMs - state.phase.chargeStartedAtMs);
       const rawFill01 = elapsedMs / CHARGE_FILL_DURATION_MS;
-      if (rawFill01 >= CHARGE_OVERFILL_FAULT_01) {
+      const fullCycles = Math.floor(rawFill01);
+      if (fullCycles >= CHARGE_MAX_CYCLES) {
         return {
           ...state,
           nowMs: action.atMs,
           phase: createLateReleaseFaultPhase(state.phase, action.atMs)
         };
       }
-      const phase01 = clamp(rawFill01, 0, 1);
+      const phase01 = clamp(rawFill01 % 1, 0, 1);
       const quality = getTimingQuality(
         phase01,
         state.phase.chargeMeter.perfectWindow,
         state.phase.chargeMeter.goodWindow
       );
       const forceNorm = applyForceQualityBonus(computeForcePreview(phase01), quality);
+      const releasePose = computeAthletePoseGeometry(
+        {
+          animTag: 'throw',
+          animT: THROW_RELEASE_PROGRESS
+        },
+        state.phase.speedNorm,
+        state.phase.angleDeg,
+        state.phase.runupDistanceM
+      );
+      const lineCrossedAtRelease =
+        Math.max(
+          state.phase.runupDistanceM,
+          releasePose.footFront.xM,
+          releasePose.footBack.xM,
+          releasePose.shoulderCenter.xM
+        ) >= THROW_LINE_X_M;
 
       return {
         ...state,
@@ -627,6 +646,8 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
           angleDeg: state.phase.angleDeg,
           forceNorm,
           releaseQuality: quality,
+          lineCrossedAtRelease,
+          releaseFlashAtMs: action.atMs,
           animProgress: 0,
           released: false,
           athletePose: {

@@ -41,6 +41,9 @@ export const JavelinPage = (): ReactElement => {
   }, [state.phase, isHighscore]);
 
   const resultMessage = useMemo(() => {
+    if (state.phase.tag === 'flight' && state.phase.launchedFrom.lineCrossedAtRelease) {
+      return t('javelin.result.foul_line');
+    }
     if (state.phase.tag === 'result') {
       const landingMessage =
         state.phase.tipFirst === null
@@ -58,6 +61,24 @@ export const JavelinPage = (): ReactElement => {
     }
     return '';
   }, [state.phase, t, formatNumber]);
+  const resultStatusMessage = useMemo(() => {
+    if (state.phase.tag === 'flight' && state.phase.launchedFrom.lineCrossedAtRelease) {
+      return t('result.notSavedInvalid');
+    }
+    if (state.phase.tag === 'fault') {
+      return t('result.notSavedInvalid');
+    }
+    if (state.phase.tag !== 'result') {
+      return '';
+    }
+    if (state.phase.resultKind !== 'valid') {
+      return t('result.notSavedInvalid');
+    }
+    if (!state.phase.isHighscore) {
+      return t('result.notHighscore');
+    }
+    return '';
+  }, [state.phase, t]);
 
   const canSaveScore =
     state.phase.tag === 'result' &&
@@ -65,6 +86,11 @@ export const JavelinPage = (): ReactElement => {
     state.phase.isHighscore &&
     savedRoundId !== state.roundId;
   const resultDistanceM = state.phase.tag === 'result' ? state.phase.distanceM : null;
+
+  const isFoulMessage =
+    state.phase.tag === 'fault' ||
+    (state.phase.tag === 'flight' && state.phase.launchedFrom.lineCrossedAtRelease) ||
+    (state.phase.tag === 'result' && state.phase.resultKind !== 'valid');
 
   return (
     <main className="page">
@@ -99,11 +125,14 @@ export const JavelinPage = (): ReactElement => {
           </div>
 
           <p
-            className={`result-live ${state.phase.tag === 'result' && state.phase.resultKind !== 'valid' ? 'is-foul' : ''}`}
+            className={`result-live ${isFoulMessage ? 'is-foul' : ''}`}
             aria-live="polite"
           >
             {resultMessage}
           </p>
+          {resultStatusMessage && (
+            <p className={`result-note ${isFoulMessage ? 'is-foul' : ''}`}>{resultStatusMessage}</p>
+          )}
 
           {canSaveScore && state.phase.tag === 'result' && (
             <form
