@@ -119,6 +119,7 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
           tapCount: 0,
           runupDistanceM: RUNUP_START_X_M,
           rhythm: {
+            firstTapAtMs: null,
             lastTapAtMs: null,
             perfectHits: 0,
             goodHits: 0,
@@ -160,6 +161,7 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
           speedNorm,
           tapCount: Math.min(phase.tapCount + 1, RUNUP_MAX_TAPS),
           rhythm: {
+            firstTapAtMs: phase.rhythm.firstTapAtMs ?? action.atMs,
             lastTapAtMs: action.atMs,
             perfectHits,
             goodHits,
@@ -266,14 +268,18 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
 
       const nextState: GameState = { ...state, nowMs: action.nowMs };
       if (nextState.phase.tag === 'runup') {
-        const passiveTarget = passiveSpeedTarget(nextState.phase.startedAtMs, action.nowMs);
+        const hasStartedRunup = nextState.phase.rhythm.firstTapAtMs !== null;
+        const passiveTarget =
+          nextState.phase.rhythm.firstTapAtMs === null
+            ? 0
+            : passiveSpeedTarget(nextState.phase.rhythm.firstTapAtMs, action.nowMs);
         const speedAfterDecay = clamp(
           nextState.phase.speedNorm - (action.dtMs / 1000) * RUNUP_SPEED_DECAY_PER_SECOND,
           0,
           1
         );
         const speedNorm = Math.max(speedAfterDecay, passiveTarget);
-        const runSpeedMs = runSpeedMsFromNorm(speedNorm);
+        const runSpeedMs = hasStartedRunup ? runSpeedMsFromNorm(speedNorm) : 0;
         const runupDistanceM = clamp(
           nextState.phase.runupDistanceM + runSpeedMs * (action.dtMs / 1000),
           RUNUP_START_X_M,

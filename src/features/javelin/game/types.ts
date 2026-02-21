@@ -10,6 +10,7 @@ export type MeterWindow = {
 };
 
 export type RhythmState = {
+  firstTapAtMs: number | null;
   lastTapAtMs: number | null;
   perfectHits: number;
   goodHits: number;

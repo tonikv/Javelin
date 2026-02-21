@@ -20,6 +20,7 @@ describe('javelin visibility state', () => {
         tapCount: 4,
         runupDistanceM: 10,
         rhythm: {
+          firstTapAtMs: 1200,
           lastTapAtMs: 1880,
           perfectHits: 2,
           goodHits: 3,

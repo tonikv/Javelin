@@ -11,13 +11,21 @@ describe('gameReducer', () => {
     expect(next.windMs).toBe(1.2);
   });
 
-  it('builds passive speed to around 50% without taps', () => {
+  it('stays still before first tap and then builds passive speed', () => {
     let state = createInitialGameState();
     state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0 });
+    state = gameReducer(state, { type: 'tick', dtMs: 2000, nowMs: 3000 });
+    expect(state.phase.tag).toBe('runup');
+    if (state.phase.tag === 'runup') {
+      expect(state.phase.speedNorm).toBe(0);
+      expect(state.phase.runupDistanceM).toBe(2.8);
+    }
+
+    state = gameReducer(state, { type: 'rhythmTap', atMs: 3200 });
     state = gameReducer(state, {
       type: 'tick',
       dtMs: RUNUP_PASSIVE_TO_HALF_MS,
-      nowMs: 1000 + RUNUP_PASSIVE_TO_HALF_MS
+      nowMs: 3200 + RUNUP_PASSIVE_TO_HALF_MS
     });
     expect(state.phase.tag).toBe('runup');
     if (state.phase.tag === 'runup') {
@@ -29,10 +37,11 @@ describe('gameReducer', () => {
   it('perfect timing tap boosts speed above passive baseline', () => {
     let state = createInitialGameState();
     state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0 });
+    state = gameReducer(state, { type: 'rhythmTap', atMs: 1300 });
     state = gameReducer(state, {
       type: 'tick',
       dtMs: RUNUP_PASSIVE_TO_HALF_MS,
-      nowMs: 1000 + RUNUP_PASSIVE_TO_HALF_MS
+      nowMs: 1300 + RUNUP_PASSIVE_TO_HALF_MS
     });
     const baseline = state.phase.tag === 'runup' ? state.phase.speedNorm : 0;
     state = gameReducer(state, { type: 'rhythmTap', atMs: 6280 });
@@ -57,6 +66,7 @@ describe('gameReducer', () => {
   it('runup locomotion advances and can cross throw line', () => {
     let state = createInitialGameState();
     state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0 });
+    state = gameReducer(state, { type: 'rhythmTap', atMs: 1300 });
     state = gameReducer(state, { type: 'tick', dtMs: 9000, nowMs: 10000 });
     expect(state.phase.tag).toBe('runup');
     if (state.phase.tag === 'runup') {
