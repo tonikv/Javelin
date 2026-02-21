@@ -1,19 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { pointerClientYToAngleDeg } from './controls';
+import { pointerFromAnchorToAngleDeg } from './controls';
 
-describe('pointerClientYToAngleDeg', () => {
-  it('maps top to 90, middle to 0, and bottom to -90', () => {
-    const top = pointerClientYToAngleDeg(100, 100, 400);
-    const middle = pointerClientYToAngleDeg(300, 100, 400);
-    const bottom = pointerClientYToAngleDeg(500, 100, 400);
+describe('pointerFromAnchorToAngleDeg', () => {
+  it('maps points above/below anchor to expected vertical angles', () => {
+    const top = pointerFromAnchorToAngleDeg(300, 100, 300, 300);
+    const middle = pointerFromAnchorToAngleDeg(500, 300, 300, 300);
+    const bottom = pointerFromAnchorToAngleDeg(300, 500, 300, 300);
 
     expect(top).toBe(90);
     expect(middle).toBe(0);
     expect(bottom).toBe(-90);
   });
 
-  it('clamps out-of-bounds positions', () => {
-    expect(pointerClientYToAngleDeg(0, 100, 400)).toBe(90);
-    expect(pointerClientYToAngleDeg(700, 100, 400)).toBe(-90);
+  it('responds strongly when pointer is close to anchor horizontally', () => {
+    const nearAnchor = pointerFromAnchorToAngleDeg(302, 250, 300, 300);
+    const farAnchor = pointerFromAnchorToAngleDeg(520, 250, 300, 300);
+
+    expect(nearAnchor).toBeGreaterThan(farAnchor);
+    expect(nearAnchor).toBeGreaterThan(80);
   });
 });

@@ -603,6 +603,16 @@ const getPoseForState = (state: GameState): AthletePoseGeometry => {
   return computeAthletePoseGeometry({ animTag: 'idle', animT: 0 }, 0, state.aimAngleDeg, 2.8);
 };
 
+export const getPlayerAngleAnchorScreen = (
+  state: GameState,
+  width: number,
+  height: number
+): { x: number; y: number } => {
+  const camera = createWorldToScreen(state, width, height);
+  const pose = getPoseForState(state);
+  return camera.toScreen(pose.shoulderCenter);
+};
+
 const shouldDrawFrontArmOverHead = (state: GameState): boolean => {
   if (state.phase.tag === 'chargeAim') {
     return false;

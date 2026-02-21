@@ -6,14 +6,17 @@ export const keyboardAngleDelta = (direction: 'up' | 'down'): number =>
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value));
 
-export const pointerClientYToAngleDeg = (
-  clientY: number,
-  rectTop: number,
-  rectHeight: number
+export const pointerFromAnchorToAngleDeg = (
+  pointerClientX: number,
+  pointerClientY: number,
+  anchorClientX: number,
+  anchorClientY: number
 ): number => {
-  if (rectHeight <= 0) {
-    return 0;
+  const dx = Math.abs(pointerClientX - anchorClientX);
+  const dy = anchorClientY - pointerClientY;
+  if (dx === 0) {
+    return dy >= 0 ? 90 : -90;
   }
-  const y01 = clamp((clientY - rectTop) / rectHeight, 0, 1);
-  return (1 - y01) * 180 - 90;
+  const angleDeg = (Math.atan2(dy, dx) * 180) / Math.PI;
+  return clamp(angleDeg, -90, 90);
 };

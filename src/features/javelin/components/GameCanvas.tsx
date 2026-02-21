@@ -20,7 +20,7 @@ export const GameCanvas = ({ state, dispatch }: GameCanvasProps): ReactElement =
     [locale]
   );
 
-  usePointerControls({ canvas: canvasRef.current, dispatch, phaseTag: state.phase.tag });
+  usePointerControls({ canvas: canvasRef.current, dispatch, phaseTag: state.phase.tag, state });
 
   useEffect(() => {
     const canvas = canvasRef.current;

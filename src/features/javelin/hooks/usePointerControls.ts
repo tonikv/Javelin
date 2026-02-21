@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
-import { keyboardAngleDelta, pointerClientYToAngleDeg } from '../game/controls';
-import type { GameAction, GamePhase } from '../game/types';
+import { useEffect, useRef } from 'react';
+import { keyboardAngleDelta, pointerFromAnchorToAngleDeg } from '../game/controls';
+import { getPlayerAngleAnchorScreen } from '../game/render';
+import type { GameAction, GamePhase, GameState } from '../game/types';
 
 type Dispatch = (action: GameAction) => void;
 
@@ -8,20 +9,33 @@ type UsePointerControlsArgs = {
   canvas: HTMLCanvasElement | null;
   dispatch: Dispatch;
   phaseTag: GamePhase['tag'];
+  state: GameState;
 };
 
-export const usePointerControls = ({ canvas, dispatch, phaseTag }: UsePointerControlsArgs): void => {
+export const usePointerControls = ({ canvas, dispatch, phaseTag, state }: UsePointerControlsArgs): void => {
+  const stateRef = useRef(state);
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
   useEffect(() => {
     if (!canvas) {
       return;
     }
 
     const now = (): number => performance.now();
-    const dispatchAngleFromPointer = (clientY: number): void => {
+    const dispatchAngleFromPointer = (clientX: number, clientY: number): void => {
       const rect = canvas.getBoundingClientRect();
+      const anchor = getPlayerAngleAnchorScreen(stateRef.current, rect.width, rect.height);
       dispatch({
         type: 'setAngle',
-        angleDeg: pointerClientYToAngleDeg(clientY, rect.top, rect.height)
+        angleDeg: pointerFromAnchorToAngleDeg(
+          clientX,
+          clientY,
+          rect.left + anchor.x,
+          rect.top + anchor.y
+        )
       });
     };
 
@@ -32,7 +46,7 @@ export const usePointerControls = ({ canvas, dispatch, phaseTag }: UsePointerCon
       if (event.button === 2) {
         event.preventDefault();
         dispatch({ type: 'beginChargeAim', atMs: now() });
-        dispatchAngleFromPointer(event.clientY);
+        dispatchAngleFromPointer(event.clientX, event.clientY);
       }
     };
 
@@ -49,7 +63,7 @@ export const usePointerControls = ({ canvas, dispatch, phaseTag }: UsePointerCon
         phaseTag === 'chargeAim' ||
         (phaseTag === 'throwAnim' && (event.buttons & 2) !== 0);
       if (shouldTrackPointerAngle) {
-        dispatchAngleFromPointer(event.clientY);
+        dispatchAngleFromPointer(event.clientX, event.clientY);
       }
     };
 
