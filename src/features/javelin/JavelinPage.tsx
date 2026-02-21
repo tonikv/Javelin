@@ -42,7 +42,13 @@ export const JavelinPage = (): ReactElement => {
 
   const resultMessage = useMemo(() => {
     if (state.phase.tag === 'result') {
-      return `${t('result.distance')} ${formatNumber(state.phase.distanceM)} m`;
+      const landingMessage =
+        state.phase.tipFirst === null
+          ? ''
+          : state.phase.tipFirst
+            ? ` · ${t('javelin.landingTipFirst')}`
+            : ` · ${t('javelin.landingFlat')}`;
+      return `${t('result.distance')} ${formatNumber(state.phase.distanceM)} m${landingMessage}`;
     }
     if (state.phase.tag === 'fault') {
       return t(faultReasonKey(state.phase.reason));

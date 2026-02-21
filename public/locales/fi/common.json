@@ -7,5 +7,10 @@
   "hud.rhythm": "Rytmi",
   "hud.force": "Voima",
   "help.mouse4": "Oikea painike ylös: vapauta heitto",
-  "help.kbd4": "Enter ylös: vapauta heitto"
+  "help.kbd4": "Enter ylös: vapauta heitto",
+  "javelin.runupHint": "Ajoita klikkaukset vihreään alueeseen. Heittoviivalle",
+  "javelin.throwLine": "Heittoviiva",
+  "javelin.speedPassiveHint": "Perusvauhti kasvaa myös ilman klikkejä.",
+  "javelin.landingTipFirst": "Kärki edellä",
+  "javelin.landingFlat": "Litteä alastulo"
 }

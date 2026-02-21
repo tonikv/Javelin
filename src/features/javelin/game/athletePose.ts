@@ -23,8 +23,6 @@ export type AthletePoseGeometry = {
   javelinAngleRad: number;
 };
 
-const BASE_X_M = 2.8;
-
 const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
 
 const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
@@ -161,11 +159,12 @@ const curvesForPose = (
 export const computeAthletePoseGeometry = (
   pose: AthletePoseState,
   speedNorm: number,
-  aimAngleDeg: number
+  aimAngleDeg: number,
+  baseXM = 2.8
 ): AthletePoseGeometry => {
   const curves = curvesForPose(pose, speedNorm, aimAngleDeg);
   const pelvis: PointM = {
-    xM: BASE_X_M + curves.pelvisShiftXM,
+    xM: baseXM + curves.pelvisShiftXM,
     yM: 1 + curves.pelvisBobYM
   };
 

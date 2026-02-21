@@ -6,14 +6,22 @@ import {
   CHARGE_FORCE_CYCLE_MS,
   CHARGE_GOOD_WINDOW,
   CHARGE_PERFECT_WINDOW,
+  CHARGE_ZONE_MARGIN_M,
   GOOD_WINDOW_MS,
   PERFECT_WINDOW_MS,
   RUNUP_MAX_TAPS,
+  RUNUP_MAX_X_M,
   RUNUP_MIN_TAPS_FOR_THROW,
+  RUNUP_PASSIVE_MAX_SPEED,
+  RUNUP_PASSIVE_TO_HALF_MS,
   RUNUP_SPEED_DECAY_PER_SECOND,
+  RUNUP_SPEED_MAX_MS,
+  RUNUP_SPEED_MIN_MS,
+  RUNUP_START_X_M,
   SPAM_PENALTY_MS,
   SPAM_THRESHOLD_MS,
   THROW_ANIM_DURATION_MS,
+  THROW_LINE_X_M,
   THROW_RELEASE_PROGRESS
 } from './constants';
 import {
@@ -34,6 +42,8 @@ import type { FaultReason, GameAction, GameState, TimingQuality } from './types'
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value));
 
+const easeOutQuad = (t: number): number => 1 - (1 - t) * (1 - t);
+
 const nearestBeatDeltaMs = (startedAtMs: number, atMs: number): number => {
   const elapsed = atMs - startedAtMs;
   const beatIndex = Math.round(elapsed / BEAT_INTERVAL_MS);
@@ -53,19 +63,28 @@ const timingQualityFromBeatDelta = (deltaMs: number): TimingQuality => {
 
 const rhythmTapSpeedDelta = (quality: TimingQuality): number => {
   if (quality === 'perfect') {
-    return 0.11;
+    return 0.085;
   }
   if (quality === 'good') {
-    return 0.07;
+    return 0.05;
   }
-  return 0.025;
+  return -0.014;
 };
 
 const runAnimT = (startedAtMs: number, nowMs: number, speedNorm: number): number => {
   const elapsedSec = Math.max(0, (nowMs - startedAtMs) / 1000);
-  const strideHz = 1.45 + speedNorm * 2.4;
+  const strideHz = 1 + speedNorm * 2.2;
   return wrap01(elapsedSec * strideHz);
 };
+
+const passiveSpeedTarget = (startedAtMs: number, nowMs: number): number => {
+  const elapsedMs = Math.max(0, nowMs - startedAtMs);
+  const t = clamp(elapsedMs / RUNUP_PASSIVE_TO_HALF_MS, 0, 1);
+  return RUNUP_PASSIVE_MAX_SPEED * easeOutQuad(t);
+};
+
+const runSpeedMsFromNorm = (speedNorm: number): number =>
+  RUNUP_SPEED_MIN_MS + (RUNUP_SPEED_MAX_MS - RUNUP_SPEED_MIN_MS) * speedNorm;
 
 const getFaultForRelease = (angleDeg: number): FaultReason | null => {
   if (angleDeg <= ANGLE_MIN_DEG + 0.2) {
@@ -91,9 +110,10 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
         windMs: action.windMs,
         phase: {
           tag: 'runup',
-          speedNorm: 0.08,
+          speedNorm: 0,
           startedAtMs: action.atMs,
           tapCount: 0,
+          runupDistanceM: RUNUP_START_X_M,
           rhythm: {
             lastTapAtMs: null,
             perfectHits: 0,
@@ -122,7 +142,7 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
       const isSpam = tapInterval < SPAM_THRESHOLD_MS;
       const beatDelta = nearestBeatDeltaMs(phase.startedAtMs, action.atMs);
       const quality = timingQualityFromBeatDelta(beatDelta);
-      const baseDelta = inPenalty || isSpam ? -0.05 : rhythmTapSpeedDelta(quality);
+      const baseDelta = isSpam ? -0.095 : inPenalty ? -0.05 : rhythmTapSpeedDelta(quality);
       const speedNorm = clamp(phase.speedNorm + baseDelta, 0, 1);
       const perfectHits = phase.rhythm.perfectHits + (quality === 'perfect' ? 1 : 0);
       const goodHits = phase.rhythm.goodHits + (quality !== 'miss' ? 1 : 0);
@@ -157,12 +177,16 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
       if (state.phase.tapCount < RUNUP_MIN_TAPS_FOR_THROW) {
         return state;
       }
+      if (state.phase.runupDistanceM < THROW_LINE_X_M - CHARGE_ZONE_MARGIN_M) {
+        return state;
+      }
       return {
         ...state,
         nowMs: action.atMs,
         phase: {
           tag: 'chargeAim',
           speedNorm: state.phase.speedNorm,
+          athleteXM: state.phase.runupDistanceM,
           angleDeg: ANGLE_DEFAULT_DEG,
           chargeStartedAtMs: action.atMs,
           chargeMeter: {
@@ -219,6 +243,7 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
         phase: {
           tag: 'throwAnim',
           speedNorm: state.phase.speedNorm,
+          athleteXM: state.phase.athleteXM,
           angleDeg: state.phase.angleDeg,
           forceNorm,
           animProgress: 0,
@@ -241,16 +266,26 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
 
       const nextState: GameState = { ...state, nowMs: action.nowMs };
       if (nextState.phase.tag === 'runup') {
-        const speedNorm = clamp(
+        const passiveTarget = passiveSpeedTarget(nextState.phase.startedAtMs, action.nowMs);
+        const speedAfterDecay = clamp(
           nextState.phase.speedNorm - (action.dtMs / 1000) * RUNUP_SPEED_DECAY_PER_SECOND,
           0,
           1
         );
+        const speedNorm = Math.max(speedAfterDecay, passiveTarget);
+        const runSpeedMs = runSpeedMsFromNorm(speedNorm);
+        const runupDistanceM = clamp(
+          nextState.phase.runupDistanceM + runSpeedMs * (action.dtMs / 1000),
+          RUNUP_START_X_M,
+          RUNUP_MAX_X_M
+        );
+
         return {
           ...nextState,
           phase: {
             ...nextState.phase,
             speedNorm,
+            runupDistanceM,
             athletePose: {
               animTag: 'run',
               animT: runAnimT(nextState.phase.startedAtMs, action.nowMs, speedNorm)
@@ -302,7 +337,8 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
               animT: THROW_RELEASE_PROGRESS
             },
             nextState.phase.speedNorm,
-            nextState.phase.angleDeg
+            nextState.phase.angleDeg,
+            nextState.phase.athleteXM
           );
           const launchSpeedMs = computeLaunchSpeedMs(
             nextState.phase.speedNorm,
@@ -314,6 +350,7 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
             ...nextState,
             phase: {
               tag: 'flight',
+              athleteXM: nextState.phase.athleteXM,
               javelin: createPhysicalJavelin({
                 xM: releasePose.javelinGrip.xM + Math.cos(launchAngleRad) * 0.45,
                 yM: Math.max(1.35, releasePose.javelinGrip.yM + Math.sin(launchAngleRad) * 0.2),
@@ -323,6 +360,7 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
               }),
               launchedFrom: {
                 speedNorm: nextState.phase.speedNorm,
+                athleteXM: nextState.phase.athleteXM,
                 angleDeg: nextState.phase.angleDeg,
                 forceNorm: nextState.phase.forceNorm,
                 windMs: nextState.windMs,
@@ -356,8 +394,10 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
             ...nextState,
             phase: {
               tag: 'result',
+              athleteXM: nextState.phase.athleteXM,
               distanceM: distanceFromJavelin(updated.javelin),
-              isHighscore: false
+              isHighscore: false,
+              tipFirst: updated.tipFirst
             }
           };
         }

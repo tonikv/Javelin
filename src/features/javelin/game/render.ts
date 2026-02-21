@@ -1,5 +1,5 @@
 import { computeAthletePoseGeometry, type AthletePoseGeometry } from './athletePose';
-import { FIELD_MAX_DISTANCE_M } from './constants';
+import { FIELD_MAX_DISTANCE_M, JAVELIN_LENGTH_M, THROW_LINE_X_M } from './constants';
 import type { GameState } from './types';
 
 type WorldToScreenInput = {
@@ -34,7 +34,32 @@ const drawBackground = (ctx: CanvasRenderingContext2D, width: number, height: nu
   }
 };
 
-const drawTrackAndField = (ctx: CanvasRenderingContext2D, width: number, height: number): void => {
+const drawThrowLine = (
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  label: string
+): void => {
+  const groundY = height - GROUND_BOTTOM_PADDING;
+  const line = toScreen({ xM: THROW_LINE_X_M, yM: 0, width, height });
+  ctx.strokeStyle = '#ff5d4e';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(line.x, groundY - 26);
+  ctx.lineTo(line.x, groundY + 20);
+  ctx.stroke();
+
+  ctx.fillStyle = '#a3211a';
+  ctx.font = '700 12px ui-sans-serif';
+  ctx.fillText(label, line.x - 34, groundY - 30);
+};
+
+const drawTrackAndField = (
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  throwLineLabel: string
+): void => {
   const groundY = height - GROUND_BOTTOM_PADDING;
   ctx.fillStyle = '#88d37f';
   ctx.fillRect(0, groundY, width, GROUND_BOTTOM_PADDING);
@@ -62,6 +87,8 @@ const drawTrackAndField = (ctx: CanvasRenderingContext2D, width: number, height:
       ctx.fillText(`${m} m`, x - 14, groundY + 35);
     }
   }
+
+  drawThrowLine(ctx, width, height, throwLineLabel);
 };
 
 const drawWindVane = (
@@ -123,9 +150,10 @@ const drawJavelinWorld = (
   height: number,
   xM: number,
   yM: number,
-  angleRad: number
+  angleRad: number,
+  lengthM = JAVELIN_LENGTH_M
 ): void => {
-  const halfLength = 0.95;
+  const halfLength = lengthM / 2;
   const tail = {
     xM: xM - Math.cos(angleRad) * halfLength,
     yM: yM - Math.sin(angleRad) * halfLength
@@ -155,8 +183,7 @@ const drawAthlete = (
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
-  pose: AthletePoseGeometry,
-  drawAttachedJavelin: boolean
+  pose: AthletePoseGeometry
 ): void => {
   const shadowCenter = toScreen({ xM: pose.pelvis.xM + 0.06, yM: 0.02, width, height });
   ctx.fillStyle = 'rgba(5, 28, 42, 0.18)';
@@ -207,41 +234,92 @@ const drawAthlete = (
   ctx.beginPath();
   ctx.arc(p.head.x - 1.4, p.head.y - 0.7, 1.2, 0, Math.PI * 2);
   ctx.fill();
+};
 
-  if (drawAttachedJavelin) {
-    drawJavelinWorld(ctx, width, height, pose.javelinGrip.xM + 0.5, pose.javelinGrip.yM, pose.javelinAngleRad);
+type JavelinRenderState =
+  | { mode: 'none' }
+  | { mode: 'attached'; xM: number; yM: number; angleRad: number; lengthM: number }
+  | { mode: 'flight'; xM: number; yM: number; angleRad: number; lengthM: number }
+  | { mode: 'landed'; xM: number; yM: number; angleRad: number; lengthM: number };
+
+export const getVisibleJavelinRenderState = (
+  state: GameState,
+  pose: AthletePoseGeometry
+): JavelinRenderState => {
+  if (state.phase.tag === 'flight') {
+    return {
+      mode: 'flight',
+      xM: state.phase.javelin.xM,
+      yM: state.phase.javelin.yM,
+      angleRad: state.phase.javelin.angleRad,
+      lengthM: state.phase.javelin.lengthM
+    };
   }
+
+  if (
+    state.phase.tag === 'runup' ||
+    state.phase.tag === 'chargeAim' ||
+    state.phase.tag === 'throwAnim'
+  ) {
+    return {
+      mode: 'attached',
+      xM: pose.javelinGrip.xM + Math.cos(pose.javelinAngleRad) * 0.44,
+      yM: pose.javelinGrip.yM + Math.sin(pose.javelinAngleRad) * 0.08,
+      angleRad: pose.javelinAngleRad,
+      lengthM: JAVELIN_LENGTH_M
+    };
+  }
+
+  if (state.phase.tag === 'result') {
+    return {
+      mode: 'landed',
+      xM: state.phase.distanceM,
+      yM: 0.22,
+      angleRad: state.phase.tipFirst ? (-34 * Math.PI) / 180 : (-8 * Math.PI) / 180,
+      lengthM: JAVELIN_LENGTH_M
+    };
+  }
+
+  return { mode: 'none' };
 };
 
 const getPoseForState = (state: GameState): AthletePoseGeometry => {
   if (state.phase.tag === 'runup') {
-    return computeAthletePoseGeometry(state.phase.athletePose, state.phase.speedNorm, 34);
+    return computeAthletePoseGeometry(
+      state.phase.athletePose,
+      state.phase.speedNorm,
+      22,
+      state.phase.runupDistanceM
+    );
   }
   if (state.phase.tag === 'chargeAim') {
     return computeAthletePoseGeometry(
       state.phase.athletePose,
       state.phase.speedNorm,
-      state.phase.angleDeg
+      state.phase.angleDeg,
+      state.phase.athleteXM
     );
   }
   if (state.phase.tag === 'throwAnim') {
     return computeAthletePoseGeometry(
       state.phase.athletePose,
       state.phase.speedNorm,
-      state.phase.angleDeg
+      state.phase.angleDeg,
+      state.phase.athleteXM
     );
   }
   if (state.phase.tag === 'flight') {
     return computeAthletePoseGeometry(
       state.phase.athletePose,
       state.phase.launchedFrom.speedNorm,
-      state.phase.launchedFrom.angleDeg
+      state.phase.launchedFrom.angleDeg,
+      state.phase.athleteXM
     );
   }
   if (state.phase.tag === 'result') {
-    return computeAthletePoseGeometry({ animTag: 'followThrough', animT: 1 }, 0.7, 24);
+    return computeAthletePoseGeometry({ animTag: 'followThrough', animT: 1 }, 0.72, 24, state.phase.athleteXM);
   }
-  return computeAthletePoseGeometry({ animTag: 'idle', animT: 0 }, 0, 20);
+  return computeAthletePoseGeometry({ animTag: 'idle', animT: 0 }, 0, 20, 2.8);
 };
 
 export const renderGame = (
@@ -249,28 +327,26 @@ export const renderGame = (
   state: GameState,
   width: number,
   height: number,
-  numberFormat: Intl.NumberFormat
+  numberFormat: Intl.NumberFormat,
+  throwLineLabel: string
 ): void => {
   drawBackground(ctx, width, height);
-  drawTrackAndField(ctx, width, height);
+  drawTrackAndField(ctx, width, height, throwLineLabel);
   drawWindVane(ctx, width, state.windMs, numberFormat);
 
   const pose = getPoseForState(state);
-  const showAttachedJavelin = state.phase.tag === 'chargeAim' || state.phase.tag === 'throwAnim';
-  drawAthlete(ctx, width, height, pose, showAttachedJavelin);
+  drawAthlete(ctx, width, height, pose);
 
-  if (state.phase.tag === 'flight') {
+  const javelin = getVisibleJavelinRenderState(state, pose);
+  if (javelin.mode !== 'none') {
     drawJavelinWorld(
       ctx,
       width,
       height,
-      state.phase.javelin.xM,
-      state.phase.javelin.yM,
-      state.phase.javelin.angleRad
+      javelin.xM,
+      javelin.yM,
+      javelin.angleRad,
+      javelin.lengthM
     );
-  }
-
-  if (state.phase.tag === 'result') {
-    drawJavelinWorld(ctx, width, height, state.phase.distanceM, 0.22, (-22 * Math.PI) / 180);
   }
 };

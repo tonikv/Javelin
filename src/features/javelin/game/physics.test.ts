@@ -117,4 +117,44 @@ describe('physical javelin simulation', () => {
     expect(excellent).toBeGreaterThanOrEqual(75);
     expect(excellent).toBeLessThanOrEqual(95);
   });
+
+  it('remains finite under strong wind extremes', () => {
+    let javelin = createPhysicalJavelin({
+      xM: 2.8,
+      yM: 1.8,
+      launchAngleRad: (30 * Math.PI) / 180,
+      launchSpeedMs: 22,
+      releasedAtMs: 0
+    });
+    for (let i = 0; i < 200; i += 1) {
+      const step = updatePhysicalJavelin(javelin, 16, i % 2 === 0 ? 2.5 : -2.5);
+      javelin = step.javelin;
+      expect(Number.isFinite(javelin.xM)).toBe(true);
+      expect(Number.isFinite(javelin.yM)).toBe(true);
+      expect(Number.isFinite(javelin.angleRad)).toBe(true);
+      if (step.landed) {
+        break;
+      }
+    }
+  });
+
+  it('reports tip-first for a good throw', () => {
+    let javelin = createPhysicalJavelin({
+      xM: 3,
+      yM: 1.6,
+      launchAngleRad: (34 * Math.PI) / 180,
+      launchSpeedMs: 28,
+      releasedAtMs: 0
+    });
+    let tipFirst: boolean | null = null;
+    for (let i = 0; i < 800; i += 1) {
+      const step = updatePhysicalJavelin(javelin, 16, 0.4);
+      javelin = step.javelin;
+      if (step.landed) {
+        tipFirst = step.tipFirst;
+        break;
+      }
+    }
+    expect(tipFirst).toBe(true);
+  });
 });

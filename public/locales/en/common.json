@@ -7,5 +7,10 @@
   "hud.rhythm": "Rhythm",
   "hud.force": "Force",
   "help.mouse4": "Right button up: release throw",
-  "help.kbd4": "Enter up: release throw"
+  "help.kbd4": "Enter up: release throw",
+  "javelin.runupHint": "Time clicks to the green zone. Distance to line",
+  "javelin.throwLine": "Throw Line",
+  "javelin.speedPassiveHint": "Base speed also builds without clicking.",
+  "javelin.landingTipFirst": "Tip-first landing",
+  "javelin.landingFlat": "Flat landing"
 }

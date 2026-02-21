@@ -1,13 +1,21 @@
 import type { MeterWindow } from './types';
 
-export const BEAT_INTERVAL_MS = 450;
-export const PERFECT_WINDOW_MS = 30;
-export const GOOD_WINDOW_MS = 70;
-export const SPAM_THRESHOLD_MS = 120;
-export const SPAM_PENALTY_MS = 220;
+export const BEAT_INTERVAL_MS = 880;
+export const PERFECT_WINDOW_MS = 90;
+export const GOOD_WINDOW_MS = 180;
+export const SPAM_THRESHOLD_MS = 160;
+export const SPAM_PENALTY_MS = 320;
 export const RUNUP_MAX_TAPS = 12;
 export const RUNUP_MIN_TAPS_FOR_THROW = 3;
-export const RUNUP_SPEED_DECAY_PER_SECOND = 0.03;
+export const RUNUP_SPEED_DECAY_PER_SECOND = 0.018;
+export const RUNUP_PASSIVE_MAX_SPEED = 0.5;
+export const RUNUP_PASSIVE_TO_HALF_MS = 4200;
+export const RUNUP_SPEED_MIN_MS = 1.6;
+export const RUNUP_SPEED_MAX_MS = 8.2;
+export const RUNUP_START_X_M = 2.8;
+export const THROW_LINE_X_M = 18.2;
+export const CHARGE_ZONE_MARGIN_M = 1.4;
+export const RUNUP_MAX_X_M = THROW_LINE_X_M - 0.3;
 
 export const RHYTHM_TARGET_PHASE01 = 0.5;
 
@@ -29,8 +37,16 @@ export const LAUNCH_SPEED_MAX_MS = 40;
 export const LAUNCH_POWER_EXP = 1.2;
 
 export const DRAG_COEFFICIENT = 0.0098;
-export const WIND_VELOCITY_COUPLING = 0.65;
-export const WIND_ACCEL_FACTOR = 0.11;
+export const LIFT_COEFFICIENT = 0.00022;
+export const AOA_MAX_RAD = 0.75;
+export const MAX_LINEAR_ACCEL = 42;
+export const MAX_ANGULAR_VEL_RAD = 8;
+export const MAX_ANGULAR_ACC_RAD = 80;
+export const ALIGN_TORQUE_BASE = 8.5;
+export const ALIGN_TORQUE_SPEED_FACTOR = 18;
+export const ANGULAR_DAMPING = 7.8;
+export const AERO_NOSE_DOWN_BIAS_RAD = 0.05;
+export const JAVELIN_LENGTH_M = 2.6;
 
 export const WIND_MIN_MS = -2.5;
 export const WIND_MAX_MS = 2.5;
