@@ -1,15 +1,15 @@
 # AI Export
-- Generated: 2026-02-21T19:26:14.173181+00:00
+- Generated: 2026-02-21T20:34:38.148747+00:00
 - Workspace: Javelin
-- Files in this chunk: 52
+- Files in this chunk: 54
 - Limits: maxTotalChars=600000, maxFileChars=20000
-- Approx tokens (this chunk): 45155
+- Approx tokens (this chunk): 48352
 
 ## Repo Map (compact)
 - .github
   - workflows/…
   - copilot-instructions.md
-- agent-guide-visual.md
+- agent-guide-gameplay-v2.md
 - AGENTS.md
 - docs
   - ai-notes.md
@@ -20,10 +20,10 @@
 - README.md
 - src
   - app/… (1 files)
-  - features/ (34 files)
-    - javelin/ (34 files)
+  - features/ (36 files)
+    - javelin/ (36 files)
       - components/… (6 files)
-      - game/… (23 files)
+      - game/… (25 files)
       - hooks/… (4 files)
       - (1 files at this level)
   - i18n/… (2 files)
@@ -51,7 +51,7 @@
 - src/features/javelin/game/types.ts
 - .github/copilot-instructions.md
 - .github/workflows/deploy.yml
-- agent-guide-visual.md
+- agent-guide-gameplay-v2.md
 - AGENTS.md
 - docs/ai-notes.md
 - index.html
@@ -68,6 +68,7 @@
 - src/features/javelin/components/LanguageSwitch.tsx
 - src/features/javelin/components/ScoreBoard.tsx
 - src/features/javelin/game/athletePose.ts
+- src/features/javelin/game/audio.ts
 - src/features/javelin/game/camera.ts
 - src/features/javelin/game/chargeMeter.ts
 - src/features/javelin/game/constants.ts
@@ -99,6 +100,7 @@
 - src/features/javelin/game/reducer.test.ts
 - src/features/javelin/game/render.test.ts
 - src/features/javelin/game/scoring.test.ts
+- src/features/javelin/game/selectors.test.ts
 - src/features/javelin/hooks/useLocalHighscores.test.ts
 
 ---
@@ -132,9 +134,9 @@ export type RhythmState = {
 };
 
 /**
- * Tracks linear throw-force charge progress.
- * `phase01` goes from 0 (start) to 1 (fully charged).
- * Overfill past the configured threshold triggers a late-release fault.
+ * Tracks cyclic throw-force charge progress.
+ * `phase01` wraps from 1 back to 0 on each cycle.
+ * Exceeding configured max cycles triggers a late-release fault.
  */
 export type ChargeMeterState = {
   phase01: number;
@@ -212,6 +214,8 @@ export type GamePhase =
       angleDeg: number;
       forceNorm: number;
       releaseQuality: TimingQuality;
+      lineCrossedAtRelease: boolean;
+      releaseFlashAtMs: number;
       animProgress: number;
       released: boolean;
       athletePose: AthletePoseState;
@@ -272,7 +276,7 @@ export type HighscoreEntry = {
 };
 
 ```
-> meta: lines=161 chars=3735 truncated=no priority
+> meta: lines=163 chars=3793 truncated=no priority
 
 
 ## .github/copilot-instructions.md
@@ -331,660 +335,665 @@ jobs:
 ```
 > meta: lines=37 chars=665 truncated=no
 
-### Rendering & visual effects
 
-
-## agent-guide-visual.md
+## agent-guide-gameplay-v2.md
 
 ```md
-# Agent Guide — Javelin: Visual Improvements
+# Agent Guide — Javelin: Gameplay Improvements (v2)
 
 > **Target project**: `selain-games-2026-javelin`
-> **Generated**: 2026-02-21
+> **Updated**: 2026-02-21 — reflects codebase after refactoring + visual guides were applied
 > **Run tests after each change**: `npm run test`
 > **Run build after all steps**: `npm run build`
 
 ---
 
+## What Changed Since v1
+
+The refactoring and visual guides have been applied. Key structural changes:
+
+- **`math.ts`** exists — shared `clamp`, `clamp01`, `wrap01`, `lerp`, `toRad`, easing functions. No local redefinitions needed.
+- **`camera.ts`** extracted from render.ts — exports `createWorldToScreen`, `createWorldToScreenRaw`, `resetSmoothCamera`, `getCameraTargetX`, `getViewWidthM`, etc. Camera is now smoothed with `dtMs`.
+- **`renderMeter.ts`** extracted — contains `drawWorldTimingMeter`, `getHeadMeterScreenAnchor`, `getWorldMeterState`.
+- **`renderAthlete.ts`** extracted — contains `drawAthlete`, `HeadAnchor`.
+- **`constants.ts`** is now structural-only (field dims, camera layout, physics). No tuning re-exports.
+- **`tuning.ts`** has convenience aliases (`BEAT_INTERVAL_MS`, `CHARGE_OVERFILL_FAULT_01`, etc.) exported directly.
+- **`ChargeMeterState`** — `cycles` field already removed, JSDoc added. Only `phase01`, windows, `lastQuality`, `lastSampleAtMs`.
+- **`update.ts`** — tick handlers extracted to standalone functions (`tickFault`, `tickRunup`, `tickChargeAim`, `tickThrowAnim`, `tickFlight`) but still in the same file (~640 lines). Reducer is a thin dispatcher.
+- **`chargeAim` phase** — `athleteXM` removed; uses `runupDistanceM` directly.
+- **`renderGame`** — now takes `dtMs` parameter for smooth camera. Calls `drawClouds`, draws landed javelins with tip-first/flat distinction, draws landing markers with fade-in.
+- **`drawWindVane`** — still in `render.ts`, signature: `(ctx, width, windMs, localeFormatter)`.
+
+---
+
 ## Summary
 
-Seven visual improvements that add depth, feedback, and polish.
+Six gameplay features. All file references updated for current codebase.
 
 | # | Feature | Impact | Primary Files |
 |---|---------|--------|---------------|
-| 1 | Parallax cloud layers | Adds depth to static sky | `render.ts` |
-| 2 | Sector lines on the field | Explains sector fouls visually | `render.ts`, `scoring.ts` |
-| 3 | Landing distance marker | Celebrates the payoff moment | `render.ts` |
-| 4 | Dynamic head/eye direction | Adds life to the athlete | `athletePose.ts`, `render.ts` |
-| 5 | Smooth camera transitions | Removes jarring view-width jumps | `render.ts` (or `camera.ts` after refactor) |
-| 6 | Improved follow-through foot plant | Better braking animation at high speed | `athletePose.ts` |
-| 7 | Tip-first vs flat landing visualization | Makes the rule comprehensible | `render.ts` |
+| 1 | Rhythm beat indicator (visual + audio) | Players can feel the timing instead of guessing | `renderMeter.ts`, new `audio.ts`, `render.ts` |
+| 2 | Throw quality flash feedback | Reward / punish is visible at release moment | `render.ts`, `update.ts`, `types.ts` |
+| 3 | Cyclic charge meter | Adds skill ceiling to force timing | `update.ts`, `tuning.ts` |
+| 4 | Wind strategy indicators | Wind becomes a meaningful gameplay factor | `render.ts`, `HudPanel.tsx`, locales |
+| 5 | Attempt counter / best-of-6 | Gives a competitive arc and session structure | `types.ts`, `update.ts`, `JavelinPage.tsx`, locales |
+| 6 | Touch / mobile input | Playable on phones (GitHub Pages audience) | `usePointerControls.ts`, `ControlHelp.tsx`, locales |
 
-**Recommended order**: 5 → 1 → 2 → 3 → 7 → 4 → 6
+**Recommended order**: 1 → 2 → 3 → 4 → 5 → 6
 
-Feature 5 (camera smoothing) has the broadest impact and should come first. The rest are independent of each other.
+Features 1–4 are independent of each other. Feature 5 changes game state structure. Feature 6 is a separate input layer and can be done at any point.
 
 ---
 
-## Feature 1 — Parallax Cloud Layers
+## Feature 1 — Rhythm Beat Indicator
 
 ### Problem
 
-The sky gradient is flat. The camera pans horizontally as the javelin flies but the background is static, giving no sense of motion or depth.
+During runup, the timing meter shows a cursor sweeping around a semicircle with green and blue zones, but there's no pulse or beat that communicates the tempo. Players must visually track the cursor and guess when to click. The `BEAT_INTERVAL_MS` (820 ms) defines a hidden metronome that the player has no way to perceive.
 
-### 1a. Cloud layer data
+### 1a. Visual beat flash on the meter arc
 
-Define cloud layers as simple data at the top of `render.ts` (or in a new `renderBackground.ts` if render.ts has been split per the refactoring guide):
+The meter drawing lives in **`renderMeter.ts`** in the `drawWorldTimingMeter` function. Add a brief glow flash when the cursor crosses the target zone.
 
-```ts
-type CloudLayer = {
-  yFraction: number;     // 0 = top of canvas, 1 = ground line
-  parallaxFactor: number; // 0 = fixed, 1 = moves at camera speed
-  clouds: Array<{
-    offsetXM: number;     // world-space X offset within layer
-    widthPx: number;
-    heightPx: number;
-    opacity: number;
-  }>;
-};
+**Approach**: Use `getRunupMeterPhase01(state)` (already imported in `renderMeter.ts` from `selectors.ts`). The target phase is `RHYTHM_TARGET_PHASE01 = 0.5` (from `constants.ts`). When the cursor is within ±0.03 of the target, draw a glow ring behind the meter.
 
-const CLOUD_LAYERS: CloudLayer[] = [
-  {
-    // Far, slow layer — thin wisps
-    yFraction: 0.12,
-    parallaxFactor: 0.05,
-    clouds: [
-      { offsetXM: 0, widthPx: 120, heightPx: 18, opacity: 0.18 },
-      { offsetXM: 35, widthPx: 90, heightPx: 14, opacity: 0.14 },
-      { offsetXM: 72, widthPx: 140, heightPx: 20, opacity: 0.16 },
-      { offsetXM: 120, widthPx: 100, heightPx: 16, opacity: 0.12 },
-    ]
-  },
-  {
-    // Mid layer — soft blobs
-    yFraction: 0.28,
-    parallaxFactor: 0.15,
-    clouds: [
-      { offsetXM: 10, widthPx: 80, heightPx: 28, opacity: 0.22 },
-      { offsetXM: 50, widthPx: 110, heightPx: 34, opacity: 0.20 },
-      { offsetXM: 95, widthPx: 70, heightPx: 24, opacity: 0.18 },
-    ]
-  },
-  {
-    // Near layer — larger, more visible
-    yFraction: 0.18,
-    parallaxFactor: 0.30,
-    clouds: [
-      { offsetXM: 20, widthPx: 100, heightPx: 38, opacity: 0.25 },
-      { offsetXM: 80, widthPx: 130, heightPx: 42, opacity: 0.22 },
-    ]
-  }
-];
-```
-
-### 1b. Cloud drawing function
+Add to `drawWorldTimingMeter` in **`renderMeter.ts`**, after drawing the meter arcs but before the cursor:
 
 ```ts
-const drawClouds = (
-  ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number,
-  worldMinX: number
-): void => {
-  const groundY = height - CAMERA_GROUND_BOTTOM_PADDING;
-
-  for (const layer of CLOUD_LAYERS) {
-    const baseY = groundY * layer.yFraction;
-    // Parallax offset: clouds move slower than the camera
-    const scrollPx = worldMinX * layer.parallaxFactor * 4; // scale factor for visible movement
-
-    for (const cloud of layer.clouds) {
-      // Tile clouds so they always appear on screen
-      const rawX = cloud.offsetXM * 8 - scrollPx;
-      const x = ((rawX % (width + cloud.widthPx * 2)) + width + cloud.widthPx) % (width + cloud.widthPx * 2) - cloud.widthPx;
-      const y = baseY;
-
+// Beat flash — glow when cursor is near target
+if (state.phase.tag === 'runup') {
+  const meterPhase = getRunupMeterPhase01(state);
+  if (meterPhase !== null) {
+    const distToTarget = Math.abs(meterPhase - RHYTHM_TARGET_PHASE01);
+    const wrappedDist = Math.min(distToTarget, 1 - distToTarget);
+    if (wrappedDist < 0.06) {
+      const flashAlpha = (1 - wrappedDist / 0.06) * 0.5;
       ctx.save();
-      ctx.globalAlpha = cloud.opacity;
-      ctx.fillStyle = '#ffffff';
+      ctx.globalAlpha = flashAlpha;
+      ctx.strokeStyle = '#22c272';
+      ctx.lineWidth = WORLD_METER_LINE_WIDTH_PX + 6;
       ctx.beginPath();
-      // Draw cloud as overlapping ellipses for a soft shape
-      const rx = cloud.widthPx / 2;
-      const ry = cloud.heightPx / 2;
-      ctx.ellipse(x + rx, y, rx, ry, 0, 0, Math.PI * 2);
-      ctx.ellipse(x + rx * 0.6, y + ry * 0.15, rx * 0.7, ry * 0.8, 0, 0, Math.PI * 2);
-      ctx.ellipse(x + rx * 1.4, y - ry * 0.1, rx * 0.65, ry * 0.75, 0, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.arc(anchor.x, anchor.y, WORLD_METER_RADIUS_PX, Math.PI, Math.PI * 2, false);
+      ctx.stroke();
       ctx.restore();
     }
   }
-};
-```
-
-### 1c. Call from `renderGame`
-
-After `drawBackground` and before `drawTrackAndField`:
-
-```diff
-  drawBackground(ctx, width, height);
-+ drawClouds(ctx, width, height, worldMinX);
-  drawTrackAndField(ctx, width, height, toScreen, throwLineLabel, worldMinX, worldMaxX);
-```
-
-The `worldMinX` value is already available from `createWorldToScreen`.
-
-### 1d. Test
-
-Visual only — verify manually. Clouds should:
-- Drift slowly left as camera pans right during runup
-- Move at different speeds per layer (far = barely moves, near = noticeable)
-- Tile seamlessly (no gaps when camera reaches field end)
-
----
-
-## Feature 2 — Sector Lines on the Field
-
-### Problem
-
-Javelin rules require landing within a 28.96° sector, but the sector is invisible. Players get sector fouls without understanding why.
-
-### 2a. Draw sector lines in `drawTrackAndField`
-
-Import the sector angle from `scoring.ts`:
-
-```ts
-import { SECTOR_HALF_ANGLE_RAD } from './scoring';
-```
-
-Add sector drawing at the end of `drawTrackAndField`, after the distance markers:
-
-```ts
-const drawSectorLines = (
-  ctx: CanvasRenderingContext2D,
-  toScreen: WorldToScreen,
-  height: number,
-  worldMaxX: number
-): void => {
-  const groundY = height - CAMERA_GROUND_BOTTOM_PADDING;
-  const throwLineScreen = toScreen({ xM: THROW_LINE_X_M, yM: 0 });
-
-  // The sector fans out from the throw line
-  // In the top-down view projected to side-on, we draw the sector boundaries
-  // as angled lines on the ground surface
-  const sectorLengthM = Math.min(worldMaxX - THROW_LINE_X_M + 10, FIELD_MAX_DISTANCE_M);
-
-  if (sectorLengthM <= 0) return;
-
-  // Left sector line (positive Z direction, drawn as upward offset on field)
-  // Right sector line (negative Z, drawn as downward offset)
-  // Since this is a 2D side-view, we show sector as subtle fanning lines on the ground
-
-  ctx.save();
-  ctx.setLineDash([6, 8]);
-  ctx.strokeStyle = 'rgba(255, 93, 78, 0.25)';
-  ctx.lineWidth = 1.5;
-
-  // Draw two angled lines from throw line extending forward
-  const farX = toScreen({ xM: THROW_LINE_X_M + sectorLengthM, yM: 0 }).x;
-
-  // Upper sector boundary (represents +Z lateral offset)
-  const lateralOffsetPx = Math.tan(SECTOR_HALF_ANGLE_RAD) * (farX - throwLineScreen.x) * 0.12;
-  ctx.beginPath();
-  ctx.moveTo(throwLineScreen.x, groundY);
-  ctx.lineTo(farX, groundY - lateralOffsetPx);
-  ctx.stroke();
-
-  // Lower sector boundary (represents -Z lateral offset)
-  ctx.beginPath();
-  ctx.moveTo(throwLineScreen.x, groundY);
-  ctx.lineTo(farX, groundY + lateralOffsetPx);
-  ctx.stroke();
-
-  ctx.setLineDash([]);
-  ctx.restore();
-
-  // Label
-  ctx.save();
-  ctx.fillStyle = 'rgba(163, 33, 26, 0.3)';
-  ctx.font = '600 10px ui-sans-serif';
-  ctx.fillText('28.96°', throwLineScreen.x + 8, groundY - lateralOffsetPx - 4);
-  ctx.restore();
-};
-```
-
-Call at the end of `drawTrackAndField`:
-
-```ts
-drawSectorLines(ctx, toScreen, height, worldMaxX);
-```
-
-### 2b. Only show during relevant phases
-
-Sector lines are only meaningful during flight and result:
-
-```ts
-// In drawTrackAndField, pass the phase tag
-if (phaseTag === 'flight' || phaseTag === 'result' || phaseTag === 'fault') {
-  drawSectorLines(ctx, toScreen, height, worldMaxX);
 }
 ```
 
-Update `drawTrackAndField` signature to accept `phaseTag: string`.
+Import `RHYTHM_TARGET_PHASE01` from `./constants` in `renderMeter.ts` (add to existing imports).
 
-### 2c. Test
+### 1b. Audio beat tick
 
-Visual only. Verify that:
-- Faint dashed lines fan out from the throw line during flight
-- Lines are only visible during flight/result phases
-- A javelin landing outside the fan area corresponds to a sector foul
-
----
-
-## Feature 3 — Landing Distance Marker
-
-### Problem
-
-When the javelin lands, the distance appears only in the HUD text. The moment of payoff deserves an on-field celebration.
-
-### 3a. Draw distance flag at landing point
-
-Add a new function in `render.ts`:
+Create **`src/features/javelin/game/audio.ts`**:
 
 ```ts
-const drawLandingMarker = (
-  ctx: CanvasRenderingContext2D,
-  toScreen: WorldToScreen,
-  landingXM: number,
-  distanceM: number,
-  resultKind: ResultKind,
-  formatNumber: (n: number) => string
-): void => {
-  const landing = toScreen({ xM: landingXM, yM: 0 });
-  const groundY = landing.y;
-
-  // Flag pole
-  ctx.strokeStyle = resultKind === 'valid' ? '#1f9d44' : '#cf3a2f';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(landing.x, groundY + 5);
-  ctx.lineTo(landing.x, groundY - 36);
-  ctx.stroke();
-
-  // Flag
-  ctx.fillStyle = resultKind === 'valid' ? '#22c272' : '#e0453a';
-  ctx.beginPath();
-  ctx.moveTo(landing.x, groundY - 36);
-  ctx.lineTo(landing.x + 28, groundY - 30);
-  ctx.lineTo(landing.x, groundY - 24);
-  ctx.closePath();
-  ctx.fill();
-
-  // Distance text on flag
-  ctx.fillStyle = '#ffffff';
-  ctx.font = '700 10px ui-sans-serif';
-  ctx.textAlign = 'left';
-  ctx.fillText(`${formatNumber(distanceM)}m`, landing.x + 4, groundY - 28);
-
-  // Ground spike mark
-  ctx.fillStyle = 'rgba(15, 40, 60, 0.35)';
-  ctx.beginPath();
-  ctx.arc(landing.x, groundY + 2, 3, 0, Math.PI * 2);
-  ctx.fill();
+type BeatAudioContext = {
+  ctx: AudioContext;
+  lastTickAtMs: number;
+  minIntervalMs: number;
 };
-```
 
-### 3b. Call during result phase
+let audioState: BeatAudioContext | null = null;
 
-In `renderGame`, after drawing the javelin:
-
-```ts
-if (state.phase.tag === 'result') {
-  drawLandingMarker(
-    ctx,
-    toScreen,
-    state.phase.landingXM,
-    state.phase.distanceM,
-    state.phase.resultKind,
-    (n) => numberFormat.format(n)
-  );
-}
-```
-
-The `numberFormat` (Intl.NumberFormat) is already passed to `renderGame` — expose it to this function. Or pass the pre-formatted string.
-
-**Note**: `renderGame` currently receives `numberFormat` — update the signature to make it available here, or format the number before calling `drawLandingMarker`.
-
-### 3c. Animate marker appearance
-
-Add a fade-in based on time in result phase. This requires knowing when the result phase started. Use `state.nowMs` relative to the javelin's `releasedAtMs` (available via `landingAngleRad` won't work — add a `resultAtMs` field to the `result` phase, or use a simpler approach):
-
-**Simple approach** — fade in over 400ms from first render of result:
-
-```ts
-// Track with a module-level variable (ok for rendering)
-let lastResultRoundId = -1;
-let resultShownAtMs = 0;
-
-if (state.phase.tag === 'result') {
-  if (state.roundId !== lastResultRoundId) {
-    lastResultRoundId = state.roundId;
-    resultShownAtMs = state.nowMs;
+const ensureAudioContext = (): BeatAudioContext => {
+  if (audioState === null) {
+    audioState = {
+      ctx: new AudioContext(),
+      lastTickAtMs: 0,
+      minIntervalMs: 200 // debounce
+    };
   }
-  const fadeAge = state.nowMs - resultShownAtMs;
-  const alpha = Math.min(1, fadeAge / 400);
+  return audioState;
+};
 
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  drawLandingMarker(ctx, toScreen, ...);
-  ctx.restore();
+/**
+ * Play a short tick sound. Call once per beat.
+ * Uses a brief sine wave oscillator — no audio files needed.
+ */
+export const playBeatTick = (nowMs: number, isInZone: boolean): void => {
+  const audio = ensureAudioContext();
+  if (nowMs - audio.lastTickAtMs < audio.minIntervalMs) {
+    return;
+  }
+  audio.lastTickAtMs = nowMs;
+
+  const osc = audio.ctx.createOscillator();
+  const gain = audio.ctx.createGain();
+  osc.connect(gain);
+  gain.connect(audio.ctx.destination);
+
+  osc.frequency.value = isInZone ? 880 : 440;
+  osc.type = 'sine';
+
+  const now = audio.ctx.currentTime;
+  gain.gain.setValueAtTime(isInZone ? 0.15 : 0.06, now);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+
+  osc.start(now);
+  osc.stop(now + 0.06);
+};
+
+/** Resume audio context (must be called from user gesture). */
+export const resumeAudioContext = (): void => {
+  if (audioState?.ctx.state === 'suspended') {
+    audioState.ctx.resume();
+  }
+};
+```
+
+### 1c. Trigger beat tick in the render loop
+
+In **`render.ts`** → `renderGame`, after `drawWorldTimingMeter(ctx, state, headScreen)`:
+
+```ts
+// Beat audio tick
+if (state.phase.tag === 'runup') {
+  const meterPhase = getRunupMeterPhase01(state);
+  if (meterPhase !== null) {
+    const distToTarget = Math.abs(meterPhase - RHYTHM_TARGET_PHASE01);
+    const wrappedDist = Math.min(distToTarget, 1 - distToTarget);
+    if (wrappedDist < 0.02) {
+      playBeatTick(state.nowMs, wrappedDist < 0.01);
+    }
+  }
 }
 ```
 
-### 3d. Test
-
-Visual only. Verify:
-- Green flag appears at landing point for valid throws
-- Red flag appears for fouls
-- Distance text is readable on the flag
-- Flag fades in smoothly
-
----
-
-## Feature 4 — Dynamic Head/Eye Direction
-
-### Problem
-
-The athlete's head and eye always face the same direction regardless of phase. During aim/throw, the head should tilt toward the throw angle.
-
-### 4a. Add `headTiltRad` to pose geometry output
-
-In `athletePose.ts`, add to `AthletePoseGeometry`:
-
-```diff
-  export type AthletePoseGeometry = {
-    head: PointM;
-+   headTiltRad: number;  // radians, 0 = forward, positive = looking up
-    shoulderCenter: PointM;
+Add imports to `render.ts`:
+```ts
+import { playBeatTick } from './audio';
+import { getRunupMeterPhase01 } from './selectors';
+import { RHYTHM_TARGET_PHASE01 } from './constants';
 ```
 
-### 4b. Compute head tilt per pose
+### 1d. Resume audio on first user interaction
 
-In `computeAthletePoseGeometry`, after computing the `head` position:
+In **`usePointerControls.ts`**, add at the top of any mouse/keyboard handler:
 
 ```ts
-const headTiltRad = (() => {
-  if (pose.animTag === 'idle') return 0;
-  if (pose.animTag === 'run') return -0.1 - 0.08 * speedNorm; // slight forward lean
-  if (pose.animTag === 'aim' || pose.animTag === 'throw') {
-    // Look toward throw angle
-    const throwAngleRad = toRad(aimAngleDeg);
-    return throwAngleRad * 0.35; // partial tilt toward aim
-  }
-  if (pose.animTag === 'followThrough') return -0.15; // look forward/down
-  if (pose.animTag === 'fall') return -0.5; // looking at ground
-  return 0;
-})();
+import { resumeAudioContext } from '../game/audio';
+
+// Inside onMouseDown, first line:
+resumeAudioContext();
 ```
 
-Include in the return:
+Browsers require a user gesture before `AudioContext` can play sound. This resumes it on first click.
 
-```diff
-  return {
-    head,
-+   headTiltRad,
-    shoulderCenter,
-```
+### 1e. Test considerations
 
-### 4c. Use head tilt in `render.ts` for eye placement
-
-In `drawAthlete`, the eye is currently drawn at a fixed offset:
+- Audio is side-effectful — don't test it in unit tests
+- The visual flash is rendering-only — verify manually
+- Add a test that `getRunupMeterPhase01` returns values near 0.5 at beat boundaries:
 
 ```ts
-ctx.arc(p.head.x - 1.4, p.head.y - 0.7, 1.2, 0, Math.PI * 2);
-```
-
-Update to use tilt:
-
-```ts
-// Eye position relative to head center, rotated by headTiltRad
-const eyeOffsetX = Math.cos(pose.headTiltRad) * 3.5 + Math.sin(pose.headTiltRad) * 0.5;
-const eyeOffsetY = -Math.sin(pose.headTiltRad) * 3.5 + Math.cos(pose.headTiltRad) * 0.5;
-ctx.arc(p.head.x + eyeOffsetX, p.head.y - eyeOffsetY, 1.2, 0, Math.PI * 2);
-```
-
-The `drawAthlete` function needs access to the original `AthletePoseGeometry` (it currently only receives the screen-projected points). Two approaches:
-
-**Approach A** — Pass `headTiltRad` as an additional parameter to `drawAthlete`:
-```diff
-  const drawAthlete = (
-    ctx: CanvasRenderingContext2D,
-    toScreen: WorldToScreen,
-    pose: AthletePoseGeometry,
--   drawFrontArmOverHead: boolean
-+   drawFrontArmOverHead: boolean,
-+   headTiltRad: number
-  ): HeadAnchor => {
-```
-
-**Approach B** — Include `headTiltRad` in the screen-space projected points object `p`.
-
-Approach A is simpler — the tilt is already in the pose.
-
-### 4d. Test
-
-Add a test in `athletePose.test.ts`:
-
-```ts
-it('head tilts toward aim angle during charge', () => {
-  const highAim = computeAthletePoseGeometry({ animTag: 'aim', animT: 0.5 }, 0.5, 60, 10);
-  const lowAim = computeAthletePoseGeometry({ animTag: 'aim', animT: 0.5 }, 0.5, 10, 10);
-  expect(highAim.headTiltRad).toBeGreaterThan(lowAim.headTiltRad);
-});
-
-it('head tilts forward during run', () => {
-  const pose = computeAthletePoseGeometry({ animTag: 'run', animT: 0.5 }, 0.8, 36, 10);
-  expect(pose.headTiltRad).toBeLessThan(0); // forward lean
+it('meter phase reaches target at beat boundary', () => {
+  const state = makeRunupState({ startedAtMs: 1000, nowMs: 1000 + BEAT_INTERVAL_MS * 3 });
+  const phase = getRunupMeterPhase01(state);
+  expect(phase).toBeCloseTo(RHYTHM_TARGET_PHASE01, 1);
 });
 ```
 
 ---
 
-## Feature 5 — Smooth Camera Transitions
+## Feature 2 — Throw Quality Flash Feedback
 
 ### Problem
 
-When the game transitions between phases, camera parameters (view width, Y scale) change instantly, causing jarring jumps. For example, `chargeAim` uses `CAMERA_THROW_VIEW_WIDTH_M = 19.5` while `runup` uses `CAMERA_RUNUP_VIEW_WIDTH_M = 21`.
+When the player releases the charge (RMB up), the meter shows which quality zone they hit but only as a static cursor color. There's no celebratory or punishing flash at the critical release moment.
 
-### 5a. Add smoothed camera state
+### 2a. Add release feedback state to `types.ts`
 
-The camera needs to interpolate between target values over time. Since the render function is stateless (called fresh each frame), we need either:
-- Module-level mutable state for the camera (simple, works for canvas rendering)
-- Or state on `GameState` (pure, but invasive)
-
-**Recommended: module-level camera interpolation** in `render.ts` (or `camera.ts` after refactoring):
-
-```ts
-type SmoothedCamera = {
-  viewWidthM: number;
-  yScale: number;
-  targetX: number;
-  lastPhaseTag: string;
-};
-
-let smoothCam: SmoothedCamera = {
-  viewWidthM: CAMERA_DEFAULT_VIEW_WIDTH_M,
-  yScale: CAMERA_Y_SCALE_RUNUP,
-  targetX: 0,
-  lastPhaseTag: 'idle',
-};
-
-const CAMERA_LERP_SPEED = 4.5; // units per second — higher = snappier
-
-const lerpToward = (current: number, target: number, dtFactor: number): number =>
-  current + (target - current) * Math.min(1, dtFactor);
-```
-
-### 5b. Create a smoothed camera update function
-
-```ts
-const updateSmoothedCamera = (state: GameState, dtMs: number): void => {
-  const targetViewWidth = getViewWidthM(state);
-  const targetYScale = getVerticalScale(state);
-  const targetX = getCameraTargetX(state);
-  const dt = (dtMs / 1000) * CAMERA_LERP_SPEED;
-
-  // On phase change, use a faster lerp for the first few frames
-  const phaseChanged = state.phase.tag !== smoothCam.lastPhaseTag;
-  const lerpFactor = phaseChanged ? Math.min(1, dt * 2.5) : Math.min(1, dt);
-
-  smoothCam = {
-    viewWidthM: lerpToward(smoothCam.viewWidthM, targetViewWidth, lerpFactor),
-    yScale: lerpToward(smoothCam.yScale, targetYScale, lerpFactor),
-    targetX: lerpToward(smoothCam.targetX, targetX, Math.min(1, dt * 1.2)),
-    lastPhaseTag: state.phase.tag,
-  };
-};
-```
-
-### 5c. Modify `createWorldToScreen` to use smoothed values
-
-```ts
-const createWorldToScreen = (
-  state: GameState,
-  width: number,
-  height: number,
-  dtMs: number
-): { toScreen: WorldToScreen; worldMinX: number; worldMaxX: number } => {
-  updateSmoothedCamera(state, dtMs);
-
-  const viewWidthM = smoothCam.viewWidthM;
-  const targetX = smoothCam.targetX;
-  const ahead = getCameraAheadRatio(state); // keep instant (doesn't cause visible jumps)
-  const worldMinLimit = -viewWidthM * ahead;
-  const worldMinX = clamp(
-    targetX - viewWidthM * ahead,
-    worldMinLimit,
-    FIELD_MAX_DISTANCE_M - viewWidthM
-  );
-  const worldMaxX = worldMinX + viewWidthM;
-  const playableWidth = width - RUNWAY_OFFSET_X - 24;
-  const yScale = smoothCam.yScale;
-
-  const toScreen: WorldToScreen = ({ xM, yM }) => {
-    const x = RUNWAY_OFFSET_X + ((xM - worldMinX) / viewWidthM) * playableWidth;
-    const y = height - CAMERA_GROUND_BOTTOM_PADDING - yM * yScale;
-    return { x, y };
-  };
-
-  return { toScreen, worldMinX, worldMaxX };
-};
-```
-
-### 5d. Pass `dtMs` to `renderGame`
-
-Update the `renderGame` signature:
+Add `releaseFlashAtMs` to the `throwAnim` phase:
 
 ```diff
-  export const renderGame = (
+  | {
+      tag: 'throwAnim';
+      speedNorm: number;
+      athleteXM: number;
+      angleDeg: number;
+      forceNorm: number;
+      releaseQuality: TimingQuality;
+      animProgress: number;
+      released: boolean;
+      athletePose: AthletePoseState;
++     releaseFlashAtMs: number;
+    }
+```
+
+### 2b. Set `releaseFlashAtMs` in `update.ts`
+
+In the `releaseCharge` case of `reduceGameState`, when building the `throwAnim` phase object (around line 4598):
+
+```diff
+  phase: {
+    tag: 'throwAnim',
+    speedNorm: state.phase.speedNorm,
+    athleteXM: state.phase.runupDistanceM,
+    angleDeg: state.phase.angleDeg,
+    forceNorm,
+    releaseQuality: quality,
+    animProgress: 0,
+    released: false,
++   releaseFlashAtMs: action.atMs,
+    athletePose: {
+      animTag: 'throw',
+      animT: 0
+    }
+  }
+```
+
+### 2c. Render the flash in `render.ts`
+
+In `renderGame`, after the meter drawing (`drawWorldTimingMeter`) and before the closing of the function:
+
+```ts
+// Release quality flash
+if (state.phase.tag === 'throwAnim') {
+  const flashAge = state.nowMs - state.phase.releaseFlashAtMs;
+  const FLASH_DURATION_MS = 600;
+  if (flashAge < FLASH_DURATION_MS) {
+    const alpha = 1 - flashAge / FLASH_DURATION_MS;
+    const flashColor =
+      state.phase.releaseQuality === 'perfect'
+        ? `rgba(34, 194, 114, ${alpha * 0.6})`
+        : state.phase.releaseQuality === 'good'
+          ? `rgba(50, 156, 245, ${alpha * 0.5})`
+          : `rgba(246, 210, 85, ${alpha * 0.4})`;
+
+    // Fullscreen flash overlay
+    ctx.save();
+    ctx.fillStyle = flashColor;
+    ctx.fillRect(0, 0, width, height);
+    ctx.restore();
+
+    // Text label
+    const label =
+      state.phase.releaseQuality === 'perfect'
+        ? 'PERFECT!'
+        : state.phase.releaseQuality === 'good'
+          ? 'GOOD'
+          : 'MISS';
+    const textAlpha = Math.min(1, alpha * 1.6);
+    const scale = 1 + (1 - alpha) * 0.3;
+    ctx.save();
+    ctx.globalAlpha = textAlpha;
+    ctx.font = `900 ${Math.round(28 * scale)}px ui-sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#0b2238';
+    ctx.fillText(label, width / 2, 72);
+    ctx.restore();
+  }
+}
+```
+
+### 2d. Test
+
+```ts
+it('sets release flash timestamp on charge release', () => {
+  // Set up chargeAim state, dispatch releaseCharge at atMs: 5000
+  // Expect state.phase.tag === 'throwAnim'
+  // Expect state.phase.releaseFlashAtMs === 5000
+});
+```
+
+---
+
+## Feature 3 — Cyclic Charge Meter
+
+### Problem
+
+The charge meter fills linearly from 0 to 1 and faults on overfill. There's only one pass through the perfect window, so the timing skill ceiling is low — a fast release always scores adequately. A cyclic meter would let the player wait for the optimal moment in a repeating pattern, adding tension and skill.
+
+### Current state after refactoring
+
+The `cycles` field was already removed from `ChargeMeterState`. The type is now clean:
+
+```ts
+export type ChargeMeterState = {
+  phase01: number;
+  perfectWindow: MeterWindow;
+  goodWindow: MeterWindow;
+  lastQuality: TimingQuality | null;
+  lastSampleAtMs: number;
+};
+```
+
+The overfill logic still uses `CHARGE_OVERFILL_FAULT_01 = 1.03` (from `tuning.ts`). The core change is making `phase01` wrap instead of clamp, and replacing the overfill threshold with a cycle count.
+
+### 3a. Change charge fill to cycle in `tickChargeAim` (update.ts)
+
+Currently at line ~4238:
+
+```ts
+const elapsedMs = Math.max(0, nowMs - state.phase.chargeStartedAtMs);
+const rawFill01 = elapsedMs / CHARGE_FILL_DURATION_MS;
+if (rawFill01 >= CHARGE_OVERFILL_FAULT_01) {
+  return { ...state, phase: createLateReleaseFaultPhase(state.phase, nowMs) };
+}
+const phase01 = clamp(rawFill01, 0, 1);
+```
+
+Replace with:
+
+```ts
+const elapsedMs = Math.max(0, nowMs - state.phase.chargeStartedAtMs);
+const rawFill01 = elapsedMs / CHARGE_FILL_DURATION_MS;
+const fullCycles = Math.floor(rawFill01);
+if (fullCycles >= CHARGE_MAX_CYCLES) {
+  return { ...state, phase: createLateReleaseFaultPhase(state.phase, nowMs) };
+}
+const phase01 = clamp(rawFill01 % 1, 0, 1); // wraps on each cycle
+```
+
+### 3b. Update tuning types and values
+
+In `tuning.ts`, replace `chargeOverfillFault01` with `chargeMaxCycles`:
+
+```diff
+  type ThrowPhaseTuning = {
+    chargeFillDurationMs: number;
+-   chargeOverfillFault01: number;
++   chargeMaxCycles: number;
+    faultJavelinLaunchSpeedMs: number;
+```
+
+In `GAMEPLAY_TUNING`:
+
+```diff
+  throwPhase: {
+    chargeFillDurationMs: 800,
+-   chargeOverfillFault01: 1.03,
++   chargeMaxCycles: 3,
+    faultJavelinLaunchSpeedMs: 8.4,
+```
+
+Update the convenience alias:
+
+```diff
+- export const CHARGE_OVERFILL_FAULT_01 = GAMEPLAY_TUNING.throwPhase.chargeOverfillFault01;
++ export const CHARGE_MAX_CYCLES = GAMEPLAY_TUNING.throwPhase.chargeMaxCycles;
+```
+
+### 3c. Update the `releaseCharge` handler
+
+In `reduceGameState`, the `releaseCharge` case (line ~4574) also checks `rawFill01 >= CHARGE_OVERFILL_FAULT_01`. Update:
+
+```diff
+- if (rawFill01 >= CHARGE_OVERFILL_FAULT_01) {
++ const fullCycles = Math.floor(rawFill01);
++ if (fullCycles >= CHARGE_MAX_CYCLES) {
+```
+
+And the phase01 computation:
+
+```diff
+- const phase01 = clamp(rawFill01, 0, 1);
++ const phase01 = clamp(rawFill01 % 1, 0, 1);
+```
+
+### 3d. Update imports
+
+In `update.ts`, replace:
+
+```diff
+- import { CHARGE_OVERFILL_FAULT_01 } from './tuning';
++ import { CHARGE_MAX_CYCLES } from './tuning';
+```
+
+Search the entire codebase for `CHARGE_OVERFILL_FAULT_01` — it should only appear in `update.ts` and `tuning.ts`. Remove all references.
+
+### 3e. Optional: cycle count indicator in meter
+
+In `renderMeter.ts`, the `getWorldMeterState` function for `chargeAim` can expose cycle info for a visual indicator. Optionally draw small dots below the meter (filled for elapsed cycles, empty for remaining). This is a nice-to-have.
+
+### 3f. Test updates
+
+Update tests in `reducer.test.ts`:
+
+```ts
+it('faults after exceeding max charge cycles', () => {
+  let state = makeChargeAimState({ chargeStartedAtMs: 1000 });
+  // Tick past 3 full cycles: 3 * 800 = 2400 ms
+  state = gameReducer(state, { type: 'tick', dtMs: 2500, nowMs: 3500 });
+  expect(state.phase.tag).toBe('fault');
+});
+
+it('allows release on second cycle with correct quality', () => {
+  let state = makeChargeAimState({ chargeStartedAtMs: 1000 });
+  // Tick to 1.85 cycles (1480 ms) — phase01 wraps to 0.85, in perfect window
+  state = gameReducer(state, { type: 'tick', dtMs: 1480, nowMs: 2480 });
+  state = gameReducer(state, { type: 'releaseCharge', atMs: 2480 });
+  expect(state.phase.tag).toBe('throwAnim');
+  if (state.phase.tag === 'throwAnim') {
+    expect(state.phase.releaseQuality).toBe('perfect');
+  }
+});
+```
+
+Remove or update any existing tests that reference `CHARGE_OVERFILL_FAULT_01`.
+
+### 3g. Tuning reference
+
+| Parameter | Easy | Default | Hard |
+|-----------|------|---------|------|
+| `chargeMaxCycles` | 5 | 3 | 2 |
+| `chargeFillDurationMs` | 1000 | 800 | 600 |
+
+---
+
+## Feature 4 — Wind Strategy Indicators
+
+### Problem
+
+Wind is displayed as a number and vane arrow in the corner, but there's no guidance on how to compensate. The wind affects physics but the player can't strategize around it.
+
+### 4a. Wind streaks visualization in `render.ts`
+
+Update `drawWindVane` signature to accept `nowMs` and add animated streaks:
+
+```diff
+  const drawWindVane = (
     ctx: CanvasRenderingContext2D,
-    state: GameState,
     width: number,
-    height: number,
-+   dtMs: number,
-    numberFormat: Intl.NumberFormat,
-    throwLineLabel: string
+    windMs: number,
++   nowMs: number,
+    localeFormatter: Intl.NumberFormat
   ): void => {
 ```
 
-In `GameCanvas.tsx`, track dtMs between renders:
+After the existing flag and text drawing, add wind streaks:
 
 ```ts
-const lastRenderRef = useRef<number>(performance.now());
-
-useEffect(() => {
-  const canvas = canvasRef.current;
-  if (!canvas) return;
-  const now = performance.now();
-  const dtMs = Math.min(now - lastRenderRef.current, 40);
-  lastRenderRef.current = now;
-  // ... existing setup ...
-  renderGame(context, state, rect.width, rect.height, dtMs, numberFormat, t('javelin.throwLine'));
-}, [state, numberFormat, t]);
+  // Animated wind streaks across the sky
+  const intensity = Math.abs(windMs) / 2.5; // 0–1
+  const dir = windMs >= 0 ? 1 : -1;
+  const streakCount = Math.ceil(intensity * 5);
+  ctx.save();
+  ctx.globalAlpha = 0.08 + intensity * 0.12;
+  ctx.strokeStyle = '#8cc4e0';
+  ctx.lineWidth = 1.5;
+  for (let i = 0; i < streakCount; i++) {
+    const baseX = (i * width / streakCount) + ((nowMs * 0.03 * dir) % width);
+    const y = 30 + i * 22;
+    const len = 20 + intensity * 30;
+    ctx.beginPath();
+    ctx.moveTo(((baseX % (width + 60)) - 30), y);
+    ctx.lineTo(((baseX % (width + 60)) - 30) + len * dir, y);
+    ctx.stroke();
+  }
+  ctx.restore();
 ```
 
-### 5e. Reset camera on round start
+Update the call in `renderGame` to pass `state.nowMs`:
+
+```diff
+- drawWindVane(ctx, width, state.windMs, numberFormat);
++ drawWindVane(ctx, width, state.windMs, state.nowMs, numberFormat);
+```
+
+### 4b. Angle compensation hint in HudPanel
+
+In **`HudPanel.tsx`**, add a wind hint when in `chargeAim` phase:
 
 ```ts
-// In renderGame or updateSmoothedCamera:
-if (state.phase.tag === 'idle') {
-  // Snap to default camera (no lingering lerp from previous throw)
-  smoothCam = {
-    viewWidthM: CAMERA_DEFAULT_VIEW_WIDTH_M,
-    yScale: CAMERA_Y_SCALE_RUNUP,
-    targetX: RUNUP_START_X_M,
-    lastPhaseTag: 'idle',
+const windHint = (() => {
+  if (state.phase.tag !== 'chargeAim') return '';
+  if (Math.abs(state.windMs) < 0.3) return '';
+  if (state.windMs < -0.3) return t('javelin.windHintHeadwind');
+  return t('javelin.windHintTailwind');
+})();
+```
+
+Display below existing hint content:
+```tsx
+{windHint && <div className="hud-hint hud-hint-wind">{windHint}</div>}
+```
+
+### 4c. Add i18n keys
+
+Add to all three locale files:
+
+**en/common.json:**
+```json
+"javelin.windHintHeadwind": "Headwind — aim higher for distance",
+"javelin.windHintTailwind": "Tailwind — lower angle carries further"
+```
+
+**fi/common.json:**
+```json
+"javelin.windHintHeadwind": "Vastatuuli — tähtää korkeammalle",
+"javelin.windHintTailwind": "Myötätuuli — matalampi kulma kantaa pidemmälle"
+```
+
+**sv/common.json:**
+```json
+"javelin.windHintHeadwind": "Motvind — sikta högre för distans",
+"javelin.windHintTailwind": "Medvind — lägre vinkel bär längre"
+```
+
+### 4d. Test
+
+Visual only — verify wind streaks animate in the correct direction and hints appear during chargeAim.
+
+---
+
+## Feature 5 — Attempt Counter / Best-of-6
+
+### Problem
+
+Each throw is independent with no session structure. Real javelin gives 3–6 attempts.
+
+### 5a. Extend `GameState` in `types.ts`
+
+```diff
+  export type GameState = {
+    nowMs: number;
+    roundId: number;
+    windMs: number;
+    aimAngleDeg: number;
+    phase: GamePhase;
++   attemptsTotal: number;
++   attemptNumber: number;
++   sessionBestM: number | null;
+  };
+```
+
+### 5b. Update `createInitialGameState` in `update.ts`
+
+```diff
+  export const createInitialGameState = (): GameState => ({
+    nowMs: performance.now(),
+    roundId: 0,
+    windMs: 0,
+    aimAngleDeg: ANGLE_DEFAULT_DEG,
+-   phase: { tag: 'idle' }
++   phase: { tag: 'idle' },
++   attemptsTotal: 6,
++   attemptNumber: 0,
++   sessionBestM: null,
+  });
+```
+
+### 5c. Add `startSession` action to `types.ts`
+
+```diff
+  export type GameAction =
++   | { type: 'startSession'; attempts: number }
+    | { type: 'startRound'; atMs: number; windMs: number }
+```
+
+Handle in `reduceGameState`:
+```ts
+case 'startSession': {
+  return {
+    ...createInitialGameState(),
+    attemptsTotal: action.attempts,
+    attemptNumber: 0,
+    sessionBestM: null,
   };
 }
 ```
 
-### 5f. Test
-
-Camera smoothing is visual — verify manually:
-- Runup → chargeAim transition: view width narrows smoothly over ~200ms
-- ChargeAim → flight transition: view widens smoothly
-- Flight → result: camera settles smoothly on landing point
-- No snapping or sudden jumps in any transition
-
-For the `getPlayerAngleAnchorScreen` function (used by `usePointerControls`), it should use the **target** (not smoothed) values so pointer controls remain responsive. Keep a separate `createWorldToScreenForAnchor` that uses raw values, or pass a flag.
-
-### 5g. Update render test considerations
-
-`getCameraTargetX` tests are unaffected (they test the target, not the smoothed value). If render tests call `createWorldToScreen`, they may need to pass `dtMs` or mock the smooth state. Since `smoothCam` is module-level, reset it in test setup:
-
-```ts
-// If needed, export a reset function:
-export const resetSmoothCamera = (): void => {
-  smoothCam = { viewWidthM: CAMERA_DEFAULT_VIEW_WIDTH_M, ... };
-};
-```
-
----
-
-## Feature 6 — Improved Follow-Through Foot Plant
-
-### Problem
-
-At high speed, the athlete slides forward during follow-through without a convincing braking stance. The legs should show a more pronounced plant.
-
-### 6a. Scale follow-through curves by entry speed
-
-In `athletePose.ts`, modify `followThroughCurves` to accept `speedNorm`:
+### 5d. Update `startRound` to increment attempt counter
 
 ```diff
-- const followThroughCurves = (t01: number): MotionCurves => {
-+ const followThroughCurves = (t01: number, speedNorm: number): MotionCurves => {
-    const t = clamp01(t01);
-    const step01 = easeOutQuad(Math.min(1, t / 0.78));
-    const settle01 = easeInOutSine(clamp01((t - 0.38) / 0.62));
-+   const brakingIntensity = clamp01(speedNorm * 1.4); // 0 at slow, ~1 at full speed
+  case 'startRound': {
++   if (state.attemptNumber >= state.attemptsTotal) {
++     return state; // session over
++   }
     return {
--     leanRad: lerp(0.16, -0.05, settle01),
-+     leanRad: lerp(0.16 + brakingIntensity * 0.12, -0.05, settle01),
-      pelvisShiftXM: lerp(0.02, 0.22, step01),
-      pelvisBobYM: 0.006 + 0.014 * Math.sin(t * Math.PI),
--     hipFront: lerp(0.52, 0.38, settle01),
-+     hipFront: lerp(0.52 + brakingIntensity * 0.18, 0.38, settle01),
--     hipBack: lerp(-0.44, -0.3, settle01),
-+     hipBack: lerp(-0.44 - brakingIntensity * 0.12, -0.3, settle01),
--     kneeFront: lerp(0.3, 0.42
+      ...state,
+      nowMs: action.atMs,
+      roundId: state.roundId + 1,
++     attemptNumber: state.attemptNumber + 1,
+      windMs: action.windMs,
+      phase: {
+        tag: 'runup',
+        ...
+```
+
+### 5e. Update session best when result lands
+
+In `tickFlight` (update.ts), where it transitions to `result` (around line 4390):
+
+```diff
+  return {
+    ...state,
++   sessionBestM:
++     legality.resultKind === 'valid'
++       ? Math.max(state.sessionBestM ?? 0, computeCompetitionDistanceM(landingTipXM))
++       : state.sessionBestM,
+    phase: {
+      tag: 'result',
+```
+
+### 5f. Update `JavelinPage.tsx` UI
+
+Show attempt counter and session best in the actions area:
+
+```tsx
+<div className="hud-topline">
+  {state.attemptNumber > 0 && (
+    <span className="attempt-counter">
+      {t('javelin.attempt')} {state.attemptNumber}/{state.attemptsTotal}
+    </span>
+  )}
+  {state.sessionBestM !== null && (
+    <span className="session-best">
+      {t('javelin.sessionBest')}: {formatNumber(state.sessionBestM)} m
+    </span>
+  )}
+</div>
+```
+
+Change the play-again button to show "Next attempt" vs "New sessi
 
 // [TRUNCATED at 20000 chars]
 
 ```
-> NOTE: Truncated to 20000 chars (original: 24661).
-> meta: lines=772 chars=24661 truncated=yes
-
-### Other code & helpers
+> NOTE: Truncated to 20000 chars (original: 25875).
+> meta: lines=868 chars=25875 truncated=yes
 
 
 ## AGENTS.md
@@ -1124,15 +1133,27 @@ _JavaScript/TypeScript package manifest (scripts, dependencies, metadata)._
   "javelin.runupHint": "Time clicks to the green zone. Distance to line",
   "javelin.throwLine": "Throw Line",
   "javelin.speedPassiveHint": "Base speed also builds without clicking.",
+  "javelin.windHintHeadwind": "Headwind - aim higher for distance",
+  "javelin.windHintTailwind": "Tailwind - lower angle carries further",
+  "javelin.attempt": "Attempt",
+  "javelin.sessionBest": "Best",
+  "action.nextAttempt": "Next Attempt",
+  "action.newSession": "New Session (6 attempts)",
+  "help.touch1": "Tap: build rhythm speed",
+  "help.touch2": "Hold: charge throw force",
+  "help.touch3": "Drag while holding: aim angle",
+  "help.touch4": "Release: throw",
   "javelin.landingTipFirst": "Tip-first landing",
   "javelin.landingFlat": "Flat landing",
   "javelin.result.foul_line": "Foul: line crossed",
   "javelin.result.foul_sector": "Foul: outside sector",
-  "javelin.result.foul_tip_first": "Foul: tip did not land first"
+  "javelin.result.foul_tip_first": "Foul: tip did not land first",
+  "result.notSavedInvalid": "Invalid throw - result is not saved",
+  "result.notHighscore": "Not a highscore - result is not saved"
 }
 
 ```
-> meta: lines=20 chars=795 truncated=no
+> meta: lines=32 chars=1398 truncated=no
 
 
 ## public/locales/fi/common.json
@@ -1151,15 +1172,27 @@ _JavaScript/TypeScript package manifest (scripts, dependencies, metadata)._
   "javelin.runupHint": "Ajoita klikkaukset vihreään alueeseen. Heittoviivalle",
   "javelin.throwLine": "Heittoviiva",
   "javelin.speedPassiveHint": "Perusvauhti kasvaa myös ilman klikkejä.",
+  "javelin.windHintHeadwind": "Vastatuuli - tähtää korkeammalle",
+  "javelin.windHintTailwind": "Myötätuuli - matalampi kulma kantaa pidemmälle",
+  "javelin.attempt": "Yritys",
+  "javelin.sessionBest": "Paras",
+  "action.nextAttempt": "Seuraava yritys",
+  "action.newSession": "Uusi sarja (6 yritystä)",
+  "help.touch1": "Napauta: kiihdytä rytmillä",
+  "help.touch2": "Pidä pohjassa: lataa heittovoima",
+  "help.touch3": "Vedä pitäessä: säädä kulmaa",
+  "help.touch4": "Vapauta: heitä",
   "javelin.landingTipFirst": "Kärki edellä",
   "javelin.landingFlat": "Litteä alastulo",
   "javelin.result.foul_line": "Hylätty: viiva ylitetty",
   "javelin.result.foul_sector": "Hylätty: sektorin ulkopuolella",
-  "javelin.result.foul_tip_first": "Hylätty: kärki ei osunut ensin"
+  "javelin.result.foul_tip_first": "Hylätty: kärki ei osunut ensin",
+  "result.notSavedInvalid": "Virheellinen heitto - tulosta ei tallenneta",
+  "result.notHighscore": "Ei uusi ennätys - tulosta ei tallenneta"
 }
 
 ```
-> meta: lines=20 chars=812 truncated=no
+> meta: lines=32 chars=1442 truncated=no
 
 
 ## public/locales/sv/common.json
@@ -1178,15 +1211,27 @@ _JavaScript/TypeScript package manifest (scripts, dependencies, metadata)._
   "javelin.runupHint": "Tajma klicken till det gröna området. Kvar till linjen",
   "javelin.throwLine": "Kastlinje",
   "javelin.speedPassiveHint": "Grundfarten ökar även utan klick.",
+  "javelin.windHintHeadwind": "Motvind - sikta högre för distans",
+  "javelin.windHintTailwind": "Medvind - lägre vinkel bär längre",
+  "javelin.attempt": "Försök",
+  "javelin.sessionBest": "Bästa",
+  "action.nextAttempt": "Nästa försök",
+  "action.newSession": "Ny serie (6 försök)",
+  "help.touch1": "Tryck: bygg rytmfart",
+  "help.touch2": "Håll: ladda kastkraft",
+  "help.touch3": "Dra medan du håller: sikta vinkel",
+  "help.touch4": "Släpp: kasta",
   "javelin.landingTipFirst": "Spetsen först",
   "javelin.landingFlat": "Platt landning",
   "javelin.result.foul_line": "Ogiltigt: linjen överträdd",
   "javelin.result.foul_sector": "Ogiltigt: utanför sektorn",
-  "javelin.result.foul_tip_first": "Ogiltigt: spetsen landade inte först"
+  "javelin.result.foul_tip_first": "Ogiltigt: spetsen landade inte först",
+  "result.notSavedInvalid": "Ogiltigt kast - resultatet sparas inte",
+  "result.notHighscore": "Inte nytt rekord - resultatet sparas inte"
 }
 
 ```
-> meta: lines=20 chars=797 truncated=no
+> meta: lines=32 chars=1392 truncated=no
 
 ### Docs & specifications
 
@@ -1400,31 +1445,48 @@ export const CircularTimingMeter = ({
 _Reusable UI component or set of components._
 
 ```tsx
-import type { ReactElement } from 'react';
+import { useMemo, type ReactElement } from 'react';
 import { useI18n } from '../../../i18n/init';
 
 export const ControlHelp = (): ReactElement => {
   const { t } = useI18n();
+  const isTouchDevice = useMemo(() => {
+    if (typeof window === 'undefined') {
+      return false;
+    }
+    return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  }, []);
 
   return (
     <section className="card control-help" aria-label={t('help.title')}>
       <h3>{t('help.title')}</h3>
       <ul>
-        <li>{t('help.mouse1')}</li>
-        <li>{t('help.mouse2')}</li>
-        <li>{t('help.mouse3')}</li>
-        <li>{t('help.mouse4')}</li>
-        <li>{t('help.kbd1')}</li>
-        <li>{t('help.kbd2')}</li>
-        <li>{t('help.kbd3')}</li>
-        <li>{t('help.kbd4')}</li>
+        {isTouchDevice ? (
+          <>
+            <li>{t('help.touch1')}</li>
+            <li>{t('help.touch2')}</li>
+            <li>{t('help.touch3')}</li>
+            <li>{t('help.touch4')}</li>
+          </>
+        ) : (
+          <>
+            <li>{t('help.mouse1')}</li>
+            <li>{t('help.mouse2')}</li>
+            <li>{t('help.mouse3')}</li>
+            <li>{t('help.mouse4')}</li>
+            <li>{t('help.kbd1')}</li>
+            <li>{t('help.kbd2')}</li>
+            <li>{t('help.kbd3')}</li>
+            <li>{t('help.kbd4')}</li>
+          </>
+        )}
       </ul>
     </section>
   );
 };
 
 ```
-> meta: lines=23 chars=610 truncated=no
+> meta: lines=40 chars=1103 truncated=no
 
 
 ## src/features/javelin/components/GameCanvas.tsx
@@ -1453,6 +1515,15 @@ export const GameCanvas = ({ state, dispatch }: GameCanvasProps): ReactElement =
     () => new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }),
     [locale]
   );
+  const releaseFlashLabels = useMemo(
+    () => ({
+      perfect: t('hud.perfect'),
+      good: t('hud.good'),
+      miss: t('hud.miss'),
+      foulLine: t('javelin.result.foul_line')
+    }),
+    [t]
+  );
 
   usePointerControls({ canvas: canvasRef.current, dispatch, phaseTag: state.phase.tag, state });
 
@@ -1473,14 +1544,24 @@ export const GameCanvas = ({ state, dispatch }: GameCanvasProps): ReactElement =
     const dtMs = Math.min(40, Math.max(0, nowMs - lastRenderAtMsRef.current));
     lastRenderAtMsRef.current = nowMs;
     context.setTransform(dpr, 0, 0, dpr, 0, 0);
-    renderGame(context, state, rect.width, rect.height, dtMs, numberFormat, t('javelin.throwLine'));
-  }, [state, numberFormat, t]);
+    renderGame(
+      context,
+      state,
+      rect.width,
+      rect.height,
+      dtMs,
+      numberFormat,
+      t('javelin.throwLine'),
+      releaseFlashLabels
+    );
+  }, [state, numberFormat, t, releaseFlashLabels]);
 
   return (
     <div className="canvas-frame">
       <canvas
         ref={canvasRef}
         className="game-canvas"
+        style={{ touchAction: 'none' }}
         role="img"
         aria-label="Javelin throw game canvas"
       />
@@ -1489,7 +1570,7 @@ export const GameCanvas = ({ state, dispatch }: GameCanvasProps): ReactElement =
 };
 
 ```
-> meta: lines=57 chars=1820 truncated=no
+> meta: lines=76 chars=2159 truncated=no
 
 
 ## src/features/javelin/components/HudPanel.tsx
@@ -1538,11 +1619,21 @@ export const HudPanel = ({ state }: HudPanelProps): ReactElement => {
       : state.phase.tag === 'chargeAim'
         ? t('javelin.speedPassiveHint')
         : '';
+  const windHint = (() => {
+    if (state.phase.tag !== 'chargeAim') {
+      return '';
+    }
+    if (Math.abs(state.windMs) < 0.3) {
+      return '';
+    }
+    return state.windMs < -0.3 ? t('javelin.windHintHeadwind') : t('javelin.windHintTailwind');
+  })();
 
   return (
     <section className="card hud-panel" aria-label="HUD">
       <div className="hud-topline">{t(phaseMessageKey(state))}</div>
       {phaseHint && <div className="hud-hint">{phaseHint}</div>}
+      {windHint && <div className="hud-hint hud-hint-wind">{windHint}</div>}
       <div className="hud-grid">
         <div className="hud-item">
           <span>{t('hud.speed')}</span>
@@ -1565,7 +1656,7 @@ export const HudPanel = ({ state }: HudPanelProps): ReactElement => {
 };
 
 ```
-> meta: lines=68 chars=2017 truncated=no
+> meta: lines=78 chars=2355 truncated=no
 
 
 ## src/features/javelin/components/LanguageSwitch.tsx
@@ -2143,6 +2234,76 @@ export const computeAthletePoseGeometry = (
 
 ```
 > meta: lines=485 chars=15183 truncated=no
+
+### Audio
+
+
+## src/features/javelin/game/audio.ts
+_Defines: playBeatTick, resumeAudioContext_
+
+```ts
+type BeatAudioContext = {
+  ctx: AudioContext;
+  lastTickAtMs: number;
+  minIntervalMs: number;
+};
+
+let audioState: BeatAudioContext | null = null;
+
+const ensureAudioContext = (): BeatAudioContext | null => {
+  if (audioState !== null) {
+    return audioState;
+  }
+  if (typeof window === 'undefined' || typeof window.AudioContext === 'undefined') {
+    return null;
+  }
+  audioState = {
+    ctx: new window.AudioContext(),
+    lastTickAtMs: 0,
+    minIntervalMs: 200
+  };
+  return audioState;
+};
+
+/**
+ * Play a short rhythm tick sound.
+ * Uses an oscillator to avoid loading audio assets.
+ */
+export const playBeatTick = (nowMs: number, isInZone: boolean): void => {
+  const audio = ensureAudioContext();
+  if (audio === null) {
+    return;
+  }
+  if (nowMs - audio.lastTickAtMs < audio.minIntervalMs) {
+    return;
+  }
+  audio.lastTickAtMs = nowMs;
+
+  const osc = audio.ctx.createOscillator();
+  const gain = audio.ctx.createGain();
+  osc.connect(gain);
+  gain.connect(audio.ctx.destination);
+
+  osc.frequency.value = isInZone ? 880 : 440;
+  osc.type = 'sine';
+
+  const now = audio.ctx.currentTime;
+  gain.gain.setValueAtTime(isInZone ? 0.15 : 0.06, now);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+
+  osc.start(now);
+  osc.stop(now + 0.06);
+};
+
+export const resumeAudioContext = (): void => {
+  const audio = ensureAudioContext();
+  if (audio?.ctx.state === 'suspended') {
+    void audio.ctx.resume();
+  }
+};
+
+```
+> meta: lines=60 chars=1429 truncated=no
 
 ### Rendering & visual effects
 
@@ -2839,9 +3000,9 @@ import {
   sampleThrowSubphase,
   type AthletePoseGeometry
 } from './athletePose';
+import { playBeatTick } from './audio';
 import {
-  createWorldToScreen,
-// ... 16 more import lines from .
+// ... 19 more import lines from .
 
 export { getCameraTargetX } from './camera';
 export { getHeadMeterScreenAnchor } from './renderMeter';
@@ -2862,27 +3023,27 @@ const CLOUD_LAYERS: CloudLayer[] = [
     yFraction: 0.12,
     parallaxFactor: 0.05,
     clouds: [
-      { offsetXM: 0, widthPx: 120, heightPx: 18, opacity: 0.18 },
-      { offsetXM: 35, widthPx: 90, heightPx: 14, opacity: 0.14 },
-      { offsetXM: 72, widthPx: 140, heightPx: 20, opacity: 0.16 },
-      { offsetXM: 120, widthPx: 100, heightPx: 16, opacity: 0.12 }
+      { offsetXM: 0, widthPx: 120, heightPx: 18, opacity: 0.28 },
+      { offsetXM: 35, widthPx: 90, heightPx: 14, opacity: 0.24 },
+      { offsetXM: 72, widthPx: 140, heightPx: 20, opacity: 0.26 },
+      { offsetXM: 120, widthPx: 100, heightPx: 16, opacity: 0.22 }
     ]
   },
   {
     yFraction: 0.28,
     parallaxFactor: 0.15,
     clouds: [
-      { offsetXM: 10, widthPx: 80, heightPx: 28, opacity: 0.22 },
-      { offsetXM: 50, widthPx: 110, heightPx: 34, opacity: 0.2 },
-      { offsetXM: 95, widthPx: 70, heightPx: 24, opacity: 0.18 }
+      { offsetXM: 10, widthPx: 80, heightPx: 28, opacity: 0.32 },
+      { offsetXM: 50, widthPx: 110, heightPx: 34, opacity: 0.3 },
+      { offsetXM: 95, widthPx: 70, heightPx: 24, opacity: 0.28 }
     ]
   },
   {
     yFraction: 0.18,
     parallaxFactor: 0.3,
     clouds: [
-      { offsetXM: 20, widthPx: 100, heightPx: 38, opacity: 0.25 },
-      { offsetXM: 80, widthPx: 130, heightPx: 42, opacity: 0.22 }
+      { offsetXM: 20, widthPx: 100, heightPx: 38, opacity: 0.34 },
+      { offsetXM: 80, widthPx: 130, heightPx: 42, opacity: 0.31 }
     ]
   }
 ];
@@ -2890,18 +3051,23 @@ const CLOUD_LAYERS: CloudLayer[] = [
 let lastResultRoundId = -1;
 let resultShownAtMs = 0;
 
+type ReleaseFlashLabels = Record<TimingQuality, string> & {
+  foulLine: string;
+};
+
 const drawBackground = (ctx: CanvasRenderingContext2D, width: number, height: number): void => {
   const sky = ctx.createLinearGradient(0, 0, 0, height);
-  sky.addColorStop(0, '#e9f7ff');
-  sky.addColorStop(0.58, '#d0efff');
-  sky.addColorStop(1, '#f5ffe4');
+  sky.addColorStop(0, '#dceef8');
+  sky.addColorStop(0.56, '#c8e1ef');
+  sky.addColorStop(1, '#b8d6e3');
   ctx.fillStyle = sky;
   ctx.fillRect(0, 0, width, height);
 
-  ctx.fillStyle = 'rgba(0, 44, 83, 0.06)';
-  for (let i = 0; i < width; i += 28) {
-    ctx.fillRect(i, 0, 2, height);
-  }
+  const haze = ctx.createRadialGradient(width * 0.25, height * 0.1, 20, width * 0.25, height * 0.1, width * 0.8);
+  haze.addColorStop(0, 'rgba(255, 255, 255, 0.24)');
+  haze.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  ctx.fillStyle = haze;
+  ctx.fillRect(0, 0, width, height);
 };
 
 const drawClouds = (
@@ -2923,8 +3089,8 @@ const drawClouds = (
       const y = baseY;
 
       ctx.save();
-      ctx.globalAlpha = cloud.opacity;
-      ctx.fillStyle = '#ffffff';
+      ctx.globalAlpha = Math.min(1, cloud.opacity + 0.16);
+      ctx.fillStyle = '#f8fcff';
       ctx.beginPath();
       const rx = cloud.widthPx / 2;
       const ry = cloud.heightPx / 2;
@@ -2932,6 +3098,9 @@ const drawClouds = (
       ctx.ellipse(x + rx * 0.6, y + ry * 0.15, rx * 0.7, ry * 0.8, 0, 0, Math.PI * 2);
       ctx.ellipse(x + rx * 1.4, y - ry * 0.1, rx * 0.65, ry * 0.75, 0, 0, Math.PI * 2);
       ctx.fill();
+      ctx.strokeStyle = 'rgba(142, 179, 200, 0.45)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
       ctx.restore();
     }
   }
@@ -3298,7 +3467,8 @@ export const renderGame = (
   height: number,
   dtMs: number,
   numberFormat: Intl.NumberFormat,
-  throwLineLabel: string
+  throwLineLabel: string,
+  releaseFlashLabels: ReleaseFlashLabels
 ): void => {
   const camera = createWorldToScreen(state, width, height, dtMs);
   const { toScreen, worldMinX, worldMaxX } = camera;
@@ -3356,11 +3526,59 @@ export const renderGame = (
     lastResultRoundId = -1;
   }
 
+  const releaseFeedback =
+    state.phase.tag === 'throwAnim'
+      ? {
+          label: state.phase.lineCrossedAtRelease
+            ? releaseFlashLabels.foulLine
+            : releaseFlashLabels[state.phase.releaseQuality],
+          shownAtMs: state.phase.releaseFlashAtMs
+        }
+      : state.phase.tag === 'flight'
+        ? {
+            label: state.phase.launchedFrom.lineCrossedAtRelease
+              ? releaseFlashLabels.foulLine
+              : releaseFlashLabels[state.phase.launchedFrom.releaseQuality],
+            shownAtMs: state.phase.javelin.releasedAtMs
+          }
+        : null;
+
+  if (releaseFeedback !== null) {
+    const feedbackAgeMs = Math.max(0, state.nowMs - releaseFeedback.shownAtMs);
+    const holdMs = 220;
+    const fadeMs = 620;
+    const totalMs = holdMs + fadeMs;
+    if (feedbackAgeMs < totalMs) {
+      const fadeT = feedbackAgeMs <= holdMs ? 0 : (feedbackAgeMs - holdMs) / fadeMs;
+      const alpha = 1 - Math.min(1, fadeT);
+      const scale = 1 + (1 - alpha) * 0.12;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.font = `900 ${Math.round(28 * scale)}px ui-sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#0b2238';
+      const y = 74 - (1 - alpha) * 8;
+      ctx.fillText(releaseFeedback.label, width / 2, y);
+      ctx.restore();
+    }
+  }
+
   drawWorldTimingMeter(ctx, state, headScreen);
+
+  if (state.phase.tag === 'runup') {
+    const meterPhase = getRunupMeterPhase01(state);
+    if (meterPhase !== null) {
+      const distToTarget = Math.abs(meterPhase - RHYTHM_TARGET_PHASE01);
+      const wrappedDist = Math.min(distToTarget, 1 - distToTarget);
+      if (wrappedDist < 0.02) {
+        playBeatTick(state.nowMs, wrappedDist < 0.01);
+      }
+    }
+  }
 };
 
 ```
-> meta: lines=526 chars=14224 truncated=no
+> meta: lines=583 chars=16328 truncated=no
 
 ### Other code & helpers
 
@@ -3481,14 +3699,14 @@ _Defines: getHeadMeterScreenAnchor, drawWorldTimingMeter_
 
 ```ts
 import {
+  RHYTHM_TARGET_PHASE01,
   WORLD_METER_CURSOR_RADIUS_PX,
   WORLD_METER_LINE_WIDTH_PX,
   WORLD_METER_OFFSET_Y_PX,
   WORLD_METER_RADIUS_PX
 } from './constants';
 import { clamp01, wrap01 } from './math';
-import {
-// ... 9 more import lines from .
+// ... 10 more import lines from .
 
 type MeterZones = {
   perfect: { start: number; end: number };
@@ -3646,6 +3864,25 @@ export const drawWorldTimingMeter = (
     WORLD_METER_LINE_WIDTH_PX + 0.8
   );
 
+  if (state.phase.tag === 'runup') {
+    const meterPhase = getRunupMeterPhase01(state);
+    if (meterPhase !== null) {
+      const distToTarget = Math.abs(meterPhase - RHYTHM_TARGET_PHASE01);
+      const wrappedDist = Math.min(distToTarget, 1 - distToTarget);
+      if (wrappedDist < 0.06) {
+        const flashAlpha = (1 - wrappedDist / 0.06) * 0.5;
+        ctx.save();
+        ctx.globalAlpha = flashAlpha;
+        ctx.strokeStyle = '#22c272';
+        ctx.lineWidth = WORLD_METER_LINE_WIDTH_PX + 6;
+        ctx.beginPath();
+        ctx.arc(anchor.x, anchor.y, WORLD_METER_RADIUS_PX, Math.PI, Math.PI * 2, false);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+  }
+
   const cursorAngle = phaseToSemicircleAngle(normalizeMeterPhase01(meterState.phase01));
   const cursorX = anchor.x + Math.cos(cursorAngle) * WORLD_METER_RADIUS_PX;
   const cursorY = anchor.y + Math.sin(cursorAngle) * WORLD_METER_RADIUS_PX;
@@ -3674,7 +3911,7 @@ export const drawWorldTimingMeter = (
 };
 
 ```
-> meta: lines=193 chars=4563 truncated=no
+> meta: lines=212 chars=5260 truncated=no
 
 
 ## src/features/javelin/game/scoring.ts
@@ -3906,7 +4143,7 @@ type SpeedUpTuning = {
 
 type ThrowPhaseTuning = {
   chargeFillDurationMs: number;
-  chargeOverfillFault01: number;
+  chargeMaxCycles: number;
   faultJavelinLaunchSpeedMs: number;
   chargePerfectWindow: MeterWindow;
   chargeGoodWindow: MeterWindow;
@@ -3956,7 +4193,7 @@ export const GAMEPLAY_TUNING: GameplayTuning = {
   },
   throwPhase: {
     chargeFillDurationMs: 800,
-    chargeOverfillFault01: 1.03,
+    chargeMaxCycles: 3,
     faultJavelinLaunchSpeedMs: 8.4,
     chargePerfectWindow: { start: 0.78, end: 0.98 },
     chargeGoodWindow: { start: 0.56, end: 0.98 },
@@ -3999,7 +4236,7 @@ export const CHARGEAIM_SPEED_DECAY_PER_SECOND = CHARGE_AIM_SPEED_DECAY_PER_SECON
 export const CHARGEAIM_STOP_SPEED_NORM = CHARGE_AIM_STOP_SPEED_NORM;
 
 export const CHARGE_FILL_DURATION_MS = GAMEPLAY_TUNING.throwPhase.chargeFillDurationMs;
-export const CHARGE_OVERFILL_FAULT_01 = GAMEPLAY_TUNING.throwPhase.chargeOverfillFault01;
+export const CHARGE_MAX_CYCLES = GAMEPLAY_TUNING.throwPhase.chargeMaxCycles;
 export const FAULT_JAVELIN_LAUNCH_SPEED_MS = GAMEPLAY_TUNING.throwPhase.faultJavelinLaunchSpeedMs;
 export const CHARGE_PERFECT_WINDOW = GAMEPLAY_TUNING.throwPhase.chargePerfectWindow;
 export const CHARGE_GOOD_WINDOW = GAMEPLAY_TUNING.throwPhase.chargeGoodWindow;
@@ -4008,7 +4245,7 @@ export const THROW_ANIM_DURATION_MS = GAMEPLAY_TUNING.throwPhase.throwAnimDurati
 export const THROW_RELEASE_PROGRESS = GAMEPLAY_TUNING.throwPhase.throwReleaseProgress01;
 
 ```
-> meta: lines=122 chars=4581 truncated=no
+> meta: lines=122 chars=4553 truncated=no
 
 ### Other code & helpers
 
@@ -4236,14 +4473,15 @@ const tickChargeAim = (state: GameState, dtMs: number, nowMs: number): GameState
 
   const elapsedMs = Math.max(0, nowMs - state.phase.chargeStartedAtMs);
   const rawFill01 = elapsedMs / CHARGE_FILL_DURATION_MS;
-  if (rawFill01 >= CHARGE_OVERFILL_FAULT_01) {
+  const fullCycles = Math.floor(rawFill01);
+  if (fullCycles >= CHARGE_MAX_CYCLES) {
     return {
       ...state,
       phase: createLateReleaseFaultPhase(state.phase, nowMs)
     };
   }
 
-  const phase01 = clamp(rawFill01, 0, 1);
+  const phase01 = clamp(rawFill01 % 1, 0, 1);
   const speedAfterDecay = clamp(
     state.phase.speedNorm - (dtMs / 1000) * CHARGE_AIM_SPEED_DECAY_PER_SECOND,
     0,
@@ -4341,7 +4579,7 @@ const tickThrowAnim = (state: GameState, dtMs: number, nowMs: number): GameState
           angleDeg: state.phase.angleDeg,
           forceNorm: state.phase.forceNorm,
           releaseQuality: state.phase.releaseQuality,
-          lineCrossedAtRelease: state.phase.athleteXM >= THROW_LINE_X_M,
+          lineCrossedAtRelease: state.phase.lineCrossedAtRelease,
           windMs: state.windMs,
           launchSpeedMs
         },
@@ -4380,6 +4618,7 @@ const tickFlight = (state: GameState, dtMs: number): GameState => {
   if (updated.landed) {
     const landingTipXM = updated.landingTipXM ?? updated.javelin.xM;
     const landingTipZM = updated.landingTipZM ?? updated.javelin.zM;
+    const distanceM = computeCompetitionDistanceM(landingTipXM);
     const legality = evaluateThrowLegality({
       lineCrossedAtRelease: state.phase.launchedFrom.lineCrossedAtRelease,
       landingTipXM,
@@ -4392,7 +4631,7 @@ const tickFlight = (state: GameState, dtMs: number): GameState => {
       phase: {
         tag: 'result',
         athleteXM,
-        distanceM: computeCompetitionDistanceM(landingTipXM),
+        distanceM,
         isHighscore: false,
         resultKind: legality.resultKind,
         tipFirst: updated.tipFirst,
@@ -4577,20 +4816,37 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
       }
       const elapsedMs = Math.max(0, action.atMs - state.phase.chargeStartedAtMs);
       const rawFill01 = elapsedMs / CHARGE_FILL_DURATION_MS;
-      if (rawFill01 >= CHARGE_OVERFILL_FAULT_01) {
+      const fullCycles = Math.floor(rawFill01);
+      if (fullCycles >= CHARGE_MAX_CYCLES) {
         return {
           ...state,
           nowMs: action.atMs,
           phase: createLateReleaseFaultPhase(state.phase, action.atMs)
         };
       }
-      const phase01 = clamp(rawFill01, 0, 1);
+      const phase01 = clamp(rawFill01 % 1, 0, 1);
       const quality = getTimingQuality(
         phase01,
         state.phase.chargeMeter.perfectWindow,
         state.phase.chargeMeter.goodWindow
       );
       const forceNorm = applyForceQualityBonus(computeForcePreview(phase01), quality);
+      const releasePose = computeAthletePoseGeometry(
+        {
+          animTag: 'throw',
+          animT: THROW_RELEASE_PROGRESS
+        },
+        state.phase.speedNorm,
+        state.phase.angleDeg,
+        state.phase.runupDistanceM
+      );
+      const lineCrossedAtRelease =
+        Math.max(
+          state.phase.runupDistanceM,
+          releasePose.footFront.xM,
+          releasePose.footBack.xM,
+          releasePose.shoulderCenter.xM
+        ) >= THROW_LINE_X_M;
 
       return {
         ...state,
@@ -4602,6 +4858,8 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
           angleDeg: state.phase.angleDeg,
           forceNorm,
           releaseQuality: quality,
+          lineCrossedAtRelease,
+          releaseFlashAtMs: action.atMs,
           animProgress: 0,
           released: false,
           athletePose: {
@@ -4658,7 +4916,7 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
 
 
 ```
-> meta: lines=640 chars=18530 truncated=no
+> meta: lines=661 chars=19185 truncated=no
 
 
 ## src/features/javelin/hooks/useGameLoop.ts
@@ -4799,6 +5057,7 @@ _Reusable hook / shared state or side-effect logic._
 
 ```ts
 import { useEffect, useRef } from 'react';
+import { resumeAudioContext } from '../game/audio';
 import { keyboardAngleDelta, pointerFromAnchorToAngleDeg } from '../game/controls';
 import { getPlayerAngleAnchorScreen } from '../game/render';
 import type { GameAction, GamePhase, GameState } from '../game/types';
@@ -4825,6 +5084,14 @@ export const usePointerControls = ({ canvas, dispatch, phaseTag, state }: UsePoi
     }
 
     const now = (): number => performance.now();
+    let longPressTimer: number | null = null;
+    const LONG_PRESS_MS = 300;
+    const clearLongPressTimer = (): void => {
+      if (longPressTimer !== null) {
+        window.clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+    };
     const dispatchAngleFromPointer = (clientX: number, clientY: number): void => {
       const rect = canvas.getBoundingClientRect();
       const anchor = getPlayerAngleAnchorScreen(stateRef.current, rect.width, rect.height);
@@ -4840,6 +5107,7 @@ export const usePointerControls = ({ canvas, dispatch, phaseTag, state }: UsePoi
     };
 
     const onMouseDown = (event: MouseEvent): void => {
+      resumeAudioContext();
       if (event.button === 0) {
         dispatch({ type: 'rhythmTap', atMs: now() });
       }
@@ -4871,13 +5139,54 @@ export const usePointerControls = ({ canvas, dispatch, phaseTag, state }: UsePoi
       event.preventDefault();
     };
 
+    const onTouchStart = (event: TouchEvent): void => {
+      event.preventDefault();
+      resumeAudioContext();
+      const currentPhaseTag = stateRef.current.phase.tag;
+      if (currentPhaseTag === 'runup') {
+        dispatch({ type: 'rhythmTap', atMs: now() });
+        clearLongPressTimer();
+        longPressTimer = window.setTimeout(() => {
+          if (stateRef.current.phase.tag === 'runup') {
+            dispatch({ type: 'beginChargeAim', atMs: now() });
+          }
+          longPressTimer = null;
+        }, LONG_PRESS_MS);
+        return;
+      }
+      if (currentPhaseTag === 'idle' || currentPhaseTag === 'result') {
+        dispatch({ type: 'rhythmTap', atMs: now() });
+      }
+    };
+
+    const onTouchEnd = (): void => {
+      clearLongPressTimer();
+      if (stateRef.current.phase.tag === 'chargeAim') {
+        dispatch({ type: 'releaseCharge', atMs: now() });
+      }
+    };
+
+    const onTouchMove = (event: TouchEvent): void => {
+      event.preventDefault();
+      if (event.touches.length < 1) {
+        return;
+      }
+      const currentPhaseTag = stateRef.current.phase.tag;
+      if (currentPhaseTag === 'chargeAim' || currentPhaseTag === 'runup' || currentPhaseTag === 'idle') {
+        const touch = event.touches[0];
+        dispatchAngleFromPointer(touch.clientX, touch.clientY);
+      }
+    };
+
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.code === 'Space' && !event.repeat) {
+        resumeAudioContext();
         event.preventDefault();
         dispatch({ type: 'rhythmTap', atMs: now() });
         return;
       }
       if (event.code === 'Enter' && !event.repeat) {
+        resumeAudioContext();
         event.preventDefault();
         if (phaseTag === 'runup') {
           dispatch({ type: 'beginChargeAim', atMs: now() });
@@ -4905,14 +5214,23 @@ export const usePointerControls = ({ canvas, dispatch, phaseTag, state }: UsePoi
     canvas.addEventListener('mousedown', onMouseDown);
     canvas.addEventListener('mousemove', onMouseMove);
     canvas.addEventListener('contextmenu', onContextMenu);
+    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+    canvas.addEventListener('touchend', onTouchEnd, { passive: false });
+    canvas.addEventListener('touchcancel', onTouchEnd, { passive: false });
+    canvas.addEventListener('touchmove', onTouchMove, { passive: false });
     window.addEventListener('mouseup', onMouseUp);
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
 
     return () => {
+      clearLongPressTimer();
       canvas.removeEventListener('mousedown', onMouseDown);
       canvas.removeEventListener('mousemove', onMouseMove);
       canvas.removeEventListener('contextmenu', onContextMenu);
+      canvas.removeEventListener('touchstart', onTouchStart);
+      canvas.removeEventListener('touchend', onTouchEnd);
+      canvas.removeEventListener('touchcancel', onTouchEnd);
+      canvas.removeEventListener('touchmove', onTouchMove);
       window.removeEventListener('mouseup', onMouseUp);
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
@@ -4921,7 +5239,7 @@ export const usePointerControls = ({ canvas, dispatch, phaseTag, state }: UsePoi
 };
 
 ```
-> meta: lines=122 chars=3894 truncated=no
+> meta: lines=182 chars=6189 truncated=no
 
 
 ## src/features/javelin/JavelinPage.tsx
@@ -4967,6 +5285,9 @@ export const JavelinPage = (): ReactElement => {
   }, [state.phase, isHighscore]);
 
   const resultMessage = useMemo(() => {
+    if (state.phase.tag === 'flight' && state.phase.launchedFrom.lineCrossedAtRelease) {
+      return t('javelin.result.foul_line');
+    }
     if (state.phase.tag === 'result') {
       const landingMessage =
         state.phase.tipFirst === null
@@ -4984,6 +5305,24 @@ export const JavelinPage = (): ReactElement => {
     }
     return '';
   }, [state.phase, t, formatNumber]);
+  const resultStatusMessage = useMemo(() => {
+    if (state.phase.tag === 'flight' && state.phase.launchedFrom.lineCrossedAtRelease) {
+      return t('result.notSavedInvalid');
+    }
+    if (state.phase.tag === 'fault') {
+      return t('result.notSavedInvalid');
+    }
+    if (state.phase.tag !== 'result') {
+      return '';
+    }
+    if (state.phase.resultKind !== 'valid') {
+      return t('result.notSavedInvalid');
+    }
+    if (!state.phase.isHighscore) {
+      return t('result.notHighscore');
+    }
+    return '';
+  }, [state.phase, t]);
 
   const canSaveScore =
     state.phase.tag === 'result' &&
@@ -4991,6 +5330,11 @@ export const JavelinPage = (): ReactElement => {
     state.phase.isHighscore &&
     savedRoundId !== state.roundId;
   const resultDistanceM = state.phase.tag === 'result' ? state.phase.distanceM : null;
+
+  const isFoulMessage =
+    state.phase.tag === 'fault' ||
+    (state.phase.tag === 'flight' && state.phase.launchedFrom.lineCrossedAtRelease) ||
+    (state.phase.tag === 'result' && state.phase.resultKind !== 'valid');
 
   return (
     <main className="page">
@@ -5025,11 +5369,14 @@ export const JavelinPage = (): ReactElement => {
           </div>
 
           <p
-            className={`result-live ${state.phase.tag === 'result' && state.phase.resultKind !== 'valid' ? 'is-foul' : ''}`}
+            className={`result-live ${isFoulMessage ? 'is-foul' : ''}`}
             aria-live="polite"
           >
             {resultMessage}
           </p>
+          {resultStatusMessage && (
+            <p className={`result-note ${isFoulMessage ? 'is-foul' : ''}`}>{resultStatusMessage}</p>
+          )}
 
           {canSaveScore && state.phase.tag === 'result' && (
             <form
@@ -5077,7 +5424,7 @@ export const JavelinPage = (): ReactElement => {
 };
 
 ```
-> meta: lines=148 chars=5258 truncated=no
+> meta: lines=177 chars=6262 truncated=no
 
 
 ## src/i18n/init.tsx
@@ -5174,6 +5521,8 @@ export const resources: Record<Locale, Messages> = {
     'javelin.runupHint': 'Ajoita klikkaukset vihreään alueeseen. Heittoviivalle',
     'javelin.throwLine': 'Heittoviiva',
     'javelin.speedPassiveHint': 'Perusvauhti kasvaa myös ilman klikkejä.',
+    'javelin.windHintHeadwind': 'Vastatuuli - tähtää korkeammalle',
+    'javelin.windHintTailwind': 'Myötätuuli - matalampi kulma kantaa pidemmälle',
     'javelin.landingTipFirst': 'Kärki edellä',
     'javelin.landingFlat': 'Litteä alastulo',
     'javelin.result.foul_line': 'Hylätty: viiva ylitetty',
@@ -5194,8 +5543,12 @@ export const resources: Record<Locale, Messages> = {
     'hud.perfect': 'Täydellinen',
     'hud.good': 'Hyvä',
     'hud.miss': 'Huti',
+    'javelin.attempt': 'Yritys',
+    'javelin.sessionBest': 'Paras',
     'action.start': 'Aloita kierros',
     'action.playAgain': 'Uusi kierros',
+    'action.nextAttempt': 'Seuraava yritys',
+    'action.newSession': 'Uusi sarja (6 yritystä)',
     'action.saveScore': 'Tallenna',
     'action.resetScores': 'Nollaa taulukko',
     'help.title': 'Ohjaus',
@@ -5207,8 +5560,14 @@ export const resources: Record<Locale, Messages> = {
     'help.kbd2': 'Enter alas: aloita tähtäys',
     'help.kbd3': 'Nuoli ylös/alas: kulma',
     'help.kbd4': 'Enter ylös: vapauta heitto',
+    'help.touch1': 'Napauta: kiihdytä rytmillä',
+    'help.touch2': 'Pidä pohjassa: lataa heittovoima',
+    'help.touch3': 'Vedä pitäessä: säädä kulmaa',
+    'help.touch4': 'Vapauta: heitä',
     'result.distance': 'Tulos',
     'result.highscore': 'Uusi ennätys!',
+    'result.notSavedInvalid': 'Virheellinen heitto - tulosta ei tallenneta',
+    'result.notHighscore': 'Ei uusi ennätys - tulosta ei tallenneta',
     'result.fault.lateRelease': 'Virhe: release myöhässä',
     'result.fault.invalidRelease': 'Virhe: release liian aikaisin',
     'result.fault.lowAngle': 'Virhe: kulma liian matala',
@@ -5223,6 +5582,8 @@ export const resources: Record<Locale, Messages> = {
     'javelin.runupHint': 'Tajma klicken till det gröna området. Kvar till linjen',
     'javelin.throwLine': 'Kastlinje',
     'javelin.speedPassiveHint': 'Grundfarten ökar även utan klick.',
+    'javelin.windHintHeadwind': 'Motvind - sikta högre för distans',
+    'javelin.windHintTailwind': 'Medvind - lägre vinkel bär längre',
     'javelin.landingTipFirst': 'Spetsen först',
     'javelin.landingFlat': 'Platt landning',
     'javelin.result.foul_line': 'Ogiltigt: linjen överträdd',
@@ -5243,8 +5604,12 @@ export const resources: Record<Locale, Messages> = {
     'hud.perfect': 'Perfekt',
     'hud.good': 'Bra',
     'hud.miss': 'Miss',
+    'javelin.attempt': 'Försök',
+    'javelin.sessionBest': 'Bästa',
     'action.start': 'Starta runda',
     'action.playAgain': 'Ny runda',
+    'action.nextAttempt': 'Nästa försök',
+    'action.newSession': 'Ny serie (6 försök)',
     'action.saveScore': 'Spara',
     'action.resetScores': 'Nollställ listan',
     'help.title': 'Styrning',
@@ -5256,8 +5621,14 @@ export const resources: Record<Locale, Messages> = {
     'help.kbd2': 'Enter ned: börja sikta',
     'help.kbd3': 'Pil upp/ner: vinkel',
     'help.kbd4': 'Enter upp: släpp kastet',
+    'help.touch1': 'Tryck: bygg rytmfart',
+    'help.touch2': 'Håll: ladda kastkraft',
+    'help.touch3': 'Dra medan du håller: sikta vinkel',
+    'help.touch4': 'Släpp: kasta',
     'result.distance': 'Resultat',
     'result.highscore': 'Nytt rekord!',
+    'result.notSavedInvalid': 'Ogiltigt kast - resultatet sparas inte',
+    'result.notHighscore': 'Inte nytt rekord - resultatet sparas inte',
     'result.fault.lateRelease': 'Fel: release för sent',
     'result.fault.invalidRelease': 'Fel: release för tidigt',
     'result.fault.lowAngle': 'Fel: för låg vinkel',
@@ -5272,6 +5643,8 @@ export const resources: Record<Locale, Messages> = {
     'javelin.runupHint': 'Time clicks to the green zone. Distance to line',
     'javelin.throwLine': 'Throw Line',
     'javelin.speedPassiveHint': 'Base speed also builds without clicking.',
+    'javelin.windHintHeadwind': 'Headwind - aim higher for distance',
+    'javelin.windHintTailwind': 'Tailwind - lower angle carries further',
     'javelin.landingTipFirst': 'Tip-first landing',
     'javelin.landingFlat': 'Flat landing',
     'javelin.result.foul_line': 'Foul: line crossed',
@@ -5292,8 +5665,12 @@ export const resources: Record<Locale, Messages> = {
     'hud.perfect': 'Perfect',
     'hud.good': 'Good',
     'hud.miss': 'Miss',
+    'javelin.attempt': 'Attempt',
+    'javelin.sessionBest': 'Best',
     'action.start': 'Start round',
     'action.playAgain': 'Play again',
+    'action.nextAttempt': 'Next Attempt',
+    'action.newSession': 'New Session (6 attempts)',
     'action.saveScore': 'Save',
     'action.resetScores': 'Reset board',
     'help.title': 'Controls',
@@ -5305,8 +5682,14 @@ export const resources: Record<Locale, Messages> = {
     'help.kbd2': 'Enter down: begin charge',
     'help.kbd3': 'Arrow up/down: angle',
     'help.kbd4': 'Enter up: release throw',
+    'help.touch1': 'Tap: build rhythm speed',
+    'help.touch2': 'Hold: charge throw force',
+    'help.touch3': 'Drag while holding: aim angle',
+    'help.touch4': 'Release: throw',
     'result.distance': 'Result',
     'result.highscore': 'New highscore!',
+    'result.notSavedInvalid': 'Invalid throw - result is not saved',
+    'result.notHighscore': 'Not a highscore - result is not saved',
     'result.fault.lateRelease': 'Fault: late release',
     'result.fault.invalidRelease': 'Fault: too early release',
     'result.fault.lowAngle': 'Fault: angle too low',
@@ -5318,7 +5701,7 @@ export const resources: Record<Locale, Messages> = {
 };
 
 ```
-> meta: lines=154 chars=6178 truncated=no
+> meta: lines=190 chars=8078 truncated=no
 
 
 ## src/index.css
@@ -5423,12 +5806,20 @@ h1 {
 .hud-topline {
   font-weight: 800;
   margin-bottom: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .hud-hint {
   font-size: 0.84rem;
   color: var(--text-soft);
   margin-bottom: 8px;
+}
+
+.hud-hint-wind {
+  color: #0f4e7a;
+  font-weight: 700;
 }
 
 .hud-grid {
@@ -5558,6 +5949,7 @@ h1 {
   height: min(54vh, 460px);
   display: block;
   background: #dff5ff;
+  touch-action: none;
 }
 
 .actions {
@@ -5565,142 +5957,15 @@ h1 {
   gap: 10px;
 }
 
-button {
-  border: 0;
-  border-radius: 12px;
-  padding: 10px 14px;
-  font-weight: 700;
-  background: var(--accent-strong);
-  color: #fff;
-  cursor: pointer;
-}
+.attempt-counter,
+.session-best {
+  display: inli
 
-button.ghost {
-  background: #e5f1ff;
-  color: #0f3b61;
-}
-
-.result-live {
-  min-height: 1.6em;
-  font-size: 1.02rem;
-  font-weight: 700;
-}
-
-.result-live.is-foul {
-  color: #9b2217;
-}
-
-.save-form {
-  display: flex;
-  gap: 10px;
-  align-items: end;
-}
-
-.save-form label {
-  display: grid;
-  gap: 4px;
-  font-size: 0.9rem;
-}
-
-.save-form input {
-  border: 1px solid rgba(15, 59, 97, 0.28);
-  border-radius: 10px;
-  padding: 7px 8px;
-  width: 120px;
-  text-transform: uppercase;
-}
-
-.badge {
-  width: fit-content;
-  background: #e3ffdc;
-  color: #1f6c35;
-  border-radius: 999px;
-  padding: 5px 10px;
-  font-weight: 700;
-}
-
-.control-help {
-  padding: 12px 14px;
-}
-
-.control-help h3 {
-  margin: 0 0 6px;
-}
-
-.control-help ul {
-  margin: 0;
-  padding-left: 18px;
-  display: grid;
-  gap: 4px;
-}
-
-.scoreboard {
-  padding: 12px 14px;
-}
-
-.scoreboard h3 {
-  margin: 0 0 8px;
-}
-
-.scoreboard ol {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 6px;
-}
-
-.scoreboard li {
-  display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: 8px;
-  align-items: baseline;
-  padding: 6px 8px;
-  border-radius: 10px;
-  background: rgba(0, 143, 85, 0.08);
-}
-
-.scoreboard time {
-  color: var(--text-soft);
-  font-size: 0.8rem;
-}
-
-.language-switch {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  font-size: 0.84rem;
-  color: var(--text-soft);
-}
-
-.language-switch select {
-  padding: 6px 8px;
-  border-radius: 10px;
-  border: 1px solid rgba(14, 43, 66, 0.28);
-  color: var(--text-main);
-}
-
-@media (max-width: 860px) {
-  .layout {
-    grid-template-columns: 1fr;
-  }
-
-  .game-canvas {
-    height: min(52vh, 380px);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  * {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
-    scroll-behavior: auto !important;
-  }
-}
+// [TRUNCATED at 4000 chars]
 
 ```
-> meta: lines=375 chars=5831 truncated=no
+> NOTE: Truncated to 4000 chars (original: 6316).
+> meta: lines=406 chars=6316 truncated=yes
 
 ### Entry points & app wiring
 
@@ -6139,8 +6404,8 @@ describe('gameReducer', () => {
 // [TRUNCATED at 3000 chars]
 
 ```
-> NOTE: Truncated to 3000 chars (original: 12471).
-> meta: lines=290 chars=12289 truncated=yes
+> NOTE: Truncated to 3000 chars (original: 13664).
+> meta: lines=319 chars=13489 truncated=yes
 
 
 ## src/features/javelin/game/render.test.ts
@@ -6350,6 +6615,56 @@ describe('scoring helpers', () => {
 
 ```
 > meta: lines=84 chars=2351 truncated=no
+
+
+## src/features/javelin/game/selectors.test.ts
+
+```ts
+import { describe, expect, it } from 'vitest';
+import { RHYTHM_TARGET_PHASE01 } from './constants';
+import { getRunupMeterPhase01 } from './selectors';
+import { BEAT_INTERVAL_MS } from './tuning';
+import type { GameState } from './types';
+
+const makeRunupState = (nowMs: number, startedAtMs: number): GameState => ({
+  nowMs,
+  roundId: 1,
+  windMs: 0,
+  aimAngleDeg: 36,
+  phase: {
+    tag: 'runup',
+    speedNorm: 0.3,
+    startedAtMs,
+    tapCount: 1,
+    runupDistanceM: 0,
+    rhythm: {
+      firstTapAtMs: startedAtMs + 20,
+      lastTapAtMs: startedAtMs + 20,
+      perfectHits: 0,
+      goodHits: 0,
+      penaltyUntilMs: 0,
+      lastQuality: null,
+      lastQualityAtMs: startedAtMs + 20
+    },
+    athletePose: {
+      animTag: 'run',
+      animT: 0
+    }
+  }
+});
+
+describe('runup meter phase', () => {
+  it('reaches target phase at beat boundaries', () => {
+    const startedAtMs = 1000;
+    const nowMs = startedAtMs + BEAT_INTERVAL_MS * 3;
+    const phase = getRunupMeterPhase01(makeRunupState(nowMs, startedAtMs));
+    expect(phase).not.toBeNull();
+    expect(phase).toBeCloseTo(RHYTHM_TARGET_PHASE01, 1);
+  });
+});
+
+```
+> meta: lines=43 chars=1131 truncated=no
 
 
 ## src/features/javelin/hooks/useLocalHighscores.test.ts

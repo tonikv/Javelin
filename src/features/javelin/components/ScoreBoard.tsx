@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react';
+import { memo, useMemo, type ReactElement } from 'react';
 import type { HighscoreEntry } from '../game/types';
 import { useI18n } from '../../../i18n/init';
 
@@ -6,8 +6,17 @@ type ScoreBoardProps = {
   highscores: HighscoreEntry[];
 };
 
-export const ScoreBoard = ({ highscores }: ScoreBoardProps): ReactElement => {
+const ScoreBoardComponent = ({ highscores }: ScoreBoardProps): ReactElement => {
   const { t, formatNumber, locale } = useI18n();
+  const dateFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat(locale, {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      }),
+    [locale]
+  );
 
   return (
     <section className="card scoreboard" aria-label={t('scoreboard.title')}>
@@ -21,11 +30,7 @@ export const ScoreBoard = ({ highscores }: ScoreBoardProps): ReactElement => {
               <span>{entry.name}</span>
               <strong>{formatNumber(entry.distanceM)} m</strong>
               <time>
-                {new Intl.DateTimeFormat(locale, {
-                  year: 'numeric',
-                  month: '2-digit',
-                  day: '2-digit'
-                }).format(new Date(entry.playedAtIso))}
+                {dateFormatter.format(new Date(entry.playedAtIso))}
               </time>
             </li>
           ))}
@@ -34,3 +39,5 @@ export const ScoreBoard = ({ highscores }: ScoreBoardProps): ReactElement => {
     </section>
   );
 };
+
+export const ScoreBoard = memo(ScoreBoardComponent);

@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { computeAthletePoseGeometry } from './athletePose';
-import { getCameraTargetX, getHeadMeterScreenAnchor, getVisibleJavelinRenderState } from './render';
+import {
+  createRenderSession,
+  getCameraTargetX,
+  getHeadMeterScreenAnchor,
+  getVisibleJavelinRenderState
+} from './render';
 import { RUNUP_START_X_M } from './tuning';
 import type { GameState } from './types';
 
@@ -12,6 +17,17 @@ const baseState: Pick<GameState, 'nowMs' | 'roundId' | 'windMs' | 'aimAngleDeg'>
 };
 
 describe('javelin visibility state', () => {
+  it('creates isolated render sessions', () => {
+    const sessionA = createRenderSession();
+    const sessionB = createRenderSession();
+
+    sessionA.resultMarker.lastRoundId = 9;
+    sessionA.camera.targetX = 18;
+
+    expect(sessionB.resultMarker.lastRoundId).toBe(-1);
+    expect(sessionB.camera.targetX).toBe(RUNUP_START_X_M);
+  });
+
   it('is attached during runup and charge', () => {
     const runupState: GameState = {
       ...baseState,

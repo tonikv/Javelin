@@ -41,6 +41,8 @@ type SmoothedCamera = {
   lastPhaseTag: GamePhase['tag'];
 };
 
+export type CameraSmoothingState = SmoothedCamera;
+
 const PHASE_CAMERA_CONFIG: Record<GamePhase['tag'], PhaseCameraConfig> = {
   idle: {
     viewWidthM: CAMERA_DEFAULT_VIEW_WIDTH_M,
@@ -81,23 +83,21 @@ const PHASE_CAMERA_CONFIG: Record<GamePhase['tag'], PhaseCameraConfig> = {
 
 const CAMERA_LERP_SPEED = 4.5;
 
-let smoothCam: SmoothedCamera = {
+const createInitialCameraState = (): CameraSmoothingState => ({
   viewWidthM: CAMERA_DEFAULT_VIEW_WIDTH_M,
   yScale: CAMERA_Y_SCALE_RUNUP,
   targetX: RUNUP_START_X_M,
   lastPhaseTag: 'idle'
-};
+});
+
+export const createCameraSmoothingState = (): CameraSmoothingState =>
+  createInitialCameraState();
 
 const lerpToward = (current: number, target: number, factor: number): number =>
   current + (target - current) * Math.min(1, Math.max(0, factor));
 
-export const resetSmoothCamera = (): void => {
-  smoothCam = {
-    viewWidthM: CAMERA_DEFAULT_VIEW_WIDTH_M,
-    yScale: CAMERA_Y_SCALE_RUNUP,
-    targetX: RUNUP_START_X_M,
-    lastPhaseTag: 'idle'
-  };
+const resetSmoothCamera = (cameraState: CameraSmoothingState): void => {
+  Object.assign(cameraState, createInitialCameraState());
 };
 
 export const getCameraTargetX = (state: GameState): number => {
@@ -155,9 +155,13 @@ const createWorldToScreenWithCamera = (
   return { toScreen, worldMinX, worldMaxX };
 };
 
-const updateSmoothedCamera = (state: GameState, dtMs: number): void => {
+const updateSmoothedCamera = (
+  state: GameState,
+  dtMs: number,
+  cameraState: CameraSmoothingState
+): void => {
   if (state.phase.tag === 'idle') {
-    resetSmoothCamera();
+    resetSmoothCamera(cameraState);
     return;
   }
 
@@ -165,15 +169,15 @@ const updateSmoothedCamera = (state: GameState, dtMs: number): void => {
   const targetYScale = getVerticalScale(state);
   const targetX = getCameraTargetX(state);
   const dt = (Math.max(0, dtMs) / 1000) * CAMERA_LERP_SPEED;
-  const phaseChanged = state.phase.tag !== smoothCam.lastPhaseTag;
+  const phaseChanged = state.phase.tag !== cameraState.lastPhaseTag;
   const lerpFactor = phaseChanged ? Math.min(1, dt * 2.5) : Math.min(1, dt);
 
-  smoothCam = {
-    viewWidthM: lerpToward(smoothCam.viewWidthM, targetViewWidth, lerpFactor),
-    yScale: lerpToward(smoothCam.yScale, targetYScale, lerpFactor),
-    targetX: lerpToward(smoothCam.targetX, targetX, Math.min(1, dt * 1.2)),
+  Object.assign(cameraState, {
+    viewWidthM: lerpToward(cameraState.viewWidthM, targetViewWidth, lerpFactor),
+    yScale: lerpToward(cameraState.yScale, targetYScale, lerpFactor),
+    targetX: lerpToward(cameraState.targetX, targetX, Math.min(1, dt * 1.2)),
     lastPhaseTag: state.phase.tag
-  };
+  });
 };
 
 export const createWorldToScreenRaw = (
@@ -195,15 +199,16 @@ export const createWorldToScreen = (
   state: GameState,
   width: number,
   height: number,
-  dtMs: number
+  dtMs: number,
+  cameraState: CameraSmoothingState
 ): { toScreen: WorldToScreen; worldMinX: number; worldMaxX: number } => {
-  updateSmoothedCamera(state, dtMs);
+  updateSmoothedCamera(state, dtMs, cameraState);
   return createWorldToScreenWithCamera(
     state,
     width,
     height,
-    smoothCam.viewWidthM,
-    smoothCam.targetX,
-    smoothCam.yScale
+    cameraState.viewWidthM,
+    cameraState.targetX,
+    cameraState.yScale
   );
 };
