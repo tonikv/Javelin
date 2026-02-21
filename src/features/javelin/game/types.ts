@@ -80,6 +80,7 @@ export type GamePhase =
       tag: 'chargeAim';
       speedNorm: number;
       athleteXM: number;
+      runEntryAnimT: number;
       angleDeg: number;
       chargeStartedAtMs: number;
       chargeMeter: ChargeMeterState;

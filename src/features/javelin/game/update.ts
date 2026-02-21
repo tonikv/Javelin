@@ -17,6 +17,7 @@ import {
   RUNUP_SPEED_MAX_MS,
   RUNUP_SPEED_MIN_MS,
   RUNUP_START_X_M,
+  RUN_TO_AIM_BLEND_MS,
   SPAM_PENALTY_MS,
   SPAM_THRESHOLD_MS,
   THROW_ANIM_DURATION_MS,
@@ -193,6 +194,7 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
           tag: 'chargeAim',
           speedNorm: state.phase.speedNorm,
           athleteXM: state.phase.runupDistanceM,
+          runEntryAnimT: state.phase.athletePose.animT,
           angleDeg: ANGLE_DEFAULT_DEG,
           chargeStartedAtMs: action.atMs,
           chargeMeter: {
@@ -304,6 +306,8 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
       if (nextState.phase.tag === 'chargeAim') {
         const elapsedMs = Math.max(0, action.nowMs - nextState.phase.chargeStartedAtMs);
         const phase01 = wrap01(elapsedMs / CHARGE_FORCE_CYCLE_MS);
+        const blend01 = clamp(elapsedMs / RUN_TO_AIM_BLEND_MS, 0, 1);
+        const aimAnimT = blend01 < 1 ? blend01 * 0.2 : phase01;
         const forceNormPreview = computeForcePreview(phase01);
         const quality = getTimingQuality(
           phase01,
@@ -324,7 +328,7 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
             },
             athletePose: {
               animTag: 'aim',
-              animT: phase01
+              animT: aimAnimT
             }
           }
         };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RUNUP_PASSIVE_TO_HALF_MS, THROW_LINE_X_M } from './constants';
+import { RUNUP_PASSIVE_TO_HALF_MS, THROW_ANIM_DURATION_MS, THROW_LINE_X_M } from './constants';
 import { gameReducer } from './reducer';
 import { createInitialGameState } from './update';
 
@@ -74,6 +74,34 @@ describe('gameReducer', () => {
     expect(state.phase.tag).toBe('chargeAim');
     if (state.phase.tag === 'chargeAim') {
       expect(state.phase.athleteXM).toBeLessThan(THROW_LINE_X_M);
+    }
+  });
+
+  it('crosses release threshold once and enters flight', () => {
+    let state = createInitialGameState();
+    state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0.2 });
+    state = gameReducer(state, { type: 'rhythmTap', atMs: 1880 });
+    state = gameReducer(state, { type: 'rhythmTap', atMs: 2760 });
+    state = gameReducer(state, { type: 'rhythmTap', atMs: 3640 });
+    state = gameReducer(state, { type: 'beginChargeAim', atMs: 3700 });
+    state = gameReducer(state, { type: 'tick', dtMs: 280, nowMs: 3980 });
+    state = gameReducer(state, { type: 'releaseCharge', atMs: 3990 });
+    expect(state.phase.tag).toBe('throwAnim');
+
+    state = gameReducer(state, {
+      type: 'tick',
+      dtMs: Math.round(THROW_ANIM_DURATION_MS * 0.72),
+      nowMs: 4610
+    });
+
+    expect(state.phase.tag).toBe('flight');
+    if (state.phase.tag === 'flight') {
+      const releasedAt = state.phase.javelin.releasedAtMs;
+      state = gameReducer(state, { type: 'tick', dtMs: 16, nowMs: 4626 });
+      expect(state.phase.tag).toBe('flight');
+      if (state.phase.tag === 'flight') {
+        expect(state.phase.javelin.releasedAtMs).toBe(releasedAt);
+      }
     }
   });
 

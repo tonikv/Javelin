@@ -23,27 +23,6 @@ export type AthletePoseGeometry = {
   javelinAngleRad: number;
 };
 
-const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
-
-const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
-
-const smoothStep = (edge0: number, edge1: number, value: number): number => {
-  const t = clamp01((value - edge0) / (edge1 - edge0));
-  return t * t * (3 - 2 * t);
-};
-
-const polar = (angleRad: number, length: number): { x: number; y: number } => ({
-  x: Math.cos(angleRad) * length,
-  y: Math.sin(angleRad) * length
-});
-
-const add = (a: PointM, b: { x: number; y: number }): PointM => ({
-  xM: a.xM + b.x,
-  yM: a.yM + b.y
-});
-
-const toRad = (deg: number): number => (deg * Math.PI) / 180;
-
 type MotionCurves = {
   leanRad: number;
   pelvisShiftXM: number;
@@ -59,110 +38,273 @@ type MotionCurves = {
   javelinAngleRad: number;
 };
 
-const curvesForPose = (
-  pose: AthletePoseState,
-  speedNorm: number,
-  aimAngleDeg: number
-): MotionCurves => {
-  const t = clamp01(pose.animT);
-  const cycle = t * Math.PI * 2;
+type PoseSamplingOptions = {
+  runBlendFromAnimT?: number;
+  runToAimBlend01?: number;
+};
 
-  if (pose.animTag === 'run') {
-    const stride = Math.sin(cycle);
-    const counter = Math.sin(cycle + Math.PI);
+type ThrowStage = 'windup' | 'delivery' | 'follow';
+
+export type ThrowSubphaseSample = {
+  stage: ThrowStage;
+  windup01: number;
+  delivery01: number;
+  follow01: number;
+};
+
+const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
+
+const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
+
+const smoothStep = (edge0: number, edge1: number, value: number): number => {
+  const t = clamp01((value - edge0) / (edge1 - edge0));
+  return t * t * (3 - 2 * t);
+};
+
+const easeOutCubic = (t: number): number => 1 - (1 - t) ** 3;
+
+const easeInCubic = (t: number): number => t ** 3;
+
+const easeOutQuad = (t: number): number => 1 - (1 - t) * (1 - t);
+
+const easeInOutSine = (t: number): number => 0.5 - Math.cos(Math.PI * clamp01(t)) * 0.5;
+
+const toRad = (deg: number): number => (deg * Math.PI) / 180;
+
+const polar = (angleRad: number, length: number): { x: number; y: number } => ({
+  x: Math.cos(angleRad) * length,
+  y: Math.sin(angleRad) * length
+});
+
+const add = (a: PointM, b: { x: number; y: number }): PointM => ({
+  xM: a.xM + b.x,
+  yM: a.yM + b.y
+});
+
+export const getRunToAimBlend01 = (
+  chargeStartedAtMs: number,
+  nowMs: number,
+  blendDurationMs: number
+): number => {
+  if (blendDurationMs <= 0) {
+    return 1;
+  }
+  return clamp01((nowMs - chargeStartedAtMs) / blendDurationMs);
+};
+
+export const sampleThrowSubphase = (progress01: number): ThrowSubphaseSample => {
+  const t = clamp01(progress01);
+  const windupEnd = 0.3;
+  const deliveryEnd = 0.68;
+
+  if (t < windupEnd) {
     return {
-      leanRad: -0.18 - 0.18 * speedNorm,
-      pelvisShiftXM: 0.08 * stride,
-      pelvisBobYM: 0.045 * Math.sin(cycle * 2) * (0.45 + speedNorm),
-      hipFront: 0.62 * stride,
-      hipBack: -0.62 * stride,
-      kneeFront: 0.4 + 0.22 * (1 - stride),
-      kneeBack: 0.4 + 0.22 * (1 + stride),
-      shoulderFront: -0.9 * counter - 0.12,
-      shoulderBack: 0.74 * counter + 0.12,
-      elbowFront: 0.14,
-      elbowBack: -0.12,
-      javelinAngleRad: toRad(9)
+      stage: 'windup',
+      windup01: easeOutCubic(t / windupEnd),
+      delivery01: 0,
+      follow01: 0
     };
   }
 
-  if (pose.animTag === 'aim') {
-    const settle = Math.sin(cycle * Math.PI);
+  if (t < deliveryEnd) {
     return {
-      leanRad: -0.3,
-      pelvisShiftXM: 0.02 * settle,
-      pelvisBobYM: 0.015 * settle,
-      hipFront: 0.2,
-      hipBack: -0.18,
-      kneeFront: 0.56,
-      kneeBack: 0.48,
-      shoulderFront: -1.5 + 0.18 * settle,
-      shoulderBack: 0.38,
-      elbowFront: 0.42,
-      elbowBack: -0.08,
-      javelinAngleRad: toRad(aimAngleDeg)
-    };
-  }
-
-  if (pose.animTag === 'throw') {
-    const explosive = smoothStep(0.14, 0.62, t);
-    const follow = smoothStep(0.62, 1, t);
-    return {
-      leanRad: lerp(-0.34, 0.24, follow) - 0.05 * (1 - explosive),
-      pelvisShiftXM: lerp(-0.02, 0.2, follow),
-      pelvisBobYM: 0.02 * Math.sin(t * Math.PI),
-      hipFront: lerp(0.22, 0.66, explosive),
-      hipBack: lerp(-0.24, -0.48, explosive),
-      kneeFront: lerp(0.56, 0.38, explosive),
-      kneeBack: lerp(0.5, 0.72, follow),
-      shoulderFront: lerp(-2.0, 0.34, explosive) + follow * 0.2,
-      shoulderBack: lerp(0.4, -0.5, explosive),
-      elbowFront: lerp(0.62, -0.18, explosive),
-      elbowBack: lerp(-0.08, 0.18, explosive),
-      javelinAngleRad: lerp(toRad(aimAngleDeg), toRad(-14), smoothStep(0.32, 1, t))
-    };
-  }
-
-  if (pose.animTag === 'followThrough') {
-    return {
-      leanRad: 0.3,
-      pelvisShiftXM: 0.16 * t,
-      pelvisBobYM: 0.01,
-      hipFront: 0.56,
-      hipBack: -0.52,
-      kneeFront: 0.35,
-      kneeBack: 0.82,
-      shoulderFront: 0.26,
-      shoulderBack: -0.52,
-      elbowFront: -0.12,
-      elbowBack: 0.22,
-      javelinAngleRad: toRad(-20)
+      stage: 'delivery',
+      windup01: 1,
+      delivery01: easeInCubic((t - windupEnd) / (deliveryEnd - windupEnd)),
+      follow01: 0
     };
   }
 
   return {
-    leanRad: -0.04,
-    pelvisShiftXM: 0,
-    pelvisBobYM: 0,
-    hipFront: 0.12,
-    hipBack: -0.12,
-    kneeFront: 0.42,
-    kneeBack: 0.42,
-    shoulderFront: -0.26,
-    shoulderBack: 0.2,
-    elbowFront: 0.14,
-    elbowBack: -0.08,
-    javelinAngleRad: toRad(4)
+    stage: 'follow',
+    windup01: 1,
+    delivery01: 1,
+    follow01: easeOutQuad((t - deliveryEnd) / (1 - deliveryEnd))
   };
+};
+
+const mixCurves = (from: MotionCurves, to: MotionCurves, t: number): MotionCurves => ({
+  leanRad: lerp(from.leanRad, to.leanRad, t),
+  pelvisShiftXM: lerp(from.pelvisShiftXM, to.pelvisShiftXM, t),
+  pelvisBobYM: lerp(from.pelvisBobYM, to.pelvisBobYM, t),
+  hipFront: lerp(from.hipFront, to.hipFront, t),
+  hipBack: lerp(from.hipBack, to.hipBack, t),
+  kneeFront: lerp(from.kneeFront, to.kneeFront, t),
+  kneeBack: lerp(from.kneeBack, to.kneeBack, t),
+  shoulderFront: lerp(from.shoulderFront, to.shoulderFront, t),
+  shoulderBack: lerp(from.shoulderBack, to.shoulderBack, t),
+  elbowFront: lerp(from.elbowFront, to.elbowFront, t),
+  elbowBack: lerp(from.elbowBack, to.elbowBack, t),
+  javelinAngleRad: lerp(from.javelinAngleRad, to.javelinAngleRad, t)
+});
+
+const runCurves = (t01: number, speedNorm: number): MotionCurves => {
+  const cycle = clamp01(t01) * Math.PI * 2;
+  const stride = Math.sin(cycle);
+  const counter = Math.sin(cycle + Math.PI);
+  return {
+    leanRad: -0.18 - 0.18 * speedNorm,
+    pelvisShiftXM: 0.08 * stride,
+    pelvisBobYM: 0.045 * Math.sin(cycle * 2) * (0.45 + speedNorm),
+    hipFront: 0.62 * stride,
+    hipBack: -0.62 * stride,
+    kneeFront: 0.4 + 0.22 * (1 - stride),
+    kneeBack: 0.4 + 0.22 * (1 + stride),
+    shoulderFront: -0.9 * counter - 0.12,
+    shoulderBack: 0.74 * counter + 0.12,
+    elbowFront: 0.14,
+    elbowBack: -0.12,
+    javelinAngleRad: toRad(9)
+  };
+};
+
+const aimCurves = (t01: number, aimAngleDeg: number): MotionCurves => {
+  const settle = Math.sin(clamp01(t01) * Math.PI);
+  return {
+    leanRad: -0.3,
+    pelvisShiftXM: 0.02 * settle,
+    pelvisBobYM: 0.015 * settle,
+    hipFront: 0.2,
+    hipBack: -0.18,
+    kneeFront: 0.56,
+    kneeBack: 0.48,
+    shoulderFront: -1.5 + 0.18 * settle,
+    shoulderBack: 0.38,
+    elbowFront: 0.42,
+    elbowBack: -0.08,
+    javelinAngleRad: toRad(aimAngleDeg)
+  };
+};
+
+const throwCurves = (t01: number, aimAngleDeg: number): MotionCurves => {
+  const stage = sampleThrowSubphase(t01);
+  const windup = stage.windup01;
+  const delivery = stage.delivery01;
+  const follow = stage.follow01;
+
+  const loadedLean = lerp(-0.28, -0.4, windup);
+  const deliveryLean = lerp(loadedLean, 0.06, delivery);
+
+  const loadedShoulderFront = lerp(-1.52, -2.22, windup);
+  const deliveryShoulderFront = lerp(loadedShoulderFront, -0.32, delivery);
+
+  const loadedShoulderBack = lerp(0.36, 0.58, windup);
+  const deliveryShoulderBack = lerp(loadedShoulderBack, -0.42, delivery);
+
+  const loadedElbowFront = lerp(0.38, 0.88, windup);
+  const deliveryElbowFront = lerp(loadedElbowFront, -0.06, delivery);
+
+  const loadedJavelinAngle = toRad(aimAngleDeg + 6 + windup * 12);
+  const deliveryJavelinAngle = lerp(loadedJavelinAngle, toRad(-6), delivery);
+
+  const pelvisLoaded = lerp(-0.02, -0.08, windup);
+  const pelvisDelivery = lerp(pelvisLoaded, 0.18, delivery);
+
+  const hipFrontLoaded = lerp(0.2, 0.08, windup);
+  const hipFrontDelivery = lerp(hipFrontLoaded, 0.72, delivery);
+
+  const hipBackLoaded = lerp(-0.2, -0.3, windup);
+  const hipBackDelivery = lerp(hipBackLoaded, -0.56, delivery);
+
+  const kneeFrontLoaded = lerp(0.56, 0.68, windup);
+  const kneeFrontDelivery = lerp(kneeFrontLoaded, 0.32, delivery);
+
+  const kneeBackLoaded = lerp(0.48, 0.54, windup);
+  const kneeBackDelivery = lerp(kneeBackLoaded, 0.76, delivery);
+
+  return {
+    leanRad: lerp(deliveryLean, 0.28, follow),
+    pelvisShiftXM: lerp(pelvisDelivery, 0.24, follow),
+    pelvisBobYM: 0.018 * Math.sin(clamp01(t01) * Math.PI * 1.2),
+    hipFront: lerp(hipFrontDelivery, 0.58, follow),
+    hipBack: lerp(hipBackDelivery, -0.48, follow),
+    kneeFront: lerp(kneeFrontDelivery, 0.38, follow),
+    kneeBack: lerp(kneeBackDelivery, 0.82, follow),
+    shoulderFront: lerp(deliveryShoulderFront, -0.18, follow),
+    shoulderBack: lerp(deliveryShoulderBack, -0.28, follow),
+    elbowFront: lerp(deliveryElbowFront, -0.04, follow),
+    elbowBack: lerp(lerp(-0.08, 0.14, delivery), 0.22, follow),
+    javelinAngleRad: lerp(deliveryJavelinAngle, toRad(-20), follow)
+  };
+};
+
+const followThroughCurves = (t01: number): MotionCurves => {
+  const t = clamp01(t01);
+  return {
+    leanRad: 0.3,
+    pelvisShiftXM: 0.16 * t,
+    pelvisBobYM: 0.01,
+    hipFront: 0.56,
+    hipBack: -0.52,
+    kneeFront: 0.35,
+    kneeBack: 0.82,
+    shoulderFront: 0.26,
+    shoulderBack: -0.52,
+    elbowFront: -0.12,
+    elbowBack: 0.22,
+    javelinAngleRad: toRad(-20)
+  };
+};
+
+const idleCurves = (): MotionCurves => ({
+  leanRad: -0.04,
+  pelvisShiftXM: 0,
+  pelvisBobYM: 0,
+  hipFront: 0.12,
+  hipBack: -0.12,
+  kneeFront: 0.42,
+  kneeBack: 0.42,
+  shoulderFront: -0.26,
+  shoulderBack: 0.2,
+  elbowFront: 0.14,
+  elbowBack: -0.08,
+  javelinAngleRad: toRad(4)
+});
+
+const curvesForPose = (
+  pose: AthletePoseState,
+  speedNorm: number,
+  aimAngleDeg: number,
+  options: PoseSamplingOptions
+): MotionCurves => {
+  const t = clamp01(pose.animT);
+
+  if (pose.animTag === 'run') {
+    return runCurves(t, speedNorm);
+  }
+
+  if (pose.animTag === 'aim') {
+    const targetAim = aimCurves(t, aimAngleDeg);
+    if (
+      typeof options.runBlendFromAnimT === 'number' &&
+      typeof options.runToAimBlend01 === 'number' &&
+      options.runToAimBlend01 < 1
+    ) {
+      const runSource = runCurves(options.runBlendFromAnimT, speedNorm);
+      return mixCurves(runSource, targetAim, easeInOutSine(options.runToAimBlend01));
+    }
+    return targetAim;
+  }
+
+  if (pose.animTag === 'throw') {
+    return throwCurves(t, aimAngleDeg);
+  }
+
+  if (pose.animTag === 'followThrough') {
+    return followThroughCurves(t);
+  }
+
+  return idleCurves();
 };
 
 export const computeAthletePoseGeometry = (
   pose: AthletePoseState,
   speedNorm: number,
   aimAngleDeg: number,
-  baseXM = 2.8
+  baseXM = 2.8,
+  options: PoseSamplingOptions = {}
 ): AthletePoseGeometry => {
-  const curves = curvesForPose(pose, speedNorm, aimAngleDeg);
+  const curves = curvesForPose(pose, speedNorm, aimAngleDeg, options);
   const pelvis: PointM = {
     xM: baseXM + curves.pelvisShiftXM,
     yM: 1 + curves.pelvisBobYM
@@ -196,6 +338,15 @@ export const computeAthletePoseGeometry = (
   const handFront = add(elbowFront, polar(armFrontAngle + curves.elbowFront, 0.31));
   const handBack = add(elbowBack, polar(armBackAngle + curves.elbowBack, 0.29));
 
+  const forearmAngle = Math.atan2(handFront.yM - elbowFront.yM, handFront.xM - elbowFront.xM);
+  const armTrackedAngle = forearmAngle - toRad(7);
+  const armTrackingBlend = smoothStep(0.08, 0.62, pose.animT) * 0.38;
+  const trackedThrowAngle = lerp(curves.javelinAngleRad, armTrackedAngle, armTrackingBlend);
+  const attachedJavelinAngle =
+    pose.animTag === 'throw'
+      ? Math.min(toRad(62), Math.max(toRad(-28), trackedThrowAngle))
+      : curves.javelinAngleRad;
+
   return {
     head,
     shoulderCenter,
@@ -211,6 +362,6 @@ export const computeAthletePoseGeometry = (
     handFront,
     handBack,
     javelinGrip: handFront,
-    javelinAngleRad: curves.javelinAngleRad
+    javelinAngleRad: attachedJavelinAngle
   };
 };
