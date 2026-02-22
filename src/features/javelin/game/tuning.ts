@@ -45,11 +45,21 @@ type AngleControlTuning = {
   pointerDeadzonePx: number;
 };
 
+type TrajectoryIndicatorTuning = {
+  numPoints: number;
+  timeStepS: number;
+  dotRadiusPx: number;
+  baseOpacity: number;
+  endOpacity: number;
+  dotColor: string;
+};
+
 export type GameplayTuning = {
   speedUp: SpeedUpTuning;
   throwPhase: ThrowPhaseTuning;
   movement: MovementTuning;
   angleControl: AngleControlTuning;
+  trajectoryIndicator: TrajectoryIndicatorTuning;
 };
 
 /**
@@ -101,6 +111,14 @@ export const GAMEPLAY_TUNING: GameplayTuning = {
     rampMs: 600,
     pointerDeadzonePx: 12,
   },
+  trajectoryIndicator: {
+    numPoints: 10,
+    timeStepS: 0.12,
+    dotRadiusPx: 3,
+    baseOpacity: 0.55,
+    endOpacity: 0.1,
+    dotColor: '#1a6b9a'
+  }
 };
 
 export const BEAT_INTERVAL_MS = GAMEPLAY_TUNING.speedUp.beatIntervalMs;
@@ -129,6 +147,13 @@ export const ANGLE_KEYBOARD_HOLD_START_DEG_PER_SEC = GAMEPLAY_TUNING.angleContro
 export const ANGLE_KEYBOARD_HOLD_MAX_DEG_PER_SEC = GAMEPLAY_TUNING.angleControl.holdMaxDegPerSec;
 export const ANGLE_KEYBOARD_RAMP_MS = GAMEPLAY_TUNING.angleControl.rampMs;
 export const ANGLE_POINTER_DEADZONE_PX = GAMEPLAY_TUNING.angleControl.pointerDeadzonePx;
+
+export const TRAJECTORY_PREVIEW_NUM_POINTS = GAMEPLAY_TUNING.trajectoryIndicator.numPoints;
+export const TRAJECTORY_PREVIEW_TIME_STEP_S = GAMEPLAY_TUNING.trajectoryIndicator.timeStepS;
+export const TRAJECTORY_PREVIEW_DOT_RADIUS_PX = GAMEPLAY_TUNING.trajectoryIndicator.dotRadiusPx;
+export const TRAJECTORY_PREVIEW_BASE_OPACITY = GAMEPLAY_TUNING.trajectoryIndicator.baseOpacity;
+export const TRAJECTORY_PREVIEW_END_OPACITY = GAMEPLAY_TUNING.trajectoryIndicator.endOpacity;
+export const TRAJECTORY_PREVIEW_DOT_COLOR = GAMEPLAY_TUNING.trajectoryIndicator.dotColor;
 
 export const CHARGE_FILL_DURATION_MS = GAMEPLAY_TUNING.throwPhase.chargeFillDurationMs;
 export const CHARGE_MAX_CYCLES = GAMEPLAY_TUNING.throwPhase.chargeMaxCycles;

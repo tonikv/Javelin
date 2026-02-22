@@ -148,3 +148,4 @@ Manual checks:
 - 2026-02-22: `computeThrowDistance` marked legacy-only via `@deprecated` JSDoc (runtime path remains physics-based).
 - 2026-02-22: Started Workstream 1 by narrowing gameplay angle clamp to `15..55` and aligning pointer/pose clamping with constants.
 - 2026-02-22: Added tunable keyboard hold acceleration and pointer deadzone plumbing in input controls.
+- 2026-02-22: Started Workstream 2 with new `trajectory.ts`, tuning hooks, and `chargeAim`-only dotted preview rendering.

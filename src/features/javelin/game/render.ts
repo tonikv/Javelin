@@ -25,7 +25,15 @@ import {
 import { drawAthlete } from './renderAthlete';
 import { drawWorldTimingMeter } from './renderMeter';
 import { getRunupMeterPhase01 } from './selectors';
-import { RUNUP_START_X_M, RUN_TO_DRAWBACK_BLEND_MS } from './tuning';
+import {
+  RUNUP_START_X_M,
+  RUN_TO_DRAWBACK_BLEND_MS,
+  TRAJECTORY_PREVIEW_BASE_OPACITY,
+  TRAJECTORY_PREVIEW_DOT_COLOR,
+  TRAJECTORY_PREVIEW_DOT_RADIUS_PX,
+  TRAJECTORY_PREVIEW_END_OPACITY
+} from './tuning';
+import { computeTrajectoryPreview, type TrajectoryPoint } from './trajectory';
 import type { GameState, ResultKind, TimingQuality } from './types';
 
 export { getCameraTargetX } from './camera';
@@ -407,6 +415,32 @@ const drawLandingMarker = (
   ctx.fill();
 };
 
+const drawTrajectoryIndicator = (
+  ctx: CanvasRenderingContext2D,
+  toScreen: WorldToScreen,
+  points: TrajectoryPoint[],
+  uiScale: number
+): void => {
+  if (points.length === 0) {
+    return;
+  }
+
+  const lastIndex = Math.max(1, points.length - 1);
+  const dotRadiusPx = Math.max(2, TRAJECTORY_PREVIEW_DOT_RADIUS_PX * uiScale);
+  ctx.save();
+  ctx.fillStyle = TRAJECTORY_PREVIEW_DOT_COLOR;
+  for (let index = 0; index < points.length; index += 1) {
+    const t = index / lastIndex;
+    const alpha = TRAJECTORY_PREVIEW_BASE_OPACITY + (TRAJECTORY_PREVIEW_END_OPACITY - TRAJECTORY_PREVIEW_BASE_OPACITY) * t;
+    const screen = toScreen(points[index]);
+    ctx.globalAlpha = alpha;
+    ctx.beginPath();
+    ctx.arc(screen.x, screen.y, dotRadiusPx, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+};
+
 type JavelinRenderState =
   | { mode: 'none' }
   | { mode: 'attached'; xM: number; yM: number; angleRad: number; lengthM: number }
@@ -643,6 +677,17 @@ export const renderGame = (
     );
   } else if (javelin.mode !== 'none') {
     drawJavelinWorld(ctx, toScreen, javelin.xM, javelin.yM, javelin.angleRad, javelin.lengthM);
+  }
+
+  if (state.phase.tag === 'chargeAim') {
+    const trajectoryPreview = computeTrajectoryPreview({
+      originXM: pose.javelinGrip.xM + Math.cos(pose.javelinAngleRad) * JAVELIN_GRIP_OFFSET_M,
+      originYM: pose.javelinGrip.yM + Math.sin(pose.javelinAngleRad) * JAVELIN_GRIP_OFFSET_Y_M,
+      angleDeg: state.phase.angleDeg,
+      speedNorm: state.phase.speedNorm,
+      forceNorm: state.phase.forceNormPreview
+    });
+    drawTrajectoryIndicator(ctx, toScreen, trajectoryPreview.points, overlayUiScale);
   }
 
   if (state.phase.tag === 'result') {
