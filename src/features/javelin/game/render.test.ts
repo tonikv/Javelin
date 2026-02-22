@@ -97,6 +97,24 @@ describe('javelin visibility state', () => {
     expect(getVisibleJavelinRenderState(chargeState, chargePose).mode).toBe('attached');
   });
 
+  it('keeps javelin attached in idle pose', () => {
+    const idleState: GameState = {
+      ...baseState,
+      phase: {
+        tag: 'idle'
+      }
+    };
+
+    const idlePose = computeAthletePoseGeometry(
+      { animTag: 'idle', animT: 0 },
+      0,
+      idleState.aimAngleDeg,
+      RUNUP_START_X_M
+    );
+
+    expect(getVisibleJavelinRenderState(idleState, idlePose).mode).toBe('attached');
+  });
+
   it('switches to flight mode after release', () => {
     const flightState: GameState = {
       ...baseState,
@@ -237,6 +255,16 @@ describe('javelin visibility state', () => {
       phase: {
         tag: 'result',
         athleteXM: RUNUP_START_X_M,
+        launchedFrom: {
+          speedNorm: 0.78,
+          angleDeg: 38,
+          forceNorm: 0.82,
+          windMs: 0.2,
+          launchSpeedMs: 29,
+          athleteXM: RUNUP_START_X_M,
+          releaseQuality: 'good',
+          lineCrossedAtRelease: false
+        },
         distanceM: 0,
         isHighscore: false,
         resultKind: 'foul_tip_first',

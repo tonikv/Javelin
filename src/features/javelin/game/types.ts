@@ -116,6 +116,7 @@ export type GamePhase =
   | {
       tag: 'result';
       athleteXM: number;
+      launchedFrom: LaunchSnapshot;
       distanceM: number;
       isHighscore: boolean;
       resultKind: ResultKind;

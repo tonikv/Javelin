@@ -413,6 +413,45 @@ type JavelinRenderState =
   | { mode: 'flight'; xM: number; yM: number; angleRad: number; lengthM: number }
   | { mode: 'landed'; xM: number; yM: number; angleRad: number; lengthM: number };
 
+const RUNWAY_FOOT_CONTACT_Y_M = 0.02;
+const MIN_POSE_GROUNDING_SHIFT_M = 0.0001;
+
+type PosePoint = {
+  xM: number;
+  yM: number;
+};
+
+const shiftPointDown = (point: PosePoint, offsetYM: number): PosePoint => ({
+  xM: point.xM,
+  yM: point.yM - offsetYM
+});
+
+const groundPoseToRunway = (pose: AthletePoseGeometry): AthletePoseGeometry => {
+  const lowestFootYM = Math.min(pose.footFront.yM, pose.footBack.yM);
+  const offsetYM = lowestFootYM - RUNWAY_FOOT_CONTACT_Y_M;
+  if (offsetYM <= MIN_POSE_GROUNDING_SHIFT_M) {
+    return pose;
+  }
+
+  return {
+    ...pose,
+    head: shiftPointDown(pose.head, offsetYM),
+    shoulderCenter: shiftPointDown(pose.shoulderCenter, offsetYM),
+    pelvis: shiftPointDown(pose.pelvis, offsetYM),
+    hipFront: shiftPointDown(pose.hipFront, offsetYM),
+    hipBack: shiftPointDown(pose.hipBack, offsetYM),
+    kneeFront: shiftPointDown(pose.kneeFront, offsetYM),
+    kneeBack: shiftPointDown(pose.kneeBack, offsetYM),
+    footFront: shiftPointDown(pose.footFront, offsetYM),
+    footBack: shiftPointDown(pose.footBack, offsetYM),
+    elbowFront: shiftPointDown(pose.elbowFront, offsetYM),
+    elbowBack: shiftPointDown(pose.elbowBack, offsetYM),
+    handFront: shiftPointDown(pose.handFront, offsetYM),
+    handBack: shiftPointDown(pose.handBack, offsetYM),
+    javelinGrip: shiftPointDown(pose.javelinGrip, offsetYM)
+  };
+};
+
 export const getVisibleJavelinRenderState = (
   state: GameState,
   pose: AthletePoseGeometry
@@ -438,6 +477,7 @@ export const getVisibleJavelinRenderState = (
   }
 
   if (
+    state.phase.tag === 'idle' ||
     state.phase.tag === 'runup' ||
     state.phase.tag === 'chargeAim' ||
     state.phase.tag === 'throwAnim'
@@ -465,68 +505,70 @@ export const getVisibleJavelinRenderState = (
 };
 
 const getPoseForState = (state: GameState): AthletePoseGeometry => {
-  if (state.phase.tag === 'runup') {
-    return computeAthletePoseGeometry(
-      state.phase.athletePose,
-      state.phase.speedNorm,
-      state.aimAngleDeg,
-      state.phase.runupDistanceM
-    );
-  }
-  if (state.phase.tag === 'chargeAim') {
-    const runToAimBlend01 =
-      state.phase.speedNorm > 0.01
-        ? getRunToAimBlend01(state.phase.chargeStartedAtMs, state.nowMs, RUN_TO_DRAWBACK_BLEND_MS)
-        : 1;
-    return computeAthletePoseGeometry(
-      state.phase.athletePose,
-      state.phase.speedNorm,
-      state.phase.angleDeg,
-      state.phase.runupDistanceM,
-      {
-        runBlendFromAnimT: state.phase.runEntryAnimT,
-        runToAimBlend01
+  const pose = (() => {
+    switch (state.phase.tag) {
+      case 'runup':
+        return computeAthletePoseGeometry(
+          state.phase.athletePose,
+          state.phase.speedNorm,
+          state.aimAngleDeg,
+          state.phase.runupDistanceM
+        );
+      case 'chargeAim': {
+        const runToAimBlend01 =
+          state.phase.speedNorm > 0.01
+            ? getRunToAimBlend01(state.phase.chargeStartedAtMs, state.nowMs, RUN_TO_DRAWBACK_BLEND_MS)
+            : 1;
+        return computeAthletePoseGeometry(
+          state.phase.athletePose,
+          state.phase.speedNorm,
+          state.phase.angleDeg,
+          state.phase.runupDistanceM,
+          {
+            runBlendFromAnimT: state.phase.runEntryAnimT,
+            runToAimBlend01
+          }
+        );
       }
-    );
-  }
-  if (state.phase.tag === 'throwAnim') {
-    return computeAthletePoseGeometry(
-      state.phase.athletePose,
-      state.phase.speedNorm,
-      state.phase.angleDeg,
-      state.phase.athleteXM
-    );
-  }
-  if (state.phase.tag === 'flight') {
-    return computeAthletePoseGeometry(
-      state.phase.athletePose,
-      state.phase.launchedFrom.speedNorm,
-      state.phase.launchedFrom.angleDeg,
-      state.phase.athleteXM
-    );
-  }
-  if (state.phase.tag === 'result') {
-    return computeAthletePoseGeometry(
-      { animTag: 'followThrough', animT: 1 },
-      0.72,
-      24,
-      state.phase.athleteXM
-    );
-  }
-  if (state.phase.tag === 'fault') {
-    return computeAthletePoseGeometry(
-      state.phase.athletePose,
-      0.14,
-      state.aimAngleDeg,
-      state.phase.athleteXM
-    );
-  }
-  return computeAthletePoseGeometry(
-    { animTag: 'idle', animT: 0 },
-    0,
-    state.aimAngleDeg,
-    RUNUP_START_X_M
-  );
+      case 'throwAnim':
+        return computeAthletePoseGeometry(
+          state.phase.athletePose,
+          state.phase.speedNorm,
+          state.phase.angleDeg,
+          state.phase.athleteXM
+        );
+      case 'flight':
+        return computeAthletePoseGeometry(
+          state.phase.athletePose,
+          state.phase.launchedFrom.speedNorm,
+          state.phase.launchedFrom.angleDeg,
+          state.phase.athleteXM
+        );
+      case 'result':
+        return computeAthletePoseGeometry(
+          { animTag: 'followThrough', animT: 1 },
+          0.72,
+          24,
+          state.phase.athleteXM
+        );
+      case 'fault':
+        return computeAthletePoseGeometry(
+          state.phase.athletePose,
+          0.14,
+          state.aimAngleDeg,
+          state.phase.athleteXM
+        );
+      case 'idle':
+        return computeAthletePoseGeometry(
+          { animTag: 'idle', animT: 0 },
+          0,
+          state.aimAngleDeg,
+          RUNUP_START_X_M
+        );
+    }
+  })();
+
+  return groundPoseToRunway(pose);
 };
 
 export const getPlayerAngleAnchorScreen = (

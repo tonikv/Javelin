@@ -419,6 +419,7 @@ const tickFlight = (state: GameState, dtMs: number): GameState => {
       phase: {
         tag: 'result',
         athleteXM,
+        launchedFrom: state.phase.launchedFrom,
         distanceM,
         isHighscore: false,
         resultKind: legality.resultKind,
