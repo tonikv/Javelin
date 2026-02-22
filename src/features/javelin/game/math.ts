@@ -20,6 +20,9 @@ export const toRad = (deg: number): number => (deg * Math.PI) / 180;
 /** Radians to degrees. */
 export const toDeg = (rad: number): number => (rad * 180) / Math.PI;
 
+/** Round a value to one decimal place. */
+export const roundTo1 = (value: number): number => Math.round(value * 10) / 10;
+
 export const easeOutQuad = (t: number): number => 1 - (1 - t) * (1 - t);
 
 export const easeOutCubic = (t: number): number => 1 - (1 - t) ** 3;

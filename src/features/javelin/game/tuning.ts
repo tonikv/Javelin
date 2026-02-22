@@ -37,10 +37,19 @@ type MovementTuning = {
   faultStumbleDistanceM: number;
 };
 
+type AngleControlTuning = {
+  stepDeg: number;
+  holdStartDegPerSec: number;
+  holdMaxDegPerSec: number;
+  rampMs: number;
+  pointerDeadzonePx: number;
+};
+
 export type GameplayTuning = {
   speedUp: SpeedUpTuning;
   throwPhase: ThrowPhaseTuning;
   movement: MovementTuning;
+  angleControl: AngleControlTuning;
 };
 
 /**
@@ -85,6 +94,13 @@ export const GAMEPLAY_TUNING: GameplayTuning = {
     followThroughStepDistanceM: 0.75,
     faultStumbleDistanceM: 0.82,
   },
+  angleControl: {
+    stepDeg: 1.0,
+    holdStartDegPerSec: 30,
+    holdMaxDegPerSec: 120,
+    rampMs: 600,
+    pointerDeadzonePx: 12,
+  },
 };
 
 export const BEAT_INTERVAL_MS = GAMEPLAY_TUNING.speedUp.beatIntervalMs;
@@ -108,9 +124,11 @@ export const CHARGE_AIM_STOP_SPEED_NORM = GAMEPLAY_TUNING.movement.chargeAimStop
 export const FOLLOW_THROUGH_STEP_DISTANCE_M = GAMEPLAY_TUNING.movement.followThroughStepDistanceM;
 export const FAULT_STUMBLE_DISTANCE_M = GAMEPLAY_TUNING.movement.faultStumbleDistanceM;
 
-// Deprecated aliases kept for compatibility during transition.
-export const CHARGEAIM_SPEED_DECAY_PER_SECOND = CHARGE_AIM_SPEED_DECAY_PER_SECOND;
-export const CHARGEAIM_STOP_SPEED_NORM = CHARGE_AIM_STOP_SPEED_NORM;
+export const ANGLE_KEYBOARD_STEP_DEG = GAMEPLAY_TUNING.angleControl.stepDeg;
+export const ANGLE_KEYBOARD_HOLD_START_DEG_PER_SEC = GAMEPLAY_TUNING.angleControl.holdStartDegPerSec;
+export const ANGLE_KEYBOARD_HOLD_MAX_DEG_PER_SEC = GAMEPLAY_TUNING.angleControl.holdMaxDegPerSec;
+export const ANGLE_KEYBOARD_RAMP_MS = GAMEPLAY_TUNING.angleControl.rampMs;
+export const ANGLE_POINTER_DEADZONE_PX = GAMEPLAY_TUNING.angleControl.pointerDeadzonePx;
 
 export const CHARGE_FILL_DURATION_MS = GAMEPLAY_TUNING.throwPhase.chargeFillDurationMs;
 export const CHARGE_MAX_CYCLES = GAMEPLAY_TUNING.throwPhase.chargeMaxCycles;

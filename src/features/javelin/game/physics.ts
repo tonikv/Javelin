@@ -15,7 +15,7 @@ import {
   MAX_ANGULAR_VEL_RAD,
   MAX_LINEAR_ACCEL
 } from './constants';
-import { clamp } from './math';
+import { clamp, roundTo1 } from './math';
 import type { PhysicalJavelinState } from './types';
 
 const normalizeAngleRad = (angleRad: number): number => {
@@ -28,8 +28,6 @@ const normalizeAngleRad = (angleRad: number): number => {
   }
   return angle;
 };
-
-const roundTo1 = (value: number): number => Math.round(value * 10) / 10;
 
 const isFiniteState = (javelin: PhysicalJavelinState): boolean =>
   Number.isFinite(javelin.xM) &&

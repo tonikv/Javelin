@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { isInteractiveElement } from '../../../app/browser';
 import { resumeAudioContext } from '../game/audio';
-import { keyboardAngleDelta, pointerFromAnchorToAngleDeg } from '../game/controls';
+import { keyboardAngleDelta, keyboardAngleHoldDelta, pointerFromAnchorToAngleDeg } from '../game/controls';
 import { getPlayerAngleAnchorScreen } from '../game/render';
+import { ANGLE_KEYBOARD_STEP_DEG } from '../game/tuning';
 import type { GameAction, GameState } from '../game/types';
 
 type Dispatch = (action: GameAction) => void;
@@ -14,6 +15,12 @@ type UsePointerControlsArgs = {
 };
 
 type TimerHandle = ReturnType<typeof setTimeout>;
+
+type AngleKeyHoldState = {
+  direction: 'up' | 'down';
+  holdStartedAtMs: number;
+  lastAppliedAtMs: number;
+};
 
 type TouchLongPressHandlers = {
   onTouchStart: () => void;
@@ -122,17 +129,22 @@ export const usePointerControls = ({ canvas, dispatch, state }: UsePointerContro
       getPhaseTag: () => stateRef.current.phase.tag,
       now
     });
+    let angleKeyHoldState: AngleKeyHoldState | null = null;
     const dispatchAngleFromPointer = (clientX: number, clientY: number): void => {
       const rect = canvas.getBoundingClientRect();
       const anchor = getPlayerAngleAnchorScreen(stateRef.current, rect.width, rect.height);
+      const angleDeg = pointerFromAnchorToAngleDeg(
+        clientX,
+        clientY,
+        rect.left + anchor.x,
+        rect.top + anchor.y
+      );
+      if (Number.isNaN(angleDeg)) {
+        return;
+      }
       dispatch({
         type: 'setAngle',
-        angleDeg: pointerFromAnchorToAngleDeg(
-          clientX,
-          clientY,
-          rect.left + anchor.x,
-          rect.top + anchor.y
-        )
+        angleDeg
       });
     };
 
@@ -209,20 +221,55 @@ export const usePointerControls = ({ canvas, dispatch, state }: UsePointerContro
         dispatch({ type: 'beginChargeAim', atMs: now() });
         return;
       }
-      if (event.code === 'ArrowUp' && shouldHandleAngleAdjustKeyDown(event.code, phaseTag, event.target)) {
+      if (
+        (event.code === 'ArrowUp' || event.code === 'ArrowDown') &&
+        shouldHandleAngleAdjustKeyDown(event.code, phaseTag, event.target)
+      ) {
         event.preventDefault();
-        dispatch({ type: 'adjustAngle', deltaDeg: keyboardAngleDelta('up') });
-        return;
-      }
-      if (event.code === 'ArrowDown' && shouldHandleAngleAdjustKeyDown(event.code, phaseTag, event.target)) {
-        event.preventDefault();
-        dispatch({ type: 'adjustAngle', deltaDeg: keyboardAngleDelta('down') });
+        const direction = event.code === 'ArrowUp' ? 'up' : 'down';
+        const timestampMs = now();
+        const shouldRestartHold =
+          !event.repeat ||
+          angleKeyHoldState === null ||
+          angleKeyHoldState.direction !== direction;
+        if (shouldRestartHold) {
+          angleKeyHoldState = {
+            direction,
+            holdStartedAtMs: timestampMs,
+            lastAppliedAtMs: timestampMs
+          };
+          dispatch({
+            type: 'adjustAngle',
+            deltaDeg: keyboardAngleDelta(direction, ANGLE_KEYBOARD_STEP_DEG)
+          });
+          return;
+        }
+        const holdState = angleKeyHoldState;
+        if (holdState === null) {
+          return;
+        }
+        const holdDurationMs = timestampMs - holdState.holdStartedAtMs;
+        const dtMs = timestampMs - holdState.lastAppliedAtMs;
+        dispatch({
+          type: 'adjustAngle',
+          deltaDeg: keyboardAngleHoldDelta(direction, holdDurationMs, dtMs)
+        });
+        angleKeyHoldState = {
+          ...holdState,
+          lastAppliedAtMs: timestampMs
+        };
       }
     };
 
     const onKeyUp = (event: KeyboardEvent): void => {
       if (isInteractiveEventTarget(event.target)) {
         return;
+      }
+      if (
+        (event.code === 'ArrowUp' && angleKeyHoldState?.direction === 'up') ||
+        (event.code === 'ArrowDown' && angleKeyHoldState?.direction === 'down')
+      ) {
+        angleKeyHoldState = null;
       }
       // Enter keyup is reserved for throw release only while charging.
       if (shouldReleaseChargeFromEnterKeyUp(event.code, stateRef.current.phase.tag, event.target)) {

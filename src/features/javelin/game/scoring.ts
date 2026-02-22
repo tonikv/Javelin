@@ -1,8 +1,6 @@
 import { THROW_LINE_X_M } from './constants';
-import { clamp } from './math';
+import { clamp, roundTo1 } from './math';
 import type { ResultKind, ThrowInput } from './types';
-
-const roundTo1 = (value: number): number => Math.round(value * 10) / 10;
 
 export const DISTANCE_MEASURE_MODE = 'throwLineArc' as const;
 export const FOUL_ON_LINE_CROSS = true as const;
@@ -27,6 +25,10 @@ export const releaseEfficiency = (releaseTiming: number): number => {
 export const windEfficiency = (windMs: number): number =>
   clamp(1 + windMs * 0.035, 0.88, 1.12);
 
+/**
+ * @deprecated Legacy formula-based distance estimate kept for tests and balancing experiments.
+ * Runtime scoring uses `computeCompetitionDistanceM` from physical landing data.
+ */
 export const computeThrowDistance = (input: ThrowInput): number => {
   const raw =
     118 *

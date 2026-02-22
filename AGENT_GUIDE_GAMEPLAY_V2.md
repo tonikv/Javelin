@@ -1,7 +1,7 @@
 # Agent Guide - Javelin Gameplay V2
 
 Generated: 2026-02-22
-Status: Draft v1
+Status: In progress (Workstream 4 started)
 
 ## Purpose
 Gameplay V2 targets better throw feel, clearer player feedback, and stronger arcade character while keeping the current reducer-driven architecture intact.
@@ -140,3 +140,11 @@ Manual checks:
 - Start with Workstream 4 before introducing new gameplay behavior.
 - Keep commits scoped by workstream to simplify review and rollback.
 - Update this document after each workstream with "Status" and key tuning decisions.
+
+## Progress Log
+- 2026-02-22: Workstream 4 cleanup batch started.
+- 2026-02-22: `roundTo1` deduplicated into `math.ts`; removed duplicate local implementations in `physics.ts` and `scoring.ts`.
+- 2026-02-22: Deprecated `CHARGEAIM_*` tuning aliases removed after usage audit.
+- 2026-02-22: `computeThrowDistance` marked legacy-only via `@deprecated` JSDoc (runtime path remains physics-based).
+- 2026-02-22: Started Workstream 1 by narrowing gameplay angle clamp to `15..55` and aligning pointer/pose clamping with constants.
+- 2026-02-22: Added tunable keyboard hold acceleration and pointer deadzone plumbing in input controls.

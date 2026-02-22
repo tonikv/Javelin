@@ -7,6 +7,7 @@ import {
   lerp,
   toRad
 } from './math';
+import { ANGLE_MAX_DEG, ANGLE_MIN_DEG } from './constants';
 import { RUNUP_START_X_M } from './tuning';
 import type { AthletePoseState } from './types';
 
@@ -190,7 +191,7 @@ const runCurves = (t01: number, speedNorm: number, aimAngleDeg: number): MotionC
   const cycle = clamp01(t01) * Math.PI * 2;
   const stride = Math.sin(cycle);
   const counter = Math.sin(cycle + Math.PI);
-  const runJavelinAngleDeg = Math.max(-90, Math.min(90, aimAngleDeg));
+  const runJavelinAngleDeg = Math.max(ANGLE_MIN_DEG, Math.min(ANGLE_MAX_DEG, aimAngleDeg));
   return {
     leanRad: -0.18 - 0.18 * speedNorm,
     pelvisShiftXM: 0.08 * stride,
@@ -300,7 +301,7 @@ const idleCurves = (aimAngleDeg: number): MotionCurves => ({
   shoulderBack: 0.2,
   elbowFront: 0.14,
   elbowBack: -0.08,
-  javelinAngleRad: toRad(Math.max(-90, Math.min(90, aimAngleDeg)))
+  javelinAngleRad: toRad(Math.max(ANGLE_MIN_DEG, Math.min(ANGLE_MAX_DEG, aimAngleDeg)))
 });
 
 const curvesForPose = (

@@ -7,10 +7,9 @@ export const RUNUP_MAX_X_M = 22.4;
 
 export const RHYTHM_TARGET_PHASE01 = 0.5;
 
-export const ANGLE_MIN_DEG = -90;
-export const ANGLE_MAX_DEG = 90;
+export const ANGLE_MIN_DEG = 15;
+export const ANGLE_MAX_DEG = 55;
 export const ANGLE_DEFAULT_DEG = 36;
-export const ANGLE_CHANGE_STEP_DEG = 1.2;
 
 export const CAMERA_RUNUP_VIEW_WIDTH_M = 21;
 export const CAMERA_THROW_VIEW_WIDTH_M = 19.5;
