@@ -169,6 +169,7 @@ export const JavelinPage = (): ReactElement => {
     state.phase.isHighscore &&
     savedRoundId !== state.roundId;
   const resultDistanceM = state.phase.tag === 'result' ? state.phase.distanceM : null;
+  const resultThrowSpecs = state.phase.tag === 'result' ? state.phase.launchedFrom : null;
 
   const isFoulMessage =
     state.phase.tag === 'fault' ||
@@ -218,19 +219,39 @@ export const JavelinPage = (): ReactElement => {
           {resultStatusMessage && (
             <p className={`result-note ${isFoulMessage ? 'is-foul' : ''}`}>{resultStatusMessage}</p>
           )}
+          {resultThrowSpecs !== null && (
+            <div className="result-specs">
+              <span className="score-chip">
+                {t('spec.wind')}:{' '}
+                {resultThrowSpecs.windMs >= 0 ? '+' : ''}
+                {formatNumber(resultThrowSpecs.windMs)} m/s
+              </span>
+              <span className="score-chip">
+                {t('spec.angle')}: {formatNumber(resultThrowSpecs.angleDeg, 0)}°
+              </span>
+              <span className="score-chip">
+                {t('spec.launchSpeed')}: {formatNumber(resultThrowSpecs.launchSpeedMs)} m/s
+              </span>
+            </div>
+          )}
 
           {canSaveScore && state.phase.tag === 'result' && (
             <form
               className="save-form"
               onSubmit={(event) => {
                 event.preventDefault();
+                if (state.phase.tag !== 'result') {
+                  return;
+                }
                 addHighscore({
                   id: crypto.randomUUID(),
                   name: nameInput.trim().slice(0, 10) || t('scoreboard.defaultName'),
                   distanceM: resultDistanceM ?? 0,
                   playedAtIso: new Date().toISOString(),
                   locale,
-                  windMs: state.windMs
+                  windMs: state.phase.launchedFrom.windMs,
+                  launchSpeedMs: state.phase.launchedFrom.launchSpeedMs,
+                  angleDeg: state.phase.launchedFrom.angleDeg
                 });
                 setSavedRoundId(state.roundId);
               }}

@@ -47,13 +47,28 @@ const parseEntry = (value: unknown): HighscoreEntry | null => {
   }
   const windMs = raw.windMs === undefined ? 0 : raw.windMs;
 
+  if (
+    raw.launchSpeedMs !== undefined &&
+    (typeof raw.launchSpeedMs !== 'number' || !Number.isFinite(raw.launchSpeedMs))
+  ) {
+    return null;
+  }
+  const launchSpeedMs = typeof raw.launchSpeedMs === 'number' ? raw.launchSpeedMs : undefined;
+
+  if (raw.angleDeg !== undefined && (typeof raw.angleDeg !== 'number' || !Number.isFinite(raw.angleDeg))) {
+    return null;
+  }
+  const angleDeg = typeof raw.angleDeg === 'number' ? raw.angleDeg : undefined;
+
   return {
     id: raw.id,
     name: raw.name,
     distanceM: raw.distanceM,
     playedAtIso: raw.playedAtIso,
     locale,
-    windMs
+    windMs,
+    launchSpeedMs,
+    angleDeg
   };
 };
 

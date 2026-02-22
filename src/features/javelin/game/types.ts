@@ -155,4 +155,6 @@ export type HighscoreEntry = {
   playedAtIso: string;
   locale: Locale;
   windMs: number;
+  launchSpeedMs?: number;
+  angleDeg?: number;
 };

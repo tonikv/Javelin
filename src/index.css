@@ -102,49 +102,21 @@ h1 {
 }
 
 .hud-panel {
-  padding: 14px 16px;
+  padding: 12px 14px;
 }
 
 .hud-topline {
   font-weight: 800;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 8px;
 }
 
 .hud-hint {
   font-size: 0.875rem;
   color: var(--text-soft);
-  margin-bottom: 8px;
-}
-
-.hud-hint-wind {
-  color: #0f4e7a;
-  font-weight: 700;
-}
-
-.hud-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.hud-item {
-  padding: 8px 10px;
-  border-radius: 12px;
-  background: rgba(0, 100, 190, 0.09);
-  display: grid;
-  gap: 2px;
-}
-
-.hud-item span {
-  font-size: 0.875rem;
-  color: var(--text-soft);
-}
-
-.hud-item strong {
-  font-size: 1.2rem;
+  margin: 0;
 }
 
 .canvas-frame {
@@ -223,6 +195,13 @@ button.ghost {
   color: #9b2217;
 }
 
+.result-specs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: -2px 0 0;
+}
+
 .save-form {
   display: flex;
   flex-wrap: wrap;
@@ -287,17 +266,48 @@ button.ghost {
 
 .scoreboard-entry {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 8px;
-  align-items: baseline;
-  padding: 6px 8px;
+  gap: 6px;
+  padding: 8px 10px;
   border-radius: 10px;
   background: rgba(0, 143, 85, 0.08);
 }
 
-.scoreboard-entry time {
+.scoreboard-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.scoreboard-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scoreboard-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.score-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(0, 100, 190, 0.11);
+  color: #0f3b61;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.scoreboard-date {
   color: var(--text-soft);
-  font-size: 0.875rem;
+  font-size: 0.8rem;
 }
 
 .disclosure {

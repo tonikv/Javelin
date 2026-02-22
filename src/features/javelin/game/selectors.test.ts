@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getAngleDeg, getRunupMeterPhase01, getSpeedPercent } from './selectors';
+import { getRunupMeterPhase01, getSpeedPercent } from './selectors';
 import type { GameState } from './types';
 
 const makeRunupState = (speedNorm: number): GameState => ({
@@ -33,7 +33,7 @@ describe('runup meter phase', () => {
 });
 
 describe('result throw specs', () => {
-  it('keeps throw speed in result phase', () => {
+  it('keeps throw speed percent in result phase', () => {
     const state: GameState = {
       nowMs: 3200,
       roundId: 2,
@@ -63,6 +63,5 @@ describe('result throw specs', () => {
     };
 
     expect(getSpeedPercent(state)).toBe(83);
-    expect(getAngleDeg(state)).toBe(41);
   });
 });

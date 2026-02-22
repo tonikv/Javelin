@@ -16,13 +16,19 @@ type StorageMock = {
 
 let storage: StorageMock;
 
-const makeEntry = (name: string, distanceM: number, playedAtIso: string): HighscoreEntry => ({
+const makeEntry = (
+  name: string,
+  distanceM: number,
+  playedAtIso: string,
+  extra: Partial<HighscoreEntry> = {}
+): HighscoreEntry => ({
   id: `${name}-${distanceM}`,
   name,
   distanceM,
   playedAtIso,
   locale: 'fi',
-  windMs: 0
+  windMs: 0,
+  ...extra
 });
 
 beforeEach(() => {
@@ -78,8 +84,12 @@ describe('highscore helpers', () => {
     expect(loadHighscores()).toEqual([]);
   });
 
-  it('ignores malformed and invalid stored entries', () => {
-    const valid = makeEntry('VALID', 75.2, '2026-02-21T09:10:00.000Z');
+  it('ignores malformed and invalid stored entries while preserving optional throw specs', () => {
+    const valid = makeEntry('VALID', 75.2, '2026-02-21T09:10:00.000Z', {
+      windMs: -0.8,
+      launchSpeedMs: 31.4,
+      angleDeg: 36
+    });
     localStorage.setItem(
       HIGHSCORE_STORAGE_KEY,
       JSON.stringify([
@@ -87,7 +97,9 @@ describe('highscore helpers', () => {
         { ...valid, distanceM: Number.NaN },
         { ...valid, playedAtIso: 'not-a-date' },
         { ...valid, locale: 'xx' },
-        { ...valid, windMs: Number.POSITIVE_INFINITY }
+        { ...valid, windMs: Number.POSITIVE_INFINITY },
+        { ...valid, launchSpeedMs: Number.POSITIVE_INFINITY },
+        { ...valid, angleDeg: Number.NaN }
       ])
     );
 
