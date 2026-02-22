@@ -24,9 +24,11 @@ describe('javelin visibility state', () => {
 
     sessionA.resultMarker.lastRoundId = 9;
     sessionA.camera.targetX = 18;
+    sessionA.lastPhaseTag = 'result';
 
     expect(sessionB.resultMarker.lastRoundId).toBe(-1);
     expect(sessionB.camera.targetX).toBe(RUNUP_START_X_M);
+    expect(sessionB.lastPhaseTag).toBe('idle');
   });
 
   it('is attached during runup and charge', () => {

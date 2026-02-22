@@ -4,7 +4,15 @@ import {
   sampleThrowSubphase,
   type AthletePoseGeometry
 } from './athletePose';
-import { playBeatTick } from './audio';
+import {
+  playBeatTick,
+  playChargeStart,
+  playCrowdReaction,
+  playFaultOof,
+  playLandingImpact,
+  playThrowWhoosh,
+  setFlightWindIntensity
+} from './audio';
 import {
   createCameraSmoothingState,
   createWorldToScreen,
@@ -88,6 +96,7 @@ type ResultMarkerFadeState = {
 export type RenderSession = {
   camera: CameraSmoothingState;
   resultMarker: ResultMarkerFadeState;
+  lastPhaseTag: GameState['phase']['tag'];
 };
 
 export const createRenderSession = (): RenderSession => ({
@@ -95,7 +104,8 @@ export const createRenderSession = (): RenderSession => ({
   resultMarker: {
     lastRoundId: -1,
     shownAtMs: 0
-  }
+  },
+  lastPhaseTag: 'idle'
 });
 
 type ReleaseFlashLabels = Record<TimingQuality, string> & {
@@ -642,6 +652,42 @@ export const renderGame = (
   releaseFlashLabels: ReleaseFlashLabels,
   session: RenderSession
 ): void => {
+  const phaseChanged = state.phase.tag !== session.lastPhaseTag;
+  if (phaseChanged) {
+    switch (state.phase.tag) {
+      case 'chargeAim':
+        playChargeStart();
+        break;
+      case 'throwAnim':
+        playThrowWhoosh(state.phase.speedNorm);
+        break;
+      case 'result':
+        playLandingImpact(state.phase.tipFirst === true);
+        playCrowdReaction(state.phase.resultKind === 'valid' ? 'cheer' : 'groan');
+        break;
+      case 'fault':
+        playFaultOof();
+        playCrowdReaction('groan');
+        break;
+      case 'idle':
+      case 'runup':
+      case 'flight':
+      default:
+        break;
+    }
+  }
+
+  if (state.phase.tag === 'flight') {
+    const speedMs = Math.hypot(
+      state.phase.javelin.vxMs,
+      state.phase.javelin.vyMs,
+      state.phase.javelin.vzMs
+    );
+    setFlightWindIntensity(Math.min(1, speedMs / 38));
+  } else {
+    setFlightWindIntensity(0);
+  }
+
   const overlayUiScale = getOverlayUiScale(width);
   const camera = createWorldToScreen(state, width, height, dtMs, session.camera);
   const { toScreen, worldMinX, worldMaxX } = camera;
@@ -760,8 +806,10 @@ export const renderGame = (
       const distToTarget = Math.abs(meterPhase - RHYTHM_TARGET_PHASE01);
       const wrappedDist = Math.min(distToTarget, 1 - distToTarget);
       if (wrappedDist < 0.02) {
-        playBeatTick(state.nowMs, wrappedDist < 0.01);
+        playBeatTick(state.nowMs, wrappedDist < 0.01 ? 'perfect' : 'good');
       }
     }
   }
+
+  session.lastPhaseTag = state.phase.tag;
 };

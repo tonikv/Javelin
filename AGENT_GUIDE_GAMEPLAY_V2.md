@@ -149,3 +149,5 @@ Manual checks:
 - 2026-02-22: Started Workstream 1 by narrowing gameplay angle clamp to `15..55` and aligning pointer/pose clamping with constants.
 - 2026-02-22: Added tunable keyboard hold acceleration and pointer deadzone plumbing in input controls.
 - 2026-02-22: Started Workstream 2 with new `trajectory.ts`, tuning hooks, and `chargeAim`-only dotted preview rendering.
+- 2026-02-22: Started Workstream 3 with event-based procedural audio engine, crowd ambience bootstrap, and phase-transition sound triggers in render.
+- 2026-02-22: Added continuous flight-wind audio layer with per-frame intensity control tied to javelin speed.

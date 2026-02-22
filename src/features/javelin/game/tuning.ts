@@ -54,12 +54,21 @@ type TrajectoryIndicatorTuning = {
   dotColor: string;
 };
 
+type AudioTuning = {
+  masterVolume: number;
+  rhythmVolume: number;
+  crowdVolume: number;
+  effectsVolume: number;
+  crowdAmbientGain: number;
+};
+
 export type GameplayTuning = {
   speedUp: SpeedUpTuning;
   throwPhase: ThrowPhaseTuning;
   movement: MovementTuning;
   angleControl: AngleControlTuning;
   trajectoryIndicator: TrajectoryIndicatorTuning;
+  audio: AudioTuning;
 };
 
 /**
@@ -118,6 +127,13 @@ export const GAMEPLAY_TUNING: GameplayTuning = {
     baseOpacity: 0.55,
     endOpacity: 0.1,
     dotColor: '#1a6b9a'
+  },
+  audio: {
+    masterVolume: 0.5,
+    rhythmVolume: 0.8,
+    crowdVolume: 0.4,
+    effectsVolume: 0.7,
+    crowdAmbientGain: 0.018
   }
 };
 
@@ -154,6 +170,12 @@ export const TRAJECTORY_PREVIEW_DOT_RADIUS_PX = GAMEPLAY_TUNING.trajectoryIndica
 export const TRAJECTORY_PREVIEW_BASE_OPACITY = GAMEPLAY_TUNING.trajectoryIndicator.baseOpacity;
 export const TRAJECTORY_PREVIEW_END_OPACITY = GAMEPLAY_TUNING.trajectoryIndicator.endOpacity;
 export const TRAJECTORY_PREVIEW_DOT_COLOR = GAMEPLAY_TUNING.trajectoryIndicator.dotColor;
+
+export const AUDIO_MASTER_VOLUME = GAMEPLAY_TUNING.audio.masterVolume;
+export const AUDIO_RHYTHM_VOLUME = GAMEPLAY_TUNING.audio.rhythmVolume;
+export const AUDIO_CROWD_VOLUME = GAMEPLAY_TUNING.audio.crowdVolume;
+export const AUDIO_EFFECTS_VOLUME = GAMEPLAY_TUNING.audio.effectsVolume;
+export const AUDIO_CROWD_AMBIENT_GAIN = GAMEPLAY_TUNING.audio.crowdAmbientGain;
 
 export const CHARGE_FILL_DURATION_MS = GAMEPLAY_TUNING.throwPhase.chargeFillDurationMs;
 export const CHARGE_MAX_CYCLES = GAMEPLAY_TUNING.throwPhase.chargeMaxCycles;
