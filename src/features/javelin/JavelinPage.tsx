@@ -2,14 +2,15 @@ import { memo, useEffect, useMemo, useReducer, useState, type ReactElement } fro
 import { LanguageSwitch } from './components/LanguageSwitch';
 import { HudPanel } from './components/HudPanel';
 import { GameCanvas } from './components/GameCanvas';
-import { ScoreBoard } from './components/ScoreBoard';
-import { ControlHelp } from './components/ControlHelp';
+import { ScoreBoard, ScoreBoardContent } from './components/ScoreBoard';
+import { ControlHelp, ControlHelpContent } from './components/ControlHelp';
 import { gameReducer } from './game/reducer';
 import { WIND_MAX_MS, WIND_MIN_MS } from './game/constants';
 import type { FaultReason, HighscoreEntry } from './game/types';
 import { useGameLoop } from './hooks/useGameLoop';
 import { useLocalHighscores } from './hooks/useLocalHighscores';
 import { useI18n } from '../../i18n/init';
+import { useMediaQuery } from '../../app/useMediaQuery';
 import { createInitialGameState } from './game/update';
 
 const randomWind = (): number =>
@@ -24,7 +25,7 @@ type TopBarProps = {
 
 const TopBarComponent = ({ appTitle, gameTitle }: TopBarProps): ReactElement => (
   <header className="topbar">
-    <div>
+    <div className="topbar-title">
       <p className="eyebrow">{appTitle}</p>
       <h1>{gameTitle}</h1>
     </div>
@@ -54,12 +55,57 @@ const SideColumnComponent = ({ highscores, clearHighscores }: SideColumnProps): 
 
 const SideColumn = memo(SideColumnComponent);
 
+type CompactSideColumnProps = {
+  highscores: HighscoreEntry[];
+  clearHighscores: () => void;
+};
+
+const CompactSideColumnComponent = ({
+  highscores,
+  clearHighscores
+}: CompactSideColumnProps): ReactElement => {
+  const { t } = useI18n();
+  const hasScores = highscores.length > 0;
+  const [isScoreboardOpen, setIsScoreboardOpen] = useState<boolean>(hasScores);
+
+  useEffect(() => {
+    setIsScoreboardOpen(hasScores);
+  }, [hasScores]);
+
+  return (
+    <section className="compact-side-column">
+      <details className="card disclosure disclosure-help">
+        <summary>{t('help.title')}</summary>
+        <div className="disclosure-body">
+          <ControlHelpContent />
+        </div>
+      </details>
+      <details
+        className="card disclosure disclosure-scoreboard"
+        open={isScoreboardOpen}
+        onToggle={(event) => setIsScoreboardOpen(event.currentTarget.open)}
+      >
+        <summary>{t('scoreboard.title')}</summary>
+        <div className="disclosure-body">
+          <ScoreBoardContent highscores={highscores} />
+        </div>
+      </details>
+      <button type="button" className="ghost reset-scores" onClick={clearHighscores}>
+        {t('action.resetScores')}
+      </button>
+    </section>
+  );
+};
+
+const CompactSideColumn = memo(CompactSideColumnComponent);
+
 export const JavelinPage = (): ReactElement => {
   const { t, formatNumber, locale } = useI18n();
   const [state, dispatch] = useReducer(gameReducer, undefined, createInitialGameState);
   const [nameInput, setNameInput] = useState('AAA');
   const [savedRoundId, setSavedRoundId] = useState<number>(-1);
   const { highscores, addHighscore, clearHighscores, isHighscore } = useLocalHighscores();
+  const isCompactLayout = useMediaQuery('(max-width: 1023px)');
 
   useGameLoop(dispatch);
 
@@ -206,7 +252,11 @@ export const JavelinPage = (): ReactElement => {
           )}
         </div>
 
-        <SideColumn highscores={highscores} clearHighscores={clearHighscores} />
+        {isCompactLayout ? (
+          <CompactSideColumn highscores={highscores} clearHighscores={clearHighscores} />
+        ) : (
+          <SideColumn highscores={highscores} clearHighscores={clearHighscores} />
+        )}
       </section>
     </main>
   );

@@ -94,6 +94,30 @@ type ReleaseFlashLabels = Record<TimingQuality, string> & {
   foulLine: string;
 };
 
+const getOverlayUiScale = (width: number): number => {
+  const safeWidth = Math.max(280, width);
+  return Math.max(0.95, Math.min(1.25, 420 / safeWidth));
+};
+
+const drawOutlinedText = (
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  fillStyle: string,
+  outlineStyle: string,
+  outlineWidth: number
+): void => {
+  ctx.save();
+  ctx.strokeStyle = outlineStyle;
+  ctx.lineWidth = outlineWidth;
+  ctx.lineJoin = 'round';
+  ctx.strokeText(text, x, y);
+  ctx.fillStyle = fillStyle;
+  ctx.fillText(text, x, y);
+  ctx.restore();
+};
+
 const drawBackground = (ctx: CanvasRenderingContext2D, width: number, height: number): void => {
   const sky = ctx.createLinearGradient(0, 0, 0, height);
   sky.addColorStop(0, '#dceef8');
@@ -149,20 +173,28 @@ const drawThrowLine = (
   ctx: CanvasRenderingContext2D,
   toScreen: WorldToScreen,
   height: number,
-  label: string
+  label: string,
+  uiScale: number
 ): void => {
   const groundY = height - CAMERA_GROUND_BOTTOM_PADDING;
   const line = toScreen({ xM: THROW_LINE_X_M, yM: 0 });
   ctx.strokeStyle = '#ff5d4e';
-  ctx.lineWidth = 3;
+  ctx.lineWidth = Math.max(2.4, 3 * uiScale);
   ctx.beginPath();
-  ctx.moveTo(line.x, groundY - 24);
-  ctx.lineTo(line.x, groundY + 19);
+  ctx.moveTo(line.x, groundY - 24 * uiScale);
+  ctx.lineTo(line.x, groundY + 19 * uiScale);
   ctx.stroke();
 
-  ctx.fillStyle = '#a3211a';
-  ctx.font = '700 12px ui-sans-serif';
-  ctx.fillText(label, line.x - 28, groundY - 27);
+  ctx.font = `700 ${Math.round(12 * uiScale)}px ui-sans-serif`;
+  drawOutlinedText(
+    ctx,
+    label,
+    line.x - 28 * uiScale,
+    groundY - 27 * uiScale,
+    '#a3211a',
+    'rgba(246, 252, 255, 0.92)',
+    Math.max(2, 1.8 * uiScale)
+  );
 };
 
 const drawTrackAndField = (
@@ -172,14 +204,15 @@ const drawTrackAndField = (
   toScreen: WorldToScreen,
   throwLineLabel: string,
   worldMinX: number,
-  worldMaxX: number
+  worldMaxX: number,
+  uiScale: number
 ): void => {
   const groundY = height - CAMERA_GROUND_BOTTOM_PADDING;
   ctx.fillStyle = '#88d37f';
   ctx.fillRect(0, groundY, width, CAMERA_GROUND_BOTTOM_PADDING);
 
   ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 2;
+  ctx.lineWidth = Math.max(1.8, 2 * uiScale);
   ctx.beginPath();
   ctx.moveTo(RUNWAY_OFFSET_X, groundY);
   ctx.lineTo(width - 20, groundY);
@@ -195,57 +228,72 @@ const drawTrackAndField = (
     const { x } = toScreen({ xM, yM: 0 });
     const isMajor = relativeM % 10 === 0;
     ctx.strokeStyle = isMajor ? 'rgba(255, 255, 255, 0.85)' : 'rgba(255, 255, 255, 0.4)';
-    ctx.lineWidth = isMajor ? 2 : 1;
+    ctx.lineWidth = isMajor ? Math.max(1.8, 2 * uiScale) : Math.max(1, 1.2 * uiScale);
     ctx.beginPath();
     ctx.moveTo(x, groundY);
-    ctx.lineTo(x, groundY + (isMajor ? 16 : 10));
+    ctx.lineTo(x, groundY + (isMajor ? 16 * uiScale : 10 * uiScale));
     ctx.stroke();
 
     if (isMajor) {
-      ctx.fillStyle = '#0b2238';
-      ctx.font = 'bold 12px ui-sans-serif';
-      ctx.fillText(`${relativeM} m`, x - 12, groundY + 32);
+      ctx.font = `700 ${Math.round(12 * uiScale)}px ui-sans-serif`;
+      drawOutlinedText(
+        ctx,
+        `${relativeM} m`,
+        x - 12 * uiScale,
+        groundY + 32 * uiScale,
+        '#0b2238',
+        'rgba(245, 252, 255, 0.92)',
+        Math.max(1.8, 1.5 * uiScale)
+      );
     }
   }
 
-  drawThrowLine(ctx, toScreen, height, throwLineLabel);
+  drawThrowLine(ctx, toScreen, height, throwLineLabel, uiScale);
 };
 
 const drawWindVane = (
   ctx: CanvasRenderingContext2D,
   width: number,
   windMs: number,
-  localeFormatter: Intl.NumberFormat
+  localeFormatter: Intl.NumberFormat,
+  uiScale: number
 ): void => {
   const dir = windMs >= 0 ? 1 : -1;
-  const x = width - 118;
-  const y = 42;
+  const x = width - 118 * uiScale;
+  const y = Math.max(32, 42 * uiScale);
 
   ctx.strokeStyle = '#0f4165';
-  ctx.lineWidth = 3;
+  ctx.lineWidth = Math.max(2, 3 * uiScale);
   ctx.beginPath();
-  ctx.moveTo(x, y + 22);
-  ctx.lineTo(x, y - 8);
+  ctx.moveTo(x, y + 22 * uiScale);
+  ctx.lineTo(x, y - 8 * uiScale);
   ctx.stroke();
 
   ctx.fillStyle = windMs >= 0 ? '#1f9d44' : '#cf3a2f';
   ctx.beginPath();
   if (dir >= 0) {
-    ctx.moveTo(x, y - 8);
-    ctx.lineTo(x + 26, y - 1);
-    ctx.lineTo(x, y + 7);
+    ctx.moveTo(x, y - 8 * uiScale);
+    ctx.lineTo(x + 26 * uiScale, y - uiScale);
+    ctx.lineTo(x, y + 7 * uiScale);
   } else {
-    ctx.moveTo(x, y - 8);
-    ctx.lineTo(x - 26, y - 1);
-    ctx.lineTo(x, y + 7);
+    ctx.moveTo(x, y - 8 * uiScale);
+    ctx.lineTo(x - 26 * uiScale, y - uiScale);
+    ctx.lineTo(x, y + 7 * uiScale);
   }
   ctx.closePath();
   ctx.fill();
 
-  ctx.fillStyle = '#10314a';
-  ctx.font = '600 12px ui-sans-serif';
+  ctx.font = `700 ${Math.round(12 * uiScale)}px ui-sans-serif`;
   const windText = `${windMs >= 0 ? '+' : ''}${localeFormatter.format(windMs)} m/s`;
-  ctx.fillText(windText, x - 16, y + 34);
+  drawOutlinedText(
+    ctx,
+    windText,
+    x - 16 * uiScale,
+    y + 34 * uiScale,
+    '#10314a',
+    'rgba(245, 252, 255, 0.95)',
+    Math.max(1.8, 1.6 * uiScale)
+  );
 };
 
 const drawJavelinWorld = (
@@ -320,34 +368,42 @@ const drawLandingMarker = (
   toScreen: WorldToScreen,
   landingXM: number,
   resultKind: ResultKind,
-  distanceLabel: string
+  distanceLabel: string,
+  uiScale: number
 ): void => {
   const landing = toScreen({ xM: landingXM, yM: 0 });
   const groundY = landing.y;
 
   ctx.strokeStyle = resultKind === 'valid' ? '#1f9d44' : '#cf3a2f';
-  ctx.lineWidth = 2;
+  ctx.lineWidth = Math.max(1.8, 2 * uiScale);
   ctx.beginPath();
-  ctx.moveTo(landing.x, groundY + 5);
-  ctx.lineTo(landing.x, groundY - 36);
+  ctx.moveTo(landing.x, groundY + 5 * uiScale);
+  ctx.lineTo(landing.x, groundY - 36 * uiScale);
   ctx.stroke();
 
   ctx.fillStyle = resultKind === 'valid' ? '#22c272' : '#e0453a';
   ctx.beginPath();
-  ctx.moveTo(landing.x, groundY - 36);
-  ctx.lineTo(landing.x + 28, groundY - 30);
-  ctx.lineTo(landing.x, groundY - 24);
+  ctx.moveTo(landing.x, groundY - 36 * uiScale);
+  ctx.lineTo(landing.x + 28 * uiScale, groundY - 30 * uiScale);
+  ctx.lineTo(landing.x, groundY - 24 * uiScale);
   ctx.closePath();
   ctx.fill();
 
-  ctx.fillStyle = '#ffffff';
-  ctx.font = '700 10px ui-sans-serif';
+  ctx.font = `700 ${Math.round(10 * uiScale)}px ui-sans-serif`;
   ctx.textAlign = 'left';
-  ctx.fillText(distanceLabel, landing.x + 4, groundY - 28);
+  drawOutlinedText(
+    ctx,
+    distanceLabel,
+    landing.x + 4 * uiScale,
+    groundY - 28 * uiScale,
+    '#ffffff',
+    'rgba(8, 35, 56, 0.6)',
+    Math.max(1.6, 1.4 * uiScale)
+  );
 
   ctx.fillStyle = 'rgba(15, 40, 60, 0.35)';
   ctx.beginPath();
-  ctx.arc(landing.x, groundY + 2, 3, 0, Math.PI * 2);
+  ctx.arc(landing.x, groundY + 2 * uiScale, 3 * uiScale, 0, Math.PI * 2);
   ctx.fill();
 };
 
@@ -510,6 +566,7 @@ export const renderGame = (
   releaseFlashLabels: ReleaseFlashLabels,
   session: RenderSession
 ): void => {
+  const overlayUiScale = getOverlayUiScale(width);
   const camera = createWorldToScreen(state, width, height, dtMs, session.camera);
   const { toScreen, worldMinX, worldMaxX } = camera;
 
@@ -522,9 +579,10 @@ export const renderGame = (
     toScreen,
     throwLineLabel,
     worldMinX,
-    worldMaxX
+    worldMaxX,
+    overlayUiScale
   );
-  drawWindVane(ctx, width, state.windMs, numberFormat);
+  drawWindVane(ctx, width, state.windMs, numberFormat, overlayUiScale);
 
   const pose = getPoseForState(state);
   const javelin = getVisibleJavelinRenderState(state, pose);
@@ -559,7 +617,8 @@ export const renderGame = (
       toScreen,
       state.phase.landingXM,
       state.phase.resultKind,
-      `${numberFormat.format(state.phase.distanceM)}m`
+      `${numberFormat.format(state.phase.distanceM)}m`,
+      overlayUiScale
     );
     ctx.restore();
   } else {
@@ -594,16 +653,19 @@ export const renderGame = (
       const scale = 1 + (1 - alpha) * 0.12;
       ctx.save();
       ctx.globalAlpha = alpha;
-      ctx.font = `900 ${Math.round(28 * scale)}px ui-sans-serif`;
+      ctx.font = `900 ${Math.round(28 * scale * overlayUiScale)}px ui-sans-serif`;
       ctx.textAlign = 'center';
+      const y = 74 + (overlayUiScale - 1) * 10 - (1 - alpha) * 8 * overlayUiScale;
+      ctx.strokeStyle = 'rgba(240, 250, 255, 0.92)';
+      ctx.lineWidth = Math.max(2, 2 * overlayUiScale);
+      ctx.strokeText(releaseFeedback.label, width / 2, y);
       ctx.fillStyle = '#0b2238';
-      const y = 74 - (1 - alpha) * 8;
       ctx.fillText(releaseFeedback.label, width / 2, y);
       ctx.restore();
     }
   }
 
-  drawWorldTimingMeter(ctx, state, headScreen);
+  drawWorldTimingMeter(ctx, state, headScreen, overlayUiScale);
 
   if (state.phase.tag === 'runup') {
     const meterPhase = getRunupMeterPhase01(state);

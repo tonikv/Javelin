@@ -29,6 +29,9 @@ type WorldMeterState = {
   valuePercent: number;
 };
 
+const normalizeUiScale = (uiScale: number): number =>
+  Math.max(0.9, Math.min(1.3, uiScale));
+
 const normalizeMeterPhase01 = (phase01: number): number => {
   if (phase01 <= 0) {
     return 0;
@@ -125,14 +128,20 @@ const getWorldMeterState = (state: GameState): WorldMeterState | null => {
 export const drawWorldTimingMeter = (
   ctx: CanvasRenderingContext2D,
   state: GameState,
-  headScreen: HeadAnchor
+  headScreen: HeadAnchor,
+  uiScale = 1
 ): void => {
   const meterState = getWorldMeterState(state);
   if (meterState === null) {
     return;
   }
 
+  const visualScale = normalizeUiScale(uiScale);
+  const meterRadius = WORLD_METER_RADIUS_PX * visualScale;
+  const meterLineWidth = WORLD_METER_LINE_WIDTH_PX * visualScale;
+  const meterCursorRadius = WORLD_METER_CURSOR_RADIUS_PX * visualScale;
   const anchor = getHeadMeterScreenAnchor(headScreen);
+  anchor.y -= (visualScale - 1) * 8;
   if (!Number.isFinite(anchor.x) || !Number.isFinite(anchor.y)) {
     return;
   }
@@ -144,33 +153,33 @@ export const drawWorldTimingMeter = (
     ctx,
     anchor.x,
     anchor.y,
-    WORLD_METER_RADIUS_PX,
+    meterRadius,
     0,
     1,
     'rgba(10, 46, 77, 0.34)',
-    WORLD_METER_LINE_WIDTH_PX
+    meterLineWidth
   );
 
   drawSemicircleArc(
     ctx,
     anchor.x,
     anchor.y,
-    WORLD_METER_RADIUS_PX,
+    meterRadius,
     meterState.zones.good.start,
     meterState.zones.good.end,
     'rgba(30, 142, 247, 0.82)',
-    WORLD_METER_LINE_WIDTH_PX
+    meterLineWidth
   );
 
   drawSemicircleArc(
     ctx,
     anchor.x,
     anchor.y,
-    WORLD_METER_RADIUS_PX,
+    meterRadius,
     meterState.zones.perfect.start,
     meterState.zones.perfect.end,
     'rgba(18, 196, 119, 0.98)',
-    WORLD_METER_LINE_WIDTH_PX + 0.8
+    meterLineWidth + 0.8 * visualScale
   );
 
   if (state.phase.tag === 'runup') {
@@ -183,9 +192,9 @@ export const drawWorldTimingMeter = (
         ctx.save();
         ctx.globalAlpha = flashAlpha;
         ctx.strokeStyle = '#22c272';
-        ctx.lineWidth = WORLD_METER_LINE_WIDTH_PX + 6;
+        ctx.lineWidth = meterLineWidth + 6 * visualScale;
         ctx.beginPath();
-        ctx.arc(anchor.x, anchor.y, WORLD_METER_RADIUS_PX, Math.PI, Math.PI * 2, false);
+        ctx.arc(anchor.x, anchor.y, meterRadius, Math.PI, Math.PI * 2, false);
         ctx.stroke();
         ctx.restore();
       }
@@ -193,8 +202,8 @@ export const drawWorldTimingMeter = (
   }
 
   const cursorAngle = phaseToSemicircleAngle(normalizeMeterPhase01(meterState.phase01));
-  const cursorX = anchor.x + Math.cos(cursorAngle) * WORLD_METER_RADIUS_PX;
-  const cursorY = anchor.y + Math.sin(cursorAngle) * WORLD_METER_RADIUS_PX;
+  const cursorX = anchor.x + Math.cos(cursorAngle) * meterRadius;
+  const cursorY = anchor.y + Math.sin(cursorAngle) * meterRadius;
 
   const cursorFill =
     meterState.feedback === 'perfect'
@@ -205,16 +214,20 @@ export const drawWorldTimingMeter = (
 
   ctx.fillStyle = cursorFill;
   ctx.strokeStyle = '#0f3b61';
-  ctx.lineWidth = 2;
+  ctx.lineWidth = Math.max(2, 2 * visualScale);
   ctx.beginPath();
-  ctx.arc(cursorX, cursorY, WORLD_METER_CURSOR_RADIUS_PX, 0, Math.PI * 2);
+  ctx.arc(cursorX, cursorY, meterCursorRadius, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
 
-  ctx.fillStyle = 'rgba(6, 32, 57, 0.9)';
-  ctx.font = '700 11px ui-sans-serif';
+  const valueLabel = `${meterState.valuePercent}%`;
+  ctx.font = `700 ${Math.round(11 * visualScale)}px ui-sans-serif`;
   ctx.textAlign = 'center';
-  ctx.fillText(`${meterState.valuePercent}%`, anchor.x, anchor.y + 16);
+  ctx.strokeStyle = 'rgba(235, 246, 255, 0.95)';
+  ctx.lineWidth = Math.max(2, 1.7 * visualScale);
+  ctx.strokeText(valueLabel, anchor.x, anchor.y + 16 * visualScale);
+  ctx.fillStyle = 'rgba(6, 32, 57, 0.9)';
+  ctx.fillText(valueLabel, anchor.x, anchor.y + 16 * visualScale);
 
   ctx.restore();
 };
