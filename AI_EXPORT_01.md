@@ -1,32 +1,33 @@
 # AI Export
-- Generated: 2026-02-21T20:34:38.148747+00:00
+- Generated: 2026-02-22T13:19:06.524420+00:00
 - Workspace: Javelin
-- Files in this chunk: 54
+- Files in this chunk: 64
 - Limits: maxTotalChars=600000, maxFileChars=20000
-- Approx tokens (this chunk): 48352
+- Approx tokens (this chunk): 58320
 
 ## Repo Map (compact)
 - .github
   - workflows/…
   - copilot-instructions.md
-- agent-guide-gameplay-v2.md
+- AGENT_GUIDE_GAMEPLAY_V2.md
 - AGENTS.md
 - docs
   - ai-notes.md
+  - audio-qa.md
 - index.html
 - package.json
 - public
   - locales/…
 - README.md
 - src
-  - app/… (1 files)
-  - features/ (36 files)
-    - javelin/ (36 files)
+  - app/… (4 files)
+  - features/ (41 files)
+    - javelin/ (41 files)
       - components/… (6 files)
-      - game/… (25 files)
-      - hooks/… (4 files)
+      - game/… (29 files)
+      - hooks/… (5 files)
       - (1 files at this level)
-  - i18n/… (2 files)
+  - i18n/… (3 files)
   - (2 files at this level)
 - tsconfig.json
 - vite.config.ts
@@ -51,9 +52,10 @@
 - src/features/javelin/game/types.ts
 - .github/copilot-instructions.md
 - .github/workflows/deploy.yml
-- agent-guide-gameplay-v2.md
+- AGENT_GUIDE_GAMEPLAY_V2.md
 - AGENTS.md
 - docs/ai-notes.md
+- docs/audio-qa.md
 - index.html
 - package.json
 - public/locales/en/common.json
@@ -61,6 +63,8 @@
 - public/locales/sv/common.json
 - README.md
 - src/app/App.tsx
+- src/app/browser.ts
+- src/app/useMediaQuery.ts
 - src/features/javelin/components/CircularTimingMeter.tsx
 - src/features/javelin/components/ControlHelp.tsx
 - src/features/javelin/components/GameCanvas.tsx
@@ -79,8 +83,10 @@
 - src/features/javelin/game/render.ts
 - src/features/javelin/game/renderAthlete.ts
 - src/features/javelin/game/renderMeter.ts
+- src/features/javelin/game/rhythm.ts
 - src/features/javelin/game/scoring.ts
 - src/features/javelin/game/selectors.ts
+- src/features/javelin/game/trajectory.ts
 - src/features/javelin/game/tuning.ts
 - src/features/javelin/game/update.ts
 - src/features/javelin/hooks/useGameLoop.ts
@@ -93,7 +99,9 @@
 - src/main.tsx
 - tsconfig.json
 - vite.config.ts
+- src/app/browser.test.ts
 - src/features/javelin/game/athletePose.test.ts
+- src/features/javelin/game/audio.test.ts
 - src/features/javelin/game/chargeMeter.test.ts
 - src/features/javelin/game/controls.test.ts
 - src/features/javelin/game/physics.test.ts
@@ -101,7 +109,10 @@
 - src/features/javelin/game/render.test.ts
 - src/features/javelin/game/scoring.test.ts
 - src/features/javelin/game/selectors.test.ts
+- src/features/javelin/game/trajectory.test.ts
 - src/features/javelin/hooks/useLocalHighscores.test.ts
+- src/features/javelin/hooks/usePointerControls.test.ts
+- src/i18n/init.test.ts
 
 ---
 
@@ -230,6 +241,7 @@ export type GamePhase =
   | {
       tag: 'result';
       athleteXM: number;
+      launchedFrom: LaunchSnapshot;
       distanceM: number;
       isHighscore: boolean;
       resultKind: ResultKind;
@@ -276,7 +288,7 @@ export type HighscoreEntry = {
 };
 
 ```
-> meta: lines=163 chars=3793 truncated=no priority
+> meta: lines=164 chars=3829 truncated=no priority
 
 
 ## .github/copilot-instructions.md
@@ -336,664 +348,167 @@ jobs:
 > meta: lines=37 chars=665 truncated=no
 
 
-## agent-guide-gameplay-v2.md
+## AGENT_GUIDE_GAMEPLAY_V2.md
 
 ```md
-# Agent Guide — Javelin: Gameplay Improvements (v2)
-
-> **Target project**: `selain-games-2026-javelin`
-> **Updated**: 2026-02-21 — reflects codebase after refactoring + visual guides were applied
-> **Run tests after each change**: `npm run test`
-> **Run build after all steps**: `npm run build`
-
----
-
-## What Changed Since v1
-
-The refactoring and visual guides have been applied. Key structural changes:
-
-- **`math.ts`** exists — shared `clamp`, `clamp01`, `wrap01`, `lerp`, `toRad`, easing functions. No local redefinitions needed.
-- **`camera.ts`** extracted from render.ts — exports `createWorldToScreen`, `createWorldToScreenRaw`, `resetSmoothCamera`, `getCameraTargetX`, `getViewWidthM`, etc. Camera is now smoothed with `dtMs`.
-- **`renderMeter.ts`** extracted — contains `drawWorldTimingMeter`, `getHeadMeterScreenAnchor`, `getWorldMeterState`.
-- **`renderAthlete.ts`** extracted — contains `drawAthlete`, `HeadAnchor`.
-- **`constants.ts`** is now structural-only (field dims, camera layout, physics). No tuning re-exports.
-- **`tuning.ts`** has convenience aliases (`BEAT_INTERVAL_MS`, `CHARGE_OVERFILL_FAULT_01`, etc.) exported directly.
-- **`ChargeMeterState`** — `cycles` field already removed, JSDoc added. Only `phase01`, windows, `lastQuality`, `lastSampleAtMs`.
-- **`update.ts`** — tick handlers extracted to standalone functions (`tickFault`, `tickRunup`, `tickChargeAim`, `tickThrowAnim`, `tickFlight`) but still in the same file (~640 lines). Reducer is a thin dispatcher.
-- **`chargeAim` phase** — `athleteXM` removed; uses `runupDistanceM` directly.
-- **`renderGame`** — now takes `dtMs` parameter for smooth camera. Calls `drawClouds`, draws landed javelins with tip-first/flat distinction, draws landing markers with fade-in.
-- **`drawWindVane`** — still in `render.ts`, signature: `(ctx, width, windMs, localeFormatter)`.
-
----
-
-## Summary
-
-Six gameplay features. All file references updated for current codebase.
-
-| # | Feature | Impact | Primary Files |
-|---|---------|--------|---------------|
-| 1 | Rhythm beat indicator (visual + audio) | Players can feel the timing instead of guessing | `renderMeter.ts`, new `audio.ts`, `render.ts` |
-| 2 | Throw quality flash feedback | Reward / punish is visible at release moment | `render.ts`, `update.ts`, `types.ts` |
-| 3 | Cyclic charge meter | Adds skill ceiling to force timing | `update.ts`, `tuning.ts` |
-| 4 | Wind strategy indicators | Wind becomes a meaningful gameplay factor | `render.ts`, `HudPanel.tsx`, locales |
-| 5 | Attempt counter / best-of-6 | Gives a competitive arc and session structure | `types.ts`, `update.ts`, `JavelinPage.tsx`, locales |
-| 6 | Touch / mobile input | Playable on phones (GitHub Pages audience) | `usePointerControls.ts`, `ControlHelp.tsx`, locales |
-
-**Recommended order**: 1 → 2 → 3 → 4 → 5 → 6
-
-Features 1–4 are independent of each other. Feature 5 changes game state structure. Feature 6 is a separate input layer and can be done at any point.
-
----
-
-## Feature 1 — Rhythm Beat Indicator
-
-### Problem
-
-During runup, the timing meter shows a cursor sweeping around a semicircle with green and blue zones, but there's no pulse or beat that communicates the tempo. Players must visually track the cursor and guess when to click. The `BEAT_INTERVAL_MS` (820 ms) defines a hidden metronome that the player has no way to perceive.
-
-### 1a. Visual beat flash on the meter arc
-
-The meter drawing lives in **`renderMeter.ts`** in the `drawWorldTimingMeter` function. Add a brief glow flash when the cursor crosses the target zone.
-
-**Approach**: Use `getRunupMeterPhase01(state)` (already imported in `renderMeter.ts` from `selectors.ts`). The target phase is `RHYTHM_TARGET_PHASE01 = 0.5` (from `constants.ts`). When the cursor is within ±0.03 of the target, draw a glow ring behind the meter.
-
-Add to `drawWorldTimingMeter` in **`renderMeter.ts`**, after drawing the meter arcs but before the cursor:
-
-```ts
-// Beat flash — glow when cursor is near target
-if (state.phase.tag === 'runup') {
-  const meterPhase = getRunupMeterPhase01(state);
-  if (meterPhase !== null) {
-    const distToTarget = Math.abs(meterPhase - RHYTHM_TARGET_PHASE01);
-    const wrappedDist = Math.min(distToTarget, 1 - distToTarget);
-    if (wrappedDist < 0.06) {
-      const flashAlpha = (1 - wrappedDist / 0.06) * 0.5;
-      ctx.save();
-      ctx.globalAlpha = flashAlpha;
-      ctx.strokeStyle = '#22c272';
-      ctx.lineWidth = WORLD_METER_LINE_WIDTH_PX + 6;
-      ctx.beginPath();
-      ctx.arc(anchor.x, anchor.y, WORLD_METER_RADIUS_PX, Math.PI, Math.PI * 2, false);
-      ctx.stroke();
-      ctx.restore();
-    }
-  }
-}
-```
-
-Import `RHYTHM_TARGET_PHASE01` from `./constants` in `renderMeter.ts` (add to existing imports).
-
-### 1b. Audio beat tick
-
-Create **`src/features/javelin/game/audio.ts`**:
-
-```ts
-type BeatAudioContext = {
-  ctx: AudioContext;
-  lastTickAtMs: number;
-  minIntervalMs: number;
-};
-
-let audioState: BeatAudioContext | null = null;
-
-const ensureAudioContext = (): BeatAudioContext => {
-  if (audioState === null) {
-    audioState = {
-      ctx: new AudioContext(),
-      lastTickAtMs: 0,
-      minIntervalMs: 200 // debounce
-    };
-  }
-  return audioState;
-};
-
-/**
- * Play a short tick sound. Call once per beat.
- * Uses a brief sine wave oscillator — no audio files needed.
- */
-export const playBeatTick = (nowMs: number, isInZone: boolean): void => {
-  const audio = ensureAudioContext();
-  if (nowMs - audio.lastTickAtMs < audio.minIntervalMs) {
-    return;
-  }
-  audio.lastTickAtMs = nowMs;
-
-  const osc = audio.ctx.createOscillator();
-  const gain = audio.ctx.createGain();
-  osc.connect(gain);
-  gain.connect(audio.ctx.destination);
-
-  osc.frequency.value = isInZone ? 880 : 440;
-  osc.type = 'sine';
-
-  const now = audio.ctx.currentTime;
-  gain.gain.setValueAtTime(isInZone ? 0.15 : 0.06, now);
-  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
-
-  osc.start(now);
-  osc.stop(now + 0.06);
-};
-
-/** Resume audio context (must be called from user gesture). */
-export const resumeAudioContext = (): void => {
-  if (audioState?.ctx.state === 'suspended') {
-    audioState.ctx.resume();
-  }
-};
-```
-
-### 1c. Trigger beat tick in the render loop
-
-In **`render.ts`** → `renderGame`, after `drawWorldTimingMeter(ctx, state, headScreen)`:
-
-```ts
-// Beat audio tick
-if (state.phase.tag === 'runup') {
-  const meterPhase = getRunupMeterPhase01(state);
-  if (meterPhase !== null) {
-    const distToTarget = Math.abs(meterPhase - RHYTHM_TARGET_PHASE01);
-    const wrappedDist = Math.min(distToTarget, 1 - distToTarget);
-    if (wrappedDist < 0.02) {
-      playBeatTick(state.nowMs, wrappedDist < 0.01);
-    }
-  }
-}
-```
-
-Add imports to `render.ts`:
-```ts
-import { playBeatTick } from './audio';
-import { getRunupMeterPhase01 } from './selectors';
-import { RHYTHM_TARGET_PHASE01 } from './constants';
-```
-
-### 1d. Resume audio on first user interaction
-
-In **`usePointerControls.ts`**, add at the top of any mouse/keyboard handler:
-
-```ts
-import { resumeAudioContext } from '../game/audio';
-
-// Inside onMouseDown, first line:
-resumeAudioContext();
-```
-
-Browsers require a user gesture before `AudioContext` can play sound. This resumes it on first click.
-
-### 1e. Test considerations
-
-- Audio is side-effectful — don't test it in unit tests
-- The visual flash is rendering-only — verify manually
-- Add a test that `getRunupMeterPhase01` returns values near 0.5 at beat boundaries:
-
-```ts
-it('meter phase reaches target at beat boundary', () => {
-  const state = makeRunupState({ startedAtMs: 1000, nowMs: 1000 + BEAT_INTERVAL_MS * 3 });
-  const phase = getRunupMeterPhase01(state);
-  expect(phase).toBeCloseTo(RHYTHM_TARGET_PHASE01, 1);
-});
-```
-
----
-
-## Feature 2 — Throw Quality Flash Feedback
-
-### Problem
-
-When the player releases the charge (RMB up), the meter shows which quality zone they hit but only as a static cursor color. There's no celebratory or punishing flash at the critical release moment.
-
-### 2a. Add release feedback state to `types.ts`
-
-Add `releaseFlashAtMs` to the `throwAnim` phase:
-
-```diff
-  | {
-      tag: 'throwAnim';
-      speedNorm: number;
-      athleteXM: number;
-      angleDeg: number;
-      forceNorm: number;
-      releaseQuality: TimingQuality;
-      animProgress: number;
-      released: boolean;
-      athletePose: AthletePoseState;
-+     releaseFlashAtMs: number;
-    }
-```
-
-### 2b. Set `releaseFlashAtMs` in `update.ts`
-
-In the `releaseCharge` case of `reduceGameState`, when building the `throwAnim` phase object (around line 4598):
-
-```diff
-  phase: {
-    tag: 'throwAnim',
-    speedNorm: state.phase.speedNorm,
-    athleteXM: state.phase.runupDistanceM,
-    angleDeg: state.phase.angleDeg,
-    forceNorm,
-    releaseQuality: quality,
-    animProgress: 0,
-    released: false,
-+   releaseFlashAtMs: action.atMs,
-    athletePose: {
-      animTag: 'throw',
-      animT: 0
-    }
-  }
-```
-
-### 2c. Render the flash in `render.ts`
-
-In `renderGame`, after the meter drawing (`drawWorldTimingMeter`) and before the closing of the function:
-
-```ts
-// Release quality flash
-if (state.phase.tag === 'throwAnim') {
-  const flashAge = state.nowMs - state.phase.releaseFlashAtMs;
-  const FLASH_DURATION_MS = 600;
-  if (flashAge < FLASH_DURATION_MS) {
-    const alpha = 1 - flashAge / FLASH_DURATION_MS;
-    const flashColor =
-      state.phase.releaseQuality === 'perfect'
-        ? `rgba(34, 194, 114, ${alpha * 0.6})`
-        : state.phase.releaseQuality === 'good'
-          ? `rgba(50, 156, 245, ${alpha * 0.5})`
-          : `rgba(246, 210, 85, ${alpha * 0.4})`;
-
-    // Fullscreen flash overlay
-    ctx.save();
-    ctx.fillStyle = flashColor;
-    ctx.fillRect(0, 0, width, height);
-    ctx.restore();
-
-    // Text label
-    const label =
-      state.phase.releaseQuality === 'perfect'
-        ? 'PERFECT!'
-        : state.phase.releaseQuality === 'good'
-          ? 'GOOD'
-          : 'MISS';
-    const textAlpha = Math.min(1, alpha * 1.6);
-    const scale = 1 + (1 - alpha) * 0.3;
-    ctx.save();
-    ctx.globalAlpha = textAlpha;
-    ctx.font = `900 ${Math.round(28 * scale)}px ui-sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#0b2238';
-    ctx.fillText(label, width / 2, 72);
-    ctx.restore();
-  }
-}
-```
-
-### 2d. Test
-
-```ts
-it('sets release flash timestamp on charge release', () => {
-  // Set up chargeAim state, dispatch releaseCharge at atMs: 5000
-  // Expect state.phase.tag === 'throwAnim'
-  // Expect state.phase.releaseFlashAtMs === 5000
-});
-```
-
----
-
-## Feature 3 — Cyclic Charge Meter
-
-### Problem
-
-The charge meter fills linearly from 0 to 1 and faults on overfill. There's only one pass through the perfect window, so the timing skill ceiling is low — a fast release always scores adequately. A cyclic meter would let the player wait for the optimal moment in a repeating pattern, adding tension and skill.
-
-### Current state after refactoring
-
-The `cycles` field was already removed from `ChargeMeterState`. The type is now clean:
-
-```ts
-export type ChargeMeterState = {
-  phase01: number;
-  perfectWindow: MeterWindow;
-  goodWindow: MeterWindow;
-  lastQuality: TimingQuality | null;
-  lastSampleAtMs: number;
-};
-```
-
-The overfill logic still uses `CHARGE_OVERFILL_FAULT_01 = 1.03` (from `tuning.ts`). The core change is making `phase01` wrap instead of clamp, and replacing the overfill threshold with a cycle count.
-
-### 3a. Change charge fill to cycle in `tickChargeAim` (update.ts)
-
-Currently at line ~4238:
-
-```ts
-const elapsedMs = Math.max(0, nowMs - state.phase.chargeStartedAtMs);
-const rawFill01 = elapsedMs / CHARGE_FILL_DURATION_MS;
-if (rawFill01 >= CHARGE_OVERFILL_FAULT_01) {
-  return { ...state, phase: createLateReleaseFaultPhase(state.phase, nowMs) };
-}
-const phase01 = clamp(rawFill01, 0, 1);
-```
-
-Replace with:
-
-```ts
-const elapsedMs = Math.max(0, nowMs - state.phase.chargeStartedAtMs);
-const rawFill01 = elapsedMs / CHARGE_FILL_DURATION_MS;
-const fullCycles = Math.floor(rawFill01);
-if (fullCycles >= CHARGE_MAX_CYCLES) {
-  return { ...state, phase: createLateReleaseFaultPhase(state.phase, nowMs) };
-}
-const phase01 = clamp(rawFill01 % 1, 0, 1); // wraps on each cycle
-```
-
-### 3b. Update tuning types and values
-
-In `tuning.ts`, replace `chargeOverfillFault01` with `chargeMaxCycles`:
-
-```diff
-  type ThrowPhaseTuning = {
-    chargeFillDurationMs: number;
--   chargeOverfillFault01: number;
-+   chargeMaxCycles: number;
-    faultJavelinLaunchSpeedMs: number;
-```
-
-In `GAMEPLAY_TUNING`:
-
-```diff
-  throwPhase: {
-    chargeFillDurationMs: 800,
--   chargeOverfillFault01: 1.03,
-+   chargeMaxCycles: 3,
-    faultJavelinLaunchSpeedMs: 8.4,
-```
-
-Update the convenience alias:
-
-```diff
-- export const CHARGE_OVERFILL_FAULT_01 = GAMEPLAY_TUNING.throwPhase.chargeOverfillFault01;
-+ export const CHARGE_MAX_CYCLES = GAMEPLAY_TUNING.throwPhase.chargeMaxCycles;
-```
-
-### 3c. Update the `releaseCharge` handler
-
-In `reduceGameState`, the `releaseCharge` case (line ~4574) also checks `rawFill01 >= CHARGE_OVERFILL_FAULT_01`. Update:
-
-```diff
-- if (rawFill01 >= CHARGE_OVERFILL_FAULT_01) {
-+ const fullCycles = Math.floor(rawFill01);
-+ if (fullCycles >= CHARGE_MAX_CYCLES) {
-```
-
-And the phase01 computation:
-
-```diff
-- const phase01 = clamp(rawFill01, 0, 1);
-+ const phase01 = clamp(rawFill01 % 1, 0, 1);
-```
-
-### 3d. Update imports
-
-In `update.ts`, replace:
-
-```diff
-- import { CHARGE_OVERFILL_FAULT_01 } from './tuning';
-+ import { CHARGE_MAX_CYCLES } from './tuning';
-```
-
-Search the entire codebase for `CHARGE_OVERFILL_FAULT_01` — it should only appear in `update.ts` and `tuning.ts`. Remove all references.
-
-### 3e. Optional: cycle count indicator in meter
-
-In `renderMeter.ts`, the `getWorldMeterState` function for `chargeAim` can expose cycle info for a visual indicator. Optionally draw small dots below the meter (filled for elapsed cycles, empty for remaining). This is a nice-to-have.
-
-### 3f. Test updates
-
-Update tests in `reducer.test.ts`:
-
-```ts
-it('faults after exceeding max charge cycles', () => {
-  let state = makeChargeAimState({ chargeStartedAtMs: 1000 });
-  // Tick past 3 full cycles: 3 * 800 = 2400 ms
-  state = gameReducer(state, { type: 'tick', dtMs: 2500, nowMs: 3500 });
-  expect(state.phase.tag).toBe('fault');
-});
-
-it('allows release on second cycle with correct quality', () => {
-  let state = makeChargeAimState({ chargeStartedAtMs: 1000 });
-  // Tick to 1.85 cycles (1480 ms) — phase01 wraps to 0.85, in perfect window
-  state = gameReducer(state, { type: 'tick', dtMs: 1480, nowMs: 2480 });
-  state = gameReducer(state, { type: 'releaseCharge', atMs: 2480 });
-  expect(state.phase.tag).toBe('throwAnim');
-  if (state.phase.tag === 'throwAnim') {
-    expect(state.phase.releaseQuality).toBe('perfect');
-  }
-});
-```
-
-Remove or update any existing tests that reference `CHARGE_OVERFILL_FAULT_01`.
-
-### 3g. Tuning reference
-
-| Parameter | Easy | Default | Hard |
-|-----------|------|---------|------|
-| `chargeMaxCycles` | 5 | 3 | 2 |
-| `chargeFillDurationMs` | 1000 | 800 | 600 |
-
----
-
-## Feature 4 — Wind Strategy Indicators
-
-### Problem
-
-Wind is displayed as a number and vane arrow in the corner, but there's no guidance on how to compensate. The wind affects physics but the player can't strategize around it.
-
-### 4a. Wind streaks visualization in `render.ts`
-
-Update `drawWindVane` signature to accept `nowMs` and add animated streaks:
-
-```diff
-  const drawWindVane = (
-    ctx: CanvasRenderingContext2D,
-    width: number,
-    windMs: number,
-+   nowMs: number,
-    localeFormatter: Intl.NumberFormat
-  ): void => {
-```
-
-After the existing flag and text drawing, add wind streaks:
-
-```ts
-  // Animated wind streaks across the sky
-  const intensity = Math.abs(windMs) / 2.5; // 0–1
-  const dir = windMs >= 0 ? 1 : -1;
-  const streakCount = Math.ceil(intensity * 5);
-  ctx.save();
-  ctx.globalAlpha = 0.08 + intensity * 0.12;
-  ctx.strokeStyle = '#8cc4e0';
-  ctx.lineWidth = 1.5;
-  for (let i = 0; i < streakCount; i++) {
-    const baseX = (i * width / streakCount) + ((nowMs * 0.03 * dir) % width);
-    const y = 30 + i * 22;
-    const len = 20 + intensity * 30;
-    ctx.beginPath();
-    ctx.moveTo(((baseX % (width + 60)) - 30), y);
-    ctx.lineTo(((baseX % (width + 60)) - 30) + len * dir, y);
-    ctx.stroke();
-  }
-  ctx.restore();
-```
-
-Update the call in `renderGame` to pass `state.nowMs`:
-
-```diff
-- drawWindVane(ctx, width, state.windMs, numberFormat);
-+ drawWindVane(ctx, width, state.windMs, state.nowMs, numberFormat);
-```
-
-### 4b. Angle compensation hint in HudPanel
-
-In **`HudPanel.tsx`**, add a wind hint when in `chargeAim` phase:
-
-```ts
-const windHint = (() => {
-  if (state.phase.tag !== 'chargeAim') return '';
-  if (Math.abs(state.windMs) < 0.3) return '';
-  if (state.windMs < -0.3) return t('javelin.windHintHeadwind');
-  return t('javelin.windHintTailwind');
-})();
-```
-
-Display below existing hint content:
-```tsx
-{windHint && <div className="hud-hint hud-hint-wind">{windHint}</div>}
-```
-
-### 4c. Add i18n keys
-
-Add to all three locale files:
-
-**en/common.json:**
-```json
-"javelin.windHintHeadwind": "Headwind — aim higher for distance",
-"javelin.windHintTailwind": "Tailwind — lower angle carries further"
-```
-
-**fi/common.json:**
-```json
-"javelin.windHintHeadwind": "Vastatuuli — tähtää korkeammalle",
-"javelin.windHintTailwind": "Myötätuuli — matalampi kulma kantaa pidemmälle"
-```
-
-**sv/common.json:**
-```json
-"javelin.windHintHeadwind": "Motvind — sikta högre för distans",
-"javelin.windHintTailwind": "Medvind — lägre vinkel bär längre"
-```
-
-### 4d. Test
-
-Visual only — verify wind streaks animate in the correct direction and hints appear during chargeAim.
-
----
-
-## Feature 5 — Attempt Counter / Best-of-6
-
-### Problem
-
-Each throw is independent with no session structure. Real javelin gives 3–6 attempts.
-
-### 5a. Extend `GameState` in `types.ts`
-
-```diff
-  export type GameState = {
-    nowMs: number;
-    roundId: number;
-    windMs: number;
-    aimAngleDeg: number;
-    phase: GamePhase;
-+   attemptsTotal: number;
-+   attemptNumber: number;
-+   sessionBestM: number | null;
-  };
-```
-
-### 5b. Update `createInitialGameState` in `update.ts`
-
-```diff
-  export const createInitialGameState = (): GameState => ({
-    nowMs: performance.now(),
-    roundId: 0,
-    windMs: 0,
-    aimAngleDeg: ANGLE_DEFAULT_DEG,
--   phase: { tag: 'idle' }
-+   phase: { tag: 'idle' },
-+   attemptsTotal: 6,
-+   attemptNumber: 0,
-+   sessionBestM: null,
-  });
-```
-
-### 5c. Add `startSession` action to `types.ts`
-
-```diff
-  export type GameAction =
-+   | { type: 'startSession'; attempts: number }
-    | { type: 'startRound'; atMs: number; windMs: number }
-```
-
-Handle in `reduceGameState`:
-```ts
-case 'startSession': {
-  return {
-    ...createInitialGameState(),
-    attemptsTotal: action.attempts,
-    attemptNumber: 0,
-    sessionBestM: null,
-  };
-}
-```
-
-### 5d. Update `startRound` to increment attempt counter
-
-```diff
-  case 'startRound': {
-+   if (state.attemptNumber >= state.attemptsTotal) {
-+     return state; // session over
-+   }
-    return {
-      ...state,
-      nowMs: action.atMs,
-      roundId: state.roundId + 1,
-+     attemptNumber: state.attemptNumber + 1,
-      windMs: action.windMs,
-      phase: {
-        tag: 'runup',
-        ...
-```
-
-### 5e. Update session best when result lands
-
-In `tickFlight` (update.ts), where it transitions to `result` (around line 4390):
-
-```diff
-  return {
-    ...state,
-+   sessionBestM:
-+     legality.resultKind === 'valid'
-+       ? Math.max(state.sessionBestM ?? 0, computeCompetitionDistanceM(landingTipXM))
-+       : state.sessionBestM,
-    phase: {
-      tag: 'result',
-```
-
-### 5f. Update `JavelinPage.tsx` UI
-
-Show attempt counter and session best in the actions area:
-
-```tsx
-<div className="hud-topline">
-  {state.attemptNumber > 0 && (
-    <span className="attempt-counter">
-      {t('javelin.attempt')} {state.attemptNumber}/{state.attemptsTotal}
-    </span>
-  )}
-  {state.sessionBestM !== null && (
-    <span className="session-best">
-      {t('javelin.sessionBest')}: {formatNumber(state.sessionBestM)} m
-    </span>
-  )}
-</div>
-```
-
-Change the play-again button to show "Next attempt" vs "New sessi
-
-// [TRUNCATED at 20000 chars]
+# Agent Guide - Javelin Gameplay V2
+
+Generated: 2026-02-22
+Status: In progress (Workstream 4 started)
+
+## Purpose
+Gameplay V2 targets better throw feel, clearer player feedback, and stronger arcade character while keeping the current reducer-driven architecture intact.
+
+Primary outcomes:
+- Tighter and more readable angle control across keyboard, mouse, and touch.
+- Better throw anticipation via trajectory preview in charge phase.
+- Clearer audiovisual feedback for rhythm, release quality, flight, and landing.
+- No regressions in core loop stability, localization, or leaderboard flow.
+
+## Guardrails
+- Keep reducer and selectors pure and immutable.
+- Keep phase logic centered in `src/features/javelin/game/update.ts` with per-phase handlers.
+- Keep camera behavior in `src/features/javelin/game/camera.ts` and rendering in render modules.
+- Route all user-visible strings through localization keys.
+- Avoid `any`; preserve strict TypeScript.
+- Add or update tests for each gameplay change.
+
+## Current Baseline (from main)
+- Core loop and controls are stable.
+- Result phase now preserves throw specs (speed/angle) until next run starts.
+- Idle pose shows javelin and is grounded correctly.
+- Mobile-first UI and responsive layout refactor already landed.
+
+## Workstreams
+
+### 1. Angle and Input Rework
+Goal: make aiming responsive but controllable, especially during charge.
+
+Scope:
+- Narrow effective angle gameplay range and tune clamp boundaries.
+- Add keyboard hold acceleration instead of fixed-step repeats.
+- Add pointer deadzone near shoulder anchor to reduce jitter.
+- Optional pointer smoothing with tuning value.
+
+Target files:
+- `src/features/javelin/game/constants.ts`
+- `src/features/javelin/game/tuning.ts`
+- `src/features/javelin/game/controls.ts`
+- `src/features/javelin/hooks/usePointerControls.ts`
+- `src/features/javelin/game/controls.test.ts`
+- `src/features/javelin/game/reducer.test.ts`
+
+Done criteria:
+- Keyboard hold feels gradual and predictable.
+- Small pointer movement near anchor does not spike angle.
+- Angle remains clamped and stable through all phases.
+- Updated tests pass.
+
+### 2. Trajectory Preview
+Goal: show a simple forward throw arc only when it is meaningful.
+
+Scope:
+- Add lightweight preview utility with simplified parabola.
+- Render dotted arc during `chargeAim` only.
+- Keep it visual-only (no gameplay authority).
+
+Target files:
+- `src/features/javelin/game/trajectory.ts` (new)
+- `src/features/javelin/game/render.ts`
+- `src/features/javelin/game/tuning.ts`
+- `src/features/javelin/game/trajectory.test.ts` (new)
+
+Done criteria:
+- Arc appears only in `chargeAim`.
+- Arc updates with angle/speed/force changes.
+- Arc disappears immediately on throw release.
+- New tests pass.
+
+### 3. Procedural Audio Pass
+Goal: increase feedback clarity with lightweight synthesized audio.
+
+Scope:
+- Expand `audio.ts` from tick-only to event-driven sound helpers.
+- Add per-category gain staging (rhythm/effects/crowd).
+- Trigger one-shot events from render/hook transitions, not reducers.
+- Keep graceful no-audio behavior when `AudioContext` is unavailable.
+
+Target files:
+- `src/features/javelin/game/audio.ts`
+- `src/features/javelin/game/render.ts`
+- `src/features/javelin/hooks/usePointerControls.ts`
+- `src/features/javelin/components/GameCanvas.tsx`
+- `src/features/javelin/game/tuning.ts`
+
+Done criteria:
+- Distinct cues for rhythm quality, throw release, and landing.
+- No repeated retrigger spam on steady frames.
+- Audio starts after user gesture and remains stable after tab focus changes.
+
+### 4. Cleanup and Drift Reduction
+Goal: reduce dead code and duplicated helpers before/while implementing V2.
+
+Scope:
+- Deduplicate shared numeric helpers (for example `roundTo1` if duplicated).
+- Remove obsolete tuning aliases if no longer used.
+- Deprecate or remove dead gameplay formula helpers unused by runtime path.
+
+Target files:
+- `src/features/javelin/game/math.ts`
+- `src/features/javelin/game/physics.ts`
+- `src/features/javelin/game/scoring.ts`
+- `src/features/javelin/game/tuning.ts`
+
+Done criteria:
+- No duplicate helper implementations.
+- No orphaned aliases in tuning exports.
+- Tests and build remain green.
+
+## Suggested Implementation Order
+1. Cleanup and drift reduction.
+2. Angle and input rework.
+3. Trajectory preview.
+4. Procedural audio pass.
+5. Final polish pass and balancing.
+
+## Validation Matrix
+Run on every completed step:
+- `npm run test`
+- `npm run build`
+
+Manual checks:
+- Keyboard-only playthrough from idle to result.
+- Mouse and touch aiming behavior in `runup` and `chargeAim`.
+- Mobile portrait (320x568 and 390x844) and desktop fallback.
+- FI/SV/EN UI and status messaging consistency.
+
+## Acceptance Criteria for Gameplay V2
+- Core throw loop remains stable with no phase-lock bugs.
+- Aiming is easier to control under both keyboard and pointer input.
+- Player gets better pre-throw and post-throw readability.
+- Audio feedback improves timing/release clarity without noise fatigue.
+- Code quality remains aligned with AGENTS.md principles.
+
+## Notes for Next Agent Iteration
+- Start with Workstream 4 before introducing new gameplay behavior.
+- Keep commits scoped by workstream to simplify review and rollback.
+- Update this document after each workstream with "Status" and key tuning decisions.
+
+## Progress Log
+- 2026-02-22: Workstream 4 cleanup batch started.
+- 2026-02-22: `roundTo1` deduplicated into `math.ts`; removed duplicate local implementations in `physics.ts` and `scoring.ts`.
+- 2026-02-22: Deprecated `CHARGEAIM_*` tuning aliases removed after usage audit.
+- 2026-02-22: `computeThrowDistance` marked legacy-only via `@deprecated` JSDoc (runtime path remains physics-based).
+- 2026-02-22: Started Workstream 1 by narrowing gameplay angle clamp to `15..55` and aligning pointer/pose clamping with constants.
+- 2026-02-22: Added tunable keyboard hold acceleration and pointer deadzone plumbing in input controls.
+- 2026-02-22: Started Workstream 2 with new `trajectory.ts`, tuning hooks, and `chargeAim`-only dotted preview rendering.
+- 2026-02-22: Started Workstream 3 with event-based procedural audio engine, crowd ambience bootstrap, and phase-transition sound triggers in render.
+- 2026-02-22: Added continuous flight-wind audio layer with per-frame intensity control tied to javelin speed.
+- 2026-02-22: Added pointer-angle smoothing control (`angleControl.pointerSmoothing`) and smoothing tests.
+- 2026-02-22: Added `docs/audio-qa.md` manual validation checklist for procedural audio behavior.
 
 ```
-> NOTE: Truncated to 20000 chars (original: 25875).
-> meta: lines=868 chars=25875 truncated=yes
+> meta: lines=156 chars=6504 truncated=no
 
 
 ## AGENTS.md
@@ -1056,6 +571,49 @@ Build and maintain the browser game demo "Selain Games 2026 / Keihäänheitto" w
 
 ```
 > meta: lines=22 chars=747 truncated=no
+
+### Audio
+
+
+## docs/audio-qa.md
+
+```md
+# Audio QA Checklist
+
+Manual verification targets for Gameplay V2 procedural audio.
+
+## Setup
+- Start local dev server: `npm run dev`
+- Use a browser with Web Audio support (Chrome/Firefox/Safari).
+- Interact once with the game surface to unlock audio context.
+
+## Rhythm and Charge
+- [ ] Rhythm ticks are audible and distinct for perfect vs good timing.
+- [ ] Rhythm ticks are not spammed when holding or mashing input.
+- [ ] Entering charge phase has a clear transition cue.
+
+## Throw and Flight
+- [ ] Throw release plays a whoosh.
+- [ ] Faster release produces brighter/stronger whoosh character.
+- [ ] During flight, wind layer fades in and tracks perceived javelin speed.
+- [ ] Wind layer fades out after flight ends.
+
+## Landing and Outcomes
+- [ ] Landing plays one impact sound per throw.
+- [ ] Tip-first landing includes an extra bright accent.
+- [ ] Valid result triggers positive crowd reaction.
+- [ ] Foul/fault results trigger negative crowd reaction.
+- [ ] Fault phase includes retro-style short oof cue.
+
+## Stability
+- [ ] No console audio errors during 10 consecutive rounds.
+- [ ] Sounds remain stable after switching tabs and returning.
+- [ ] Mobile touch interaction starts audio correctly after first gesture.
+
+```
+> meta: lines=32 chars=1230 truncated=no
+
+### Other code & helpers
 
 
 ## index.html
@@ -1329,6 +887,107 @@ export const App = (): ReactElement => {
 ```
 > meta: lines=7 chars=177 truncated=no
 
+
+## src/app/browser.ts
+_Defines: isInteractiveElement, safeLocalStorageGet, safeLocalStorageSet_
+
+```ts
+const INTERACTIVE_TAGS = new Set(['input', 'textarea', 'select', 'button']);
+const INTERACTIVE_SELECTOR =
+  'input, textarea, select, button, [contenteditable], [role="textbox"], [role="combobox"], [role="spinbutton"]';
+
+type InteractiveElement = {
+  tagName?: string;
+  isContentEditable?: boolean;
+  closest?: (selector: string) => unknown;
+};
+
+export const isInteractiveElement = (target: EventTarget | null): boolean => {
+  if (target === null || typeof target !== 'object') {
+    return false;
+  }
+
+  const maybeElement = target as InteractiveElement;
+
+  if (maybeElement.isContentEditable === true) {
+    return true;
+  }
+  if (typeof maybeElement.tagName === 'string' && INTERACTIVE_TAGS.has(maybeElement.tagName.toLowerCase())) {
+    return true;
+  }
+  if (typeof maybeElement.closest === 'function') {
+    return maybeElement.closest(INTERACTIVE_SELECTOR) !== null;
+  }
+  return false;
+};
+
+export const safeLocalStorageGet = (key: string): string | null => {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+
+export const safeLocalStorageSet = (key: string, value: string): void => {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    
+  }
+};
+
+```
+> meta: lines=45 chars=1196 truncated=no
+
+
+## src/app/useMediaQuery.ts
+_Defines: useMediaQuery_
+
+```ts
+import { useEffect, useState } from 'react';
+
+const getMatches = (query: string): boolean => {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return false;
+  }
+  return window.matchMedia(query).matches;
+};
+
+export const useMediaQuery = (query: string): boolean => {
+  const [matches, setMatches] = useState<boolean>(() => getMatches(query));
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return;
+    }
+
+    const mediaQueryList = window.matchMedia(query);
+    setMatches(mediaQueryList.matches);
+
+    const onChange = (event: MediaQueryListEvent): void => {
+      setMatches(event.matches);
+    };
+
+    if (typeof mediaQueryList.addEventListener === 'function') {
+      mediaQueryList.addEventListener('change', onChange);
+      return () => {
+        mediaQueryList.removeEventListener('change', onChange);
+      };
+    }
+
+    mediaQueryList.addListener(onChange);
+    return () => {
+      mediaQueryList.removeListener(onChange);
+    };
+  }, [query]);
+
+  return matches;
+};
+
+```
+> meta: lines=40 chars=1080 truncated=no
+
 ### Frontend / UI
 
 
@@ -1445,56 +1104,74 @@ export const CircularTimingMeter = ({
 _Reusable UI component or set of components._
 
 ```tsx
-import { useMemo, type ReactElement } from 'react';
+import { memo, useMemo, type ReactElement } from 'react';
 import { useI18n } from '../../../i18n/init';
 
-export const ControlHelp = (): ReactElement => {
+type ControlHelpContentProps = {
+  isTouchDevice?: boolean;
+};
+
+const detectTouchDevice = (): boolean => {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+};
+
+const ControlHelpContentComponent = ({ isTouchDevice }: ControlHelpContentProps): ReactElement => {
   const { t } = useI18n();
-  const isTouchDevice = useMemo(() => {
-    if (typeof window === 'undefined') {
-      return false;
-    }
-    return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-  }, []);
+  const useTouchHelp = useMemo(() => isTouchDevice ?? detectTouchDevice(), [isTouchDevice]);
+  const helpItems = useMemo(
+    () =>
+      useTouchHelp
+        ? [t('help.touch1'), t('help.touch2'), t('help.touch3'), t('help.touch4')]
+        : [
+            t('help.mouse1'),
+            t('help.mouse2'),
+            t('help.mouse3'),
+            t('help.mouse4'),
+            t('help.kbd1'),
+            t('help.kbd2'),
+            t('help.kbd3'),
+            t('help.kbd4')
+          ],
+    [t, useTouchHelp]
+  );
+
+  return (
+    <ul className="control-help-list">
+      {helpItems.map((item, index) => (
+        <li key={`${index}-${item}`}>{item}</li>
+      ))}
+    </ul>
+  );
+};
+
+export const ControlHelpContent = memo(ControlHelpContentComponent);
+
+const ControlHelpComponent = (): ReactElement => {
+  const { t } = useI18n();
 
   return (
     <section className="card control-help" aria-label={t('help.title')}>
       <h3>{t('help.title')}</h3>
-      <ul>
-        {isTouchDevice ? (
-          <>
-            <li>{t('help.touch1')}</li>
-            <li>{t('help.touch2')}</li>
-            <li>{t('help.touch3')}</li>
-            <li>{t('help.touch4')}</li>
-          </>
-        ) : (
-          <>
-            <li>{t('help.mouse1')}</li>
-            <li>{t('help.mouse2')}</li>
-            <li>{t('help.mouse3')}</li>
-            <li>{t('help.mouse4')}</li>
-            <li>{t('help.kbd1')}</li>
-            <li>{t('help.kbd2')}</li>
-            <li>{t('help.kbd3')}</li>
-            <li>{t('help.kbd4')}</li>
-          </>
-        )}
-      </ul>
+      <ControlHelpContent />
     </section>
   );
 };
 
+export const ControlHelp = memo(ControlHelpComponent);
+
 ```
-> meta: lines=40 chars=1103 truncated=no
+> meta: lines=58 chars=1531 truncated=no
 
 
 ## src/features/javelin/components/GameCanvas.tsx
 _Reusable UI component or set of components._
 
 ```tsx
-import { useEffect, useMemo, useRef, type ReactElement } from 'react';
-import { renderGame } from '../game/render';
+import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import { createRenderSession, renderGame } from '../game/render';
 import type { GameAction, GameState } from '../game/types';
 import { usePointerControls } from '../hooks/usePointerControls';
 import { useI18n } from '../../../i18n/init';
@@ -1509,6 +1186,14 @@ type GameCanvasProps = {
 export const GameCanvas = ({ state, dispatch }: GameCanvasProps): ReactElement => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const lastRenderAtMsRef = useRef<number>(performance.now());
+  const contextRef = useRef<CanvasRenderingContext2D | null>(null);
+  const renderSessionRef = useRef(createRenderSession());
+  const viewportRef = useRef<{ width: number; height: number; dpr: number }>({
+    width: 0,
+    height: 0,
+    dpr: 1
+  });
+  const [viewportVersion, setViewportVersion] = useState(0);
   const { locale, t } = useI18n();
 
   const numberFormat = useMemo(
@@ -1525,21 +1210,68 @@ export const GameCanvas = ({ state, dispatch }: GameCanvasProps): ReactElement =
     [t]
   );
 
-  usePointerControls({ canvas: canvasRef.current, dispatch, phaseTag: state.phase.tag, state });
+  usePointerControls({ canvas: canvasRef.current, dispatch, state });
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) {
       return;
     }
-    const rect = canvas.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.max(1, Math.floor(rect.width * dpr));
-    canvas.height = Math.max(1, Math.floor(rect.height * dpr));
-    const context = canvas.getContext('2d');
-    if (!context) {
+
+    const syncBackbuffer = (): void => {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const width = Math.max(1, Math.floor(rect.width));
+      const height = Math.max(1, Math.floor(rect.height));
+      const pixelWidth = Math.max(1, Math.floor(width * dpr));
+      const pixelHeight = Math.max(1, Math.floor(height * dpr));
+      const current = viewportRef.current;
+      const changed = current.width !== width || current.height !== height || current.dpr !== dpr;
+      if (!changed) {
+        return;
+      }
+      if (canvas.width !== pixelWidth) {
+        canvas.width = pixelWidth;
+      }
+      if (canvas.height !== pixelHeight) {
+        canvas.height = pixelHeight;
+      }
+      viewportRef.current = { width, height, dpr };
+      setViewportVersion((version) => version + 1);
+    };
+
+    contextRef.current = canvas.getContext('2d');
+    if (!contextRef.current) {
       return;
     }
+    syncBackbuffer();
+
+    if (typeof ResizeObserver !== 'undefined') {
+      const observer = new ResizeObserver(() => {
+        syncBackbuffer();
+      });
+      observer.observe(canvas);
+      return () => {
+        observer.disconnect();
+      };
+    }
+
+    const onWindowResize = (): void => {
+      syncBackbuffer();
+    };
+    window.addEventListener('resize', onWindowResize);
+    return () => {
+      window.removeEventListener('resize', onWindowResize);
+    };
+  }, []);
+
+  useEffect(() => {
+    const context = contextRef.current;
+    const { width, height, dpr } = viewportRef.current;
+    if (!context || width <= 0 || height <= 0) {
+      return;
+    }
+
     const nowMs = performance.now();
     const dtMs = Math.min(40, Math.max(0, nowMs - lastRenderAtMsRef.current));
     lastRenderAtMsRef.current = nowMs;
@@ -1547,14 +1279,15 @@ export const GameCanvas = ({ state, dispatch }: GameCanvasProps): ReactElement =
     renderGame(
       context,
       state,
-      rect.width,
-      rect.height,
+      width,
+      height,
       dtMs,
       numberFormat,
       t('javelin.throwLine'),
-      releaseFlashLabels
+      releaseFlashLabels,
+      renderSessionRef.current
     );
-  }, [state, numberFormat, t, releaseFlashLabels]);
+  }, [state, numberFormat, t, releaseFlashLabels, viewportVersion]);
 
   return (
     <div className="canvas-frame">
@@ -1563,14 +1296,14 @@ export const GameCanvas = ({ state, dispatch }: GameCanvasProps): ReactElement =
         className="game-canvas"
         style={{ touchAction: 'none' }}
         role="img"
-        aria-label="Javelin throw game canvas"
+        aria-label={t('a11y.gameCanvas')}
       />
     </div>
   );
 };
 
 ```
-> meta: lines=76 chars=2159 truncated=no
+> meta: lines=132 chars=3829 truncated=no
 
 
 ## src/features/javelin/components/HudPanel.tsx
@@ -1630,7 +1363,7 @@ export const HudPanel = ({ state }: HudPanelProps): ReactElement => {
   })();
 
   return (
-    <section className="card hud-panel" aria-label="HUD">
+    <section className="card hud-panel" aria-label={t('a11y.hudPanel')}>
       <div className="hud-topline">{t(phaseMessageKey(state))}</div>
       {phaseHint && <div className="hud-hint">{phaseHint}</div>}
       {windHint && <div className="hud-hint hud-hint-wind">{windHint}</div>}
@@ -1656,14 +1389,14 @@ export const HudPanel = ({ state }: HudPanelProps): ReactElement => {
 };
 
 ```
-> meta: lines=78 chars=2355 truncated=no
+> meta: lines=78 chars=2370 truncated=no
 
 
 ## src/features/javelin/components/LanguageSwitch.tsx
 _Reusable UI component or set of components._
 
 ```tsx
-import type { ReactElement } from 'react';
+import { memo, type ReactElement } from 'react';
 import { useI18n } from '../../../i18n/init';
 import type { Locale } from '../game/types';
 
@@ -1673,7 +1406,7 @@ const LABELS: Record<Locale, string> = {
   en: 'English'
 };
 
-export const LanguageSwitch = (): ReactElement => {
+const LanguageSwitchComponent = (): ReactElement => {
   const { locale, setLocale, t } = useI18n();
 
   return (
@@ -1692,15 +1425,17 @@ export const LanguageSwitch = (): ReactElement => {
   );
 };
 
+export const LanguageSwitch = memo(LanguageSwitchComponent);
+
 ```
-> meta: lines=29 chars=756 truncated=no
+> meta: lines=31 chars=826 truncated=no
 
 
 ## src/features/javelin/components/ScoreBoard.tsx
 _Reusable UI component or set of components._
 
 ```tsx
-import type { ReactElement } from 'react';
+import { memo, useMemo, type ReactElement } from 'react';
 import type { HighscoreEntry } from '../game/types';
 import { useI18n } from '../../../i18n/init';
 
@@ -1708,37 +1443,56 @@ type ScoreBoardProps = {
   highscores: HighscoreEntry[];
 };
 
-export const ScoreBoard = ({ highscores }: ScoreBoardProps): ReactElement => {
+type ScoreBoardContentProps = {
+  highscores: HighscoreEntry[];
+};
+
+const ScoreBoardContentComponent = ({ highscores }: ScoreBoardContentProps): ReactElement => {
   const { t, formatNumber, locale } = useI18n();
+  const dateFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat(locale, {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      }),
+    [locale]
+  );
+
+  if (highscores.length === 0) {
+    return <p className="scoreboard-empty">{t('scoreboard.empty')}</p>;
+  }
+
+  return (
+    <ol className="scoreboard-list">
+      {highscores.map((entry) => (
+        <li key={entry.id} className="scoreboard-entry">
+          <span>{entry.name}</span>
+          <strong>{formatNumber(entry.distanceM)} m</strong>
+          <time>{dateFormatter.format(new Date(entry.playedAtIso))}</time>
+        </li>
+      ))}
+    </ol>
+  );
+};
+
+export const ScoreBoardContent = memo(ScoreBoardContentComponent);
+
+const ScoreBoardComponent = ({ highscores }: ScoreBoardProps): ReactElement => {
+  const { t } = useI18n();
 
   return (
     <section className="card scoreboard" aria-label={t('scoreboard.title')}>
       <h3>{t('scoreboard.title')}</h3>
-      {highscores.length === 0 ? (
-        <p>{t('scoreboard.empty')}</p>
-      ) : (
-        <ol>
-          {highscores.map((entry) => (
-            <li key={entry.id}>
-              <span>{entry.name}</span>
-              <strong>{formatNumber(entry.distanceM)} m</strong>
-              <time>
-                {new Intl.DateTimeFormat(locale, {
-                  year: 'numeric',
-                  month: '2-digit',
-                  day: '2-digit'
-                }).format(new Date(entry.playedAtIso))}
-              </time>
-            </li>
-          ))}
-        </ol>
-      )}
+      <ScoreBoardContent highscores={highscores} />
     </section>
   );
 };
 
+export const ScoreBoard = memo(ScoreBoardComponent);
+
 ```
-> meta: lines=37 chars=1067 truncated=no
+> meta: lines=56 chars=1515 truncated=no
 
 ### Other code & helpers
 
@@ -1755,7 +1509,7 @@ import {
   easeOutQuad,
   lerp,
   toRad
-// ... 3 more import lines from .
+// ... 4 more import lines from .
 
 type PointM = {
   xM: number;
@@ -1937,7 +1691,7 @@ const runCurves = (t01: number, speedNorm: number, aimAngleDeg: number): MotionC
   const cycle = clamp01(t01) * Math.PI * 2;
   const stride = Math.sin(cycle);
   const counter = Math.sin(cycle + Math.PI);
-  const runJavelinAngleDeg = Math.max(-90, Math.min(90, aimAngleDeg));
+  const runJavelinAngleDeg = Math.max(ANGLE_MIN_DEG, Math.min(ANGLE_MAX_DEG, aimAngleDeg));
   return {
     leanRad: -0.18 - 0.18 * speedNorm,
     pelvisShiftXM: 0.08 * stride,
@@ -2047,7 +1801,7 @@ const idleCurves = (aimAngleDeg: number): MotionCurves => ({
   shoulderBack: 0.2,
   elbowFront: 0.14,
   elbowBack: -0.08,
-  javelinAngleRad: toRad(Math.max(-90, Math.min(90, aimAngleDeg)))
+  javelinAngleRad: toRad(Math.max(ANGLE_MIN_DEG, Math.min(ANGLE_MAX_DEG, aimAngleDeg)))
 });
 
 const curvesForPose = (
@@ -2233,83 +1987,462 @@ export const computeAthletePoseGeometry = (
 };
 
 ```
-> meta: lines=485 chars=15183 truncated=no
+> meta: lines=485 chars=15225 truncated=no
 
 ### Audio
 
 
 ## src/features/javelin/game/audio.ts
-_Defines: playBeatTick, resumeAudioContext_
+_Defines: playBeatTick, playChargeStart, playThrowWhoosh, setFlightWindIntensity, playLandingImpact, playCrowdReaction_
 
 ```ts
-type BeatAudioContext = {
+import { clamp, lerp } from './math';
+import {
+  AUDIO_CROWD_AMBIENT_GAIN,
+  AUDIO_CROWD_VOLUME,
+  AUDIO_EFFECTS_VOLUME,
+  AUDIO_MASTER_VOLUME,
+  AUDIO_RHYTHM_VOLUME
+} from './tuning';
+// ... 1 more import lines from .
+
+type BeatTickQuality = TimingQuality;
+type CrowdReaction = 'cheer' | 'groan';
+
+type AudioEngine = {
   ctx: AudioContext;
-  lastTickAtMs: number;
-  minIntervalMs: number;
+  master: GainNode;
+  channels: {
+    rhythm: GainNode;
+    crowd: GainNode;
+    effects: GainNode;
+  };
+  crowdSource: AudioBufferSourceNode | null;
+  crowdAmbientGain: GainNode | null;
+  flightWindSource: AudioBufferSourceNode | null;
+  flightWindGain: GainNode | null;
+  noiseBuffer: AudioBuffer | null;
+  lastBeatAtMs: number;
+  minBeatIntervalMs: number;
+  crowdBaseGain: number;
 };
 
-let audioState: BeatAudioContext | null = null;
+type BrowserWindowWithWebkit = Window &
+  typeof globalThis & {
+    webkitAudioContext?: typeof AudioContext;
+  };
 
-const ensureAudioContext = (): BeatAudioContext | null => {
+let audioState: AudioEngine | null = null;
+
+const getAudioContextCtor = (): typeof AudioContext | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  const browserWindow = window as BrowserWindowWithWebkit;
+  return browserWindow.AudioContext ?? browserWindow.webkitAudioContext ?? null;
+};
+
+const createNoiseBuffer = (ctx: AudioContext, durationS: number): AudioBuffer => {
+  const sampleRate = ctx.sampleRate;
+  const length = Math.max(1, Math.ceil(sampleRate * durationS));
+  const buffer = ctx.createBuffer(1, length, sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let index = 0; index < length; index += 1) {
+    data[index] = Math.random() * 2 - 1;
+  }
+  return buffer;
+};
+
+const ensureNoiseBuffer = (audio: AudioEngine, durationS = 2): AudioBuffer => {
+  if (audio.noiseBuffer === null) {
+    audio.noiseBuffer = createNoiseBuffer(audio.ctx, durationS);
+  }
+  return audio.noiseBuffer;
+};
+
+const ensureAudioEngine = (): AudioEngine | null => {
   if (audioState !== null) {
     return audioState;
   }
-  if (typeof window === 'undefined' || typeof window.AudioContext === 'undefined') {
+
+  const AudioContextCtor = getAudioContextCtor();
+  if (AudioContextCtor === null) {
     return null;
   }
+
+  const ctx = new AudioContextCtor();
+  const master = ctx.createGain();
+  const rhythm = ctx.createGain();
+  const crowd = ctx.createGain();
+  const effects = ctx.createGain();
+
+  master.gain.value = clamp(AUDIO_MASTER_VOLUME, 0, 1);
+  rhythm.gain.value = clamp(AUDIO_RHYTHM_VOLUME, 0, 1);
+  crowd.gain.value = clamp(AUDIO_CROWD_VOLUME, 0, 1);
+  effects.gain.value = clamp(AUDIO_EFFECTS_VOLUME, 0, 1);
+
+  rhythm.connect(master);
+  crowd.connect(master);
+  effects.connect(master);
+  master.connect(ctx.destination);
+
   audioState = {
-    ctx: new window.AudioContext(),
-    lastTickAtMs: 0,
-    minIntervalMs: 200
+    ctx,
+    master,
+    channels: {
+      rhythm,
+      crowd,
+      effects
+    },
+    crowdSource: null,
+    crowdAmbientGain: null,
+    flightWindSource: null,
+    flightWindGain: null,
+    noiseBuffer: null,
+    lastBeatAtMs: 0,
+    minBeatIntervalMs: 200,
+    crowdBaseGain: clamp(AUDIO_CROWD_AMBIENT_GAIN, 0.001, 0.25)
   };
+
   return audioState;
+};
+
+const startCrowdAmbience = (audio: AudioEngine): void => {
+  if (audio.crowdSource !== null) {
+    return;
+  }
+
+  const source = audio.ctx.createBufferSource();
+  source.buffer = ensureNoiseBuffer(audio, 2);
+  source.loop = true;
+
+  const filter = audio.ctx.createBiquadFilter();
+  filter.type = 'bandpass';
+  filter.frequency.setValueAtTime(400, audio.ctx.currentTime);
+  filter.Q.setValueAtTime(0.8, audio.ctx.currentTime);
+
+  const gain = audio.ctx.createGain();
+  gain.gain.setValueAtTime(audio.crowdBaseGain, audio.ctx.currentTime);
+
+  source.connect(filter);
+  filter.connect(gain);
+  gain.connect(audio.channels.crowd);
+
+  source.start();
+  source.onended = () => {
+    if (audio.crowdSource === source) {
+      audio.crowdSource = null;
+      audio.crowdAmbientGain = null;
+    }
+  };
+
+  audio.crowdSource = source;
+  audio.crowdAmbientGain = gain;
+};
+
+const ensureFlightWind = (audio: AudioEngine): GainNode => {
+  if (audio.flightWindSource !== null && audio.flightWindGain !== null) {
+    return audio.flightWindGain;
+  }
+
+  const source = audio.ctx.createBufferSource();
+  source.buffer = ensureNoiseBuffer(audio, 2);
+  source.loop = true;
+
+  const filter = audio.ctx.createBiquadFilter();
+  filter.type = 'highpass';
+  filter.frequency.setValueAtTime(1800, audio.ctx.currentTime);
+
+  const gain = audio.ctx.createGain();
+  gain.gain.setValueAtTime(0.0001, audio.ctx.currentTime);
+
+  source.connect(filter);
+  filter.connect(gain);
+  gain.connect(audio.channels.effects);
+  source.start();
+  source.onended = () => {
+    if (audio.flightWindSource === source) {
+      audio.flightWindSource = null;
+      audio.flightWindGain = null;
+    }
+  };
+
+  audio.flightWindSource = source;
+  audio.flightWindGain = gain;
+  return gain;
+};
+
+type ToneParams = {
+  frequencyHz: number;
+  endFrequencyHz?: number;
+  type: OscillatorType;
+  volume: number;
+  durationS: number;
+  attackS?: number;
+  startOffsetS?: number;
+};
+
+const playTone = (audio: AudioEngine, destination: AudioNode, params: ToneParams): void => {
+  const now = audio.ctx.currentTime + (params.startOffsetS ?? 0);
+  const attackS = Math.max(0.001, params.attackS ?? 0.005);
+  const durationS = Math.max(0.015, params.durationS);
+  const endTime = now + durationS;
+
+  const osc = audio.ctx.createOscillator();
+  const gain = audio.ctx.createGain();
+  osc.type = params.type;
+  osc.frequency.setValueAtTime(Math.max(20, params.frequencyHz), now);
+  if (typeof params.endFrequencyHz === 'number') {
+    osc.frequency.exponentialRampToValueAtTime(Math.max(20, params.endFrequencyHz), endTime);
+  }
+
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.linearRampToValueAtTime(Math.max(0.0001, params.volume), now + attackS);
+  gain.gain.exponentialRampToValueAtTime(0.0001, endTime);
+
+  osc.connect(gain);
+  gain.connect(destination);
+  osc.start(now);
+  osc.stop(endTime + 0.03);
+};
+
+type NoiseBurstParams = {
+  filterType: BiquadFilterType;
+  filterHz: number;
+  volume: number;
+  durationS: number;
+  attackS?: number;
+};
+
+const playNoiseBurst = (audio: AudioEngine, destination: AudioNode, params: NoiseBurstParams): void => {
+  const now = audio.ctx.currentTime;
+  const durationS = Math.max(0.02, params.durationS);
+  const attackS = Math.max(0.002, params.attackS ?? 0.01);
+  const source = audio.ctx.createBufferSource();
+  source.buffer = createNoiseBuffer(audio.ctx, durationS);
+
+  const filter = audio.ctx.createBiquadFilter();
+  filter.type = params.filterType;
+  filter.frequency.setValueAtTime(Math.max(20, params.filterHz), now);
+
+  const gain = audio.ctx.createGain();
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.linearRampToValueAtTime(Math.max(0.0001, params.volume), now + attackS);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + durationS);
+
+  source.connect(filter);
+  filter.connect(gain);
+  gain.connect(destination);
+  source.start(now);
+  source.stop(now + durationS + 0.03);
+};
+
+const runWithAudio = (callback: (audio: AudioEngine) => void): void => {
+  const audio = ensureAudioEngine();
+  if (audio === null) {
+    return;
+  }
+  callback(audio);
 };
 
 /**
  * Play a short rhythm tick sound.
- * Uses an oscillator to avoid loading audio assets.
+ * `qualityOrInZone` supports legacy boolean call sites.
  */
-export const playBeatTick = (nowMs: number, isInZone: boolean): void => {
-  const audio = ensureAudioContext();
-  if (audio === null) {
-    return;
-  }
-  if (nowMs - audio.lastTickAtMs < audio.minIntervalMs) {
-    return;
-  }
-  audio.lastTickAtMs = nowMs;
+export const playBeatTick = (nowMs: number, qualityOrInZone: BeatTickQuality | boolean): void => {
+  runWithAudio((audio) => {
+    if (nowMs - audio.lastBeatAtMs < audio.minBeatIntervalMs) {
+      return;
+    }
+    audio.lastBeatAtMs = nowMs;
 
-  const osc = audio.ctx.createOscillator();
-  const gain = audio.ctx.createGain();
-  osc.connect(gain);
-  gain.connect(audio.ctx.destination);
+    const quality: BeatTickQuality =
+      typeof qualityOrInZone === 'boolean'
+        ? qualityOrInZone
+          ? 'perfect'
+          : 'good'
+        : qualityOrInZone;
 
-  osc.frequency.value = isInZone ? 880 : 440;
-  osc.type = 'sine';
+    if (quality === 'perfect') {
+      playTone(audio, audio.channels.rhythm, {
+        frequencyHz: 660,
+        type: 'square',
+        volume: 0.12,
+        durationS: 0.04,
+        attackS: 0.004
+      });
+      playTone(audio, audio.channels.rhythm, {
+        frequencyHz: 880,
+        type: 'square',
+        volume: 0.09,
+        durationS: 0.03,
+        attackS: 0.003,
+        startOffsetS: 0.035
+      });
+      return;
+    }
 
-  const now = audio.ctx.currentTime;
-  gain.gain.setValueAtTime(isInZone ? 0.15 : 0.06, now);
-  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+    if (quality === 'good') {
+      playTone(audio, audio.channels.rhythm, {
+        frequencyHz: 440,
+        type: 'triangle',
+        volume: 0.08,
+        durationS: 0.05
+      });
+      return;
+    }
 
-  osc.start(now);
-  osc.stop(now + 0.06);
+    playTone(audio, audio.channels.rhythm, {
+      frequencyHz: 220,
+      type: 'sine',
+      volume: 0.04,
+      durationS: 0.06
+    });
+  });
+};
+
+export const playChargeStart = (): void => {
+  runWithAudio((audio) => {
+    playTone(audio, audio.channels.effects, {
+      frequencyHz: 150,
+      endFrequencyHz: 120,
+      type: 'sine',
+      volume: 0.045,
+      durationS: 0.12,
+      attackS: 0.01
+    });
+    playNoiseBurst(audio, audio.channels.effects, {
+      filterType: 'lowpass',
+      filterHz: 520,
+      volume: 0.025,
+      durationS: 0.12
+    });
+  });
+};
+
+export const playThrowWhoosh = (speedNorm: number): void => {
+  runWithAudio((audio) => {
+    const speedT = clamp(speedNorm, 0, 1);
+    playNoiseBurst(audio, audio.channels.effects, {
+      filterType: 'highpass',
+      filterHz: lerp(2000, 6000, speedT),
+      volume: lerp(0.08, 0.15, speedT),
+      durationS: 0.15
+    });
+  });
+};
+
+export const setFlightWindIntensity = (speedNorm: number): void => {
+  runWithAudio((audio) => {
+    const gain = ensureFlightWind(audio);
+    const intensity = clamp(speedNorm, 0, 1);
+    const now = audio.ctx.currentTime;
+    gain.gain.cancelScheduledValues(now);
+    gain.gain.setValueAtTime(Math.max(0.0001, gain.gain.value), now);
+    gain.gain.linearRampToValueAtTime(lerp(0.0001, 0.09, intensity), now + 0.08);
+  });
+};
+
+export const playLandingImpact = (tipFirst: boolean): void => {
+  runWithAudio((audio) => {
+    playTone(audio, audio.channels.effects, {
+      frequencyHz: 80,
+      type: 'sine',
+      volume: 0.12,
+      durationS: 0.1,
+      attackS: 0.004
+    });
+    playNoiseBurst(audio, audio.channels.effects, {
+      filterType: 'lowpass',
+      filterHz: 400,
+      volume: 0.06,
+      durationS: 0.08
+    });
+    if (tipFirst) {
+      playTone(audio, audio.channels.effects, {
+        frequencyHz: 1200,
+        type: 'triangle',
+        volume: 0.05,
+        durationS: 0.04,
+        attackS: 0.003,
+        startOffsetS: 0.02
+      });
+    }
+  });
+};
+
+export const playCrowdReaction = (reaction: CrowdReaction): void => {
+  runWithAudio((audio) => {
+    const now = audio.ctx.currentTime;
+    const crowdChannel = audio.channels.crowd.gain;
+    const base = clamp(AUDIO_CROWD_VOLUME, 0, 1);
+    crowdChannel.cancelScheduledValues(now);
+    crowdChannel.setValueAtTime(crowdChannel.value, now);
+
+    if (reaction === 'cheer') {
+      crowdChannel.linearRampToValueAtTime(Math.min(1, base * 1.8), now + 0.2);
+      crowdChannel.linearRampToValueAtTime(base, now + 1.4);
+      playNoiseBurst(audio, audio.channels.crowd, {
+        filterType: 'bandpass',
+        filterHz: 1500,
+        volume: 0.07,
+        durationS: 0.28
+      });
+      return;
+    }
+
+    crowdChannel.linearRampToValueAtTime(base * 0.45, now + 0.06);
+    crowdChannel.linearRampToValueAtTime(base, now + 0.85);
+    playTone(audio, audio.channels.crowd, {
+      frequencyHz: 110,
+      type: 'square',
+      volume: 0.05,
+      durationS: 0.12
+    });
+  });
+};
+
+export const playFaultOof = (): void => {
+  runWithAudio((audio) => {
+    playTone(audio, audio.channels.effects, {
+      frequencyHz: 140,
+      endFrequencyHz: 100,
+      type: 'square',
+      volume: 0.1,
+      durationS: 0.18,
+      attackS: 0.002
+    });
+  });
 };
 
 export const resumeAudioContext = (): void => {
-  const audio = ensureAudioContext();
-  if (audio?.ctx.state === 'suspended') {
-    void audio.ctx.resume();
+  const audio = ensureAudioEngine();
+  if (audio === null) {
+    return;
   }
+
+  const bootAmbience = (): void => {
+    startCrowdAmbience(audio);
+  };
+
+  if (audio.ctx.state === 'suspended') {
+    void audio.ctx.resume().then(bootAmbience).catch(() => {
+      
+    });
+    return;
+  }
+
+  bootAmbience();
 };
 
 ```
-> meta: lines=60 chars=1429 truncated=no
+> meta: lines=439 chars=11701 truncated=no
 
 ### Rendering & visual effects
 
 
 ## src/features/javelin/game/camera.ts
-_Defines: WorldToScreenInput, WorldToScreen, RUNWAY_OFFSET_X, resetSmoothCamera, getCameraTargetX, getViewWidthM_
+_Defines: WorldToScreenInput, WorldToScreen, RUNWAY_OFFSET_X, CameraSmoothingState, createCameraSmoothingState, getCameraTargetX_
 
 ```ts
 import {
@@ -2320,7 +2453,7 @@ import {
   CAMERA_RESULT_TARGET_AHEAD,
   CAMERA_RESULT_VIEW_WIDTH_M,
   CAMERA_RUNUP_TARGET_AHEAD,
-// ... 12 more import lines from .
+// ... 10 more import lines from .
 
 export type WorldToScreenInput = {
   xM: number;
@@ -2344,6 +2477,15 @@ type SmoothedCamera = {
   lastPhaseTag: GamePhase['tag'];
 };
 
+export type CameraSmoothingState = SmoothedCamera;
+
+const PLAYER_ANCHOR_OFFSET_M = -RUNUP_START_X_M;
+const FLIGHT_CAMERA_PROFILE_LERP_SPEED = 5.8;
+const FLIGHT_CAMERA_TARGET_LERP_SPEED = 8.4;
+
+const lerpToward = (current: number, target: number, factor: number): number =>
+  current + (target - current) * Math.min(1, Math.max(0, factor));
+
 const PHASE_CAMERA_CONFIG: Record<GamePhase['tag'], PhaseCameraConfig> = {
   idle: {
     viewWidthM: CAMERA_DEFAULT_VIEW_WIDTH_M,
@@ -2351,19 +2493,19 @@ const PHASE_CAMERA_CONFIG: Record<GamePhase['tag'], PhaseCameraConfig> = {
     yScale: CAMERA_Y_SCALE_RUNUP
   },
   runup: {
-    viewWidthM: CAMERA_RUNUP_VIEW_WIDTH_M,
+    viewWidthM: CAMERA_DEFAULT_VIEW_WIDTH_M,
     aheadRatio: CAMERA_RUNUP_TARGET_AHEAD,
     yScale: CAMERA_Y_SCALE_RUNUP
   },
   chargeAim: {
-    viewWidthM: CAMERA_THROW_VIEW_WIDTH_M,
-    aheadRatio: CAMERA_THROW_TARGET_AHEAD,
+    viewWidthM: CAMERA_DEFAULT_VIEW_WIDTH_M,
+    aheadRatio: CAMERA_RUNUP_TARGET_AHEAD,
     yScale: CAMERA_Y_SCALE_RUNUP
   },
   throwAnim: {
-    viewWidthM: CAMERA_THROW_VIEW_WIDTH_M,
+    viewWidthM: CAMERA_DEFAULT_VIEW_WIDTH_M,
     aheadRatio: CAMERA_THROW_TARGET_AHEAD,
-    yScale: CAMERA_Y_SCALE_THROW
+    yScale: CAMERA_Y_SCALE_RUNUP
   },
   flight: {
     viewWidthM: CAMERA_FLIGHT_VIEW_WIDTH_M,
@@ -2376,49 +2518,45 @@ const PHASE_CAMERA_CONFIG: Record<GamePhase['tag'], PhaseCameraConfig> = {
     yScale: CAMERA_Y_SCALE_RESULT
   },
   fault: {
-    viewWidthM: CAMERA_THROW_VIEW_WIDTH_M,
+    viewWidthM: CAMERA_DEFAULT_VIEW_WIDTH_M,
     aheadRatio: CAMERA_THROW_TARGET_AHEAD,
     yScale: CAMERA_Y_SCALE_THROW
   }
 };
 
-const CAMERA_LERP_SPEED = 4.5;
-
-let smoothCam: SmoothedCamera = {
+const createInitialCameraState = (): CameraSmoothingState => ({
   viewWidthM: CAMERA_DEFAULT_VIEW_WIDTH_M,
   yScale: CAMERA_Y_SCALE_RUNUP,
   targetX: RUNUP_START_X_M,
   lastPhaseTag: 'idle'
-};
+});
 
-const lerpToward = (current: number, target: number, factor: number): number =>
-  current + (target - current) * Math.min(1, Math.max(0, factor));
+export const createCameraSmoothingState = (): CameraSmoothingState =>
+  createInitialCameraState();
 
-export const resetSmoothCamera = (): void => {
-  smoothCam = {
-    viewWidthM: CAMERA_DEFAULT_VIEW_WIDTH_M,
-    yScale: CAMERA_Y_SCALE_RUNUP,
-    targetX: RUNUP_START_X_M,
-    lastPhaseTag: 'idle'
-  };
+const resetSmoothCamera = (cameraState: CameraSmoothingState): void => {
+  Object.assign(cameraState, createInitialCameraState());
 };
 
 export const getCameraTargetX = (state: GameState): number => {
   switch (state.phase.tag) {
     case 'runup':
     case 'chargeAim':
-      return state.phase.runupDistanceM;
+      return state.phase.runupDistanceM + PLAYER_ANCHOR_OFFSET_M;
     case 'throwAnim':
-      return state.phase.athleteXM;
-    case 'flight':
-      return state.phase.javelin.xM;
+      return state.phase.athleteXM + PLAYER_ANCHOR_OFFSET_M;
+    case 'flight': {
+      
+      const releaseAnchorTarget = state.phase.athleteXM + PLAYER_ANCHOR_OFFSET_M;
+      return Math.max(releaseAnchorTarget, state.phase.javelin.xM);
+    }
     case 'result':
       return state.phase.landingXM;
     case 'fault':
-      return state.phase.athleteXM;
+      return state.phase.athleteXM + PLAYER_ANCHOR_OFFSET_M;
     case 'idle':
     default:
-      return 5;
+      return RUNUP_START_X_M + PLAYER_ANCHOR_OFFSET_M;
   }
 };
 
@@ -2458,25 +2596,48 @@ const createWorldToScreenWithCamera = (
   return { toScreen, worldMinX, worldMaxX };
 };
 
-const updateSmoothedCamera = (state: GameState, dtMs: number): void => {
+const updateSmoothedCamera = (
+  state: GameState,
+  dtMs: number,
+  cameraState: CameraSmoothingState
+): void => {
   if (state.phase.tag === 'idle') {
-    resetSmoothCamera();
+    resetSmoothCamera(cameraState);
     return;
   }
 
   const targetViewWidth = getViewWidthM(state);
   const targetYScale = getVerticalScale(state);
   const targetX = getCameraTargetX(state);
-  const dt = (Math.max(0, dtMs) / 1000) * CAMERA_LERP_SPEED;
-  const phaseChanged = state.phase.tag !== smoothCam.lastPhaseTag;
-  const lerpFactor = phaseChanged ? Math.min(1, dt * 2.5) : Math.min(1, dt);
+  const phaseChanged = state.phase.tag !== cameraState.lastPhaseTag;
+  const isFlightTrackingPhase = state.phase.tag === 'flight' || state.phase.tag === 'result';
 
-  smoothCam = {
-    viewWidthM: lerpToward(smoothCam.viewWidthM, targetViewWidth, lerpFactor),
-    yScale: lerpToward(smoothCam.yScale, targetYScale, lerpFactor),
-    targetX: lerpToward(smoothCam.targetX, targetX, Math.min(1, dt * 1.2)),
+  if (!isFlightTrackingPhase) {
+    Object.assign(cameraState, {
+      viewWidthM: targetViewWidth,
+      yScale: targetYScale,
+      targetX,
+      lastPhaseTag: state.phase.tag
+    });
+    return;
+  }
+
+  const dt = Math.max(0, dtMs) / 1000;
+  const profileLerpFactor = Math.min(
+    1,
+    dt * (phaseChanged ? FLIGHT_CAMERA_PROFILE_LERP_SPEED * 0.75 : FLIGHT_CAMERA_PROFILE_LERP_SPEED)
+  );
+  const targetLerpFactor = Math.min(
+    1,
+    dt * (phaseChanged ? FLIGHT_CAMERA_TARGET_LERP_SPEED * 0.75 : FLIGHT_CAMERA_TARGET_LERP_SPEED)
+  );
+
+  Object.assign(cameraState, {
+    viewWidthM: lerpToward(cameraState.viewWidthM, targetViewWidth, profileLerpFactor),
+    yScale: lerpToward(cameraState.yScale, targetYScale, profileLerpFactor),
+    targetX: lerpToward(cameraState.targetX, targetX, targetLerpFactor),
     lastPhaseTag: state.phase.tag
-  };
+  });
 };
 
 export const createWorldToScreenRaw = (
@@ -2498,21 +2659,22 @@ export const createWorldToScreen = (
   state: GameState,
   width: number,
   height: number,
-  dtMs: number
+  dtMs: number,
+  cameraState: CameraSmoothingState
 ): { toScreen: WorldToScreen; worldMinX: number; worldMaxX: number } => {
-  updateSmoothedCamera(state, dtMs);
+  updateSmoothedCamera(state, dtMs, cameraState);
   return createWorldToScreenWithCamera(
     state,
     width,
     height,
-    smoothCam.viewWidthM,
-    smoothCam.targetX,
-    smoothCam.yScale
+    cameraState.viewWidthM,
+    cameraState.targetX,
+    cameraState.yScale
   );
 };
 
 ```
-> meta: lines=199 chars=5335 truncated=no
+> meta: lines=228 chars=6449 truncated=no
 
 ### Other code & helpers
 
@@ -2579,10 +2741,9 @@ export const RUNUP_MAX_X_M = 22.4;
 
 export const RHYTHM_TARGET_PHASE01 = 0.5;
 
-export const ANGLE_MIN_DEG = -90;
-export const ANGLE_MAX_DEG = 90;
+export const ANGLE_MIN_DEG = 15;
+export const ANGLE_MAX_DEG = 55;
 export const ANGLE_DEFAULT_DEG = 36;
-export const ANGLE_CHANGE_STEP_DEG = 1.2;
 
 export const CAMERA_RUNUP_VIEW_WIDTH_M = 21;
 export const CAMERA_THROW_VIEW_WIDTH_M = 19.5;
@@ -2634,36 +2795,84 @@ export const MAX_HIGHSCORES = 10;
 export const HIGHSCORE_STORAGE_KEY = 'sg2026-javelin-highscores-v1';
 
 ```
-> meta: lines=63 chars=2118 truncated=no
+> meta: lines=62 chars=2075 truncated=no
 
 
 ## src/features/javelin/game/controls.ts
-_Defines: keyboardAngleDelta, pointerFromAnchorToAngleDeg_
+_Defines: keyboardAngleDelta, keyboardAngleHoldDelta, pointerFromAnchorToAngleDeg, smoothPointerAngleDeg_
 
 ```ts
-import { ANGLE_CHANGE_STEP_DEG } from './constants';
-import { clamp } from './math';
+import { ANGLE_MAX_DEG, ANGLE_MIN_DEG } from './constants';
+import { clamp, clamp01, easeOutQuad, lerp } from './math';
+import {
+  ANGLE_KEYBOARD_HOLD_MAX_DEG_PER_SEC,
+  ANGLE_KEYBOARD_HOLD_START_DEG_PER_SEC,
+  ANGLE_KEYBOARD_RAMP_MS,
+  ANGLE_POINTER_SMOOTHING,
+  ANGLE_KEYBOARD_STEP_DEG,
+// ... 2 more import lines from .
 
-export const keyboardAngleDelta = (direction: 'up' | 'down'): number =>
-  direction === 'up' ? ANGLE_CHANGE_STEP_DEG : -ANGLE_CHANGE_STEP_DEG;
+const directionSign = (direction: 'up' | 'down'): number => (direction === 'up' ? 1 : -1);
+
+export const keyboardAngleDelta = (
+  direction: 'up' | 'down',
+  stepDeg = ANGLE_KEYBOARD_STEP_DEG
+): number => directionSign(direction) * stepDeg;
+
+export const keyboardAngleHoldDelta = (
+  direction: 'up' | 'down',
+  holdDurationMs: number,
+  dtMs: number
+): number => {
+  const safeDtMs = Math.max(0, dtMs);
+  if (safeDtMs <= 0) {
+    return 0;
+  }
+  const safeRampMs = Math.max(1, ANGLE_KEYBOARD_RAMP_MS);
+  const rampT = clamp01(Math.max(0, holdDurationMs) / safeRampMs);
+  const degPerSec = lerp(
+    ANGLE_KEYBOARD_HOLD_START_DEG_PER_SEC,
+    ANGLE_KEYBOARD_HOLD_MAX_DEG_PER_SEC,
+    easeOutQuad(rampT)
+  );
+  return directionSign(direction) * degPerSec * (safeDtMs / 1000);
+};
 
 export const pointerFromAnchorToAngleDeg = (
   pointerClientX: number,
   pointerClientY: number,
   anchorClientX: number,
-  anchorClientY: number
+  anchorClientY: number,
+  deadzonePx = ANGLE_POINTER_DEADZONE_PX
 ): number => {
-  const dx = Math.abs(pointerClientX - anchorClientX);
+  const dx = pointerClientX - anchorClientX;
   const dy = anchorClientY - pointerClientY;
-  if (dx === 0) {
-    return dy >= 0 ? 90 : -90;
+  const distancePx = Math.hypot(dx, dy);
+  if (distancePx < deadzonePx) {
+    return Number.NaN;
   }
-  const angleDeg = (Math.atan2(dy, dx) * 180) / Math.PI;
-  return clamp(angleDeg, -90, 90);
+  if (dx === 0) {
+    return clamp(dy >= 0 ? ANGLE_MAX_DEG : ANGLE_MIN_DEG, ANGLE_MIN_DEG, ANGLE_MAX_DEG);
+  }
+  const absDx = Math.max(Math.abs(dx), 1);
+  const angleDeg = (Math.atan2(dy, absDx) * 180) / Math.PI;
+  return clamp(angleDeg, ANGLE_MIN_DEG, ANGLE_MAX_DEG);
+};
+
+export const smoothPointerAngleDeg = (
+  previousAngleDeg: number | null,
+  rawAngleDeg: number,
+  smoothing = ANGLE_POINTER_SMOOTHING
+): number => {
+  const t = clamp(smoothing, 0, 1);
+  if (previousAngleDeg === null || t >= 1) {
+    return rawAngleDeg;
+  }
+  return previousAngleDeg + (rawAngleDeg - previousAngleDeg) * t;
 };
 
 ```
-> meta: lines=21 chars=639 truncated=no
+> meta: lines=69 chars=2099 truncated=no
 
 
 ## src/features/javelin/game/math.ts
@@ -2692,6 +2901,9 @@ export const toRad = (deg: number): number => (deg * Math.PI) / 180;
 /** Radians to degrees. */
 export const toDeg = (rad: number): number => (rad * 180) / Math.PI;
 
+/** Round a value to one decimal place. */
+export const roundTo1 = (value: number): number => Math.round(value * 10) / 10;
+
 export const easeOutQuad = (t: number): number => 1 - (1 - t) * (1 - t);
 
 export const easeOutCubic = (t: number): number => 1 - (1 - t) ** 3;
@@ -2702,7 +2914,7 @@ export const easeInOutSine = (t: number): number =>
   0.5 - Math.cos(Math.PI * clamp01(t)) * 0.5;
 
 ```
-> meta: lines=31 chars=1100 truncated=no
+> meta: lines=34 chars=1224 truncated=no
 
 ### Gameplay systems
 
@@ -2731,8 +2943,6 @@ const normalizeAngleRad = (angleRad: number): number => {
   }
   return angle;
 };
-
-const roundTo1 = (value: number): number => Math.round(value * 10) / 10;
 
 const isFiniteState = (javelin: PhysicalJavelinState): boolean =>
   Number.isFinite(javelin.xM) &&
@@ -2969,7 +3179,7 @@ export const distanceFromJavelin = (javelin: PhysicalJavelinState): number =>
   roundTo1(clamp(javelin.xM, 0, FIELD_MAX_DISTANCE_M));
 
 ```
-> meta: lines=257 chars=7644 truncated=no
+> meta: lines=255 chars=7570 truncated=no
 
 ### Other code & helpers
 
@@ -2991,7 +3201,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState =>
 
 
 ## src/features/javelin/game/render.ts
-_Defines: getVisibleJavelinRenderState, getPlayerAngleAnchorScreen, renderGame_
+_Defines: RenderSession, createRenderSession, getVisibleJavelinRenderState, getPlayerAngleAnchorScreen, renderGame_
 
 ```ts
 import {
@@ -3000,9 +3210,9 @@ import {
   sampleThrowSubphase,
   type AthletePoseGeometry
 } from './athletePose';
-import { playBeatTick } from './audio';
 import {
-// ... 19 more import lines from .
+  playBeatTick,
+// ... 36 more import lines from .
 
 export { getCameraTargetX } from './camera';
 export { getHeadMeterScreenAnchor } from './renderMeter';
@@ -3048,11 +3258,54 @@ const CLOUD_LAYERS: CloudLayer[] = [
   }
 ];
 
-let lastResultRoundId = -1;
-let resultShownAtMs = 0;
+type ResultMarkerFadeState = {
+  lastRoundId: number;
+  shownAtMs: number;
+};
+
+export type RenderSession = {
+  camera: CameraSmoothingState;
+  resultMarker: ResultMarkerFadeState;
+  lastRunupBeatIndex: number | null;
+  lastPhaseTag: GameState['phase']['tag'];
+};
+
+export const createRenderSession = (): RenderSession => ({
+  camera: createCameraSmoothingState(),
+  resultMarker: {
+    lastRoundId: -1,
+    shownAtMs: 0
+  },
+  lastRunupBeatIndex: null,
+  lastPhaseTag: 'idle'
+});
 
 type ReleaseFlashLabels = Record<TimingQuality, string> & {
   foulLine: string;
+};
+
+const getOverlayUiScale = (width: number): number => {
+  const safeWidth = Math.max(280, width);
+  return Math.max(0.95, Math.min(1.25, 420 / safeWidth));
+};
+
+const drawOutlinedText = (
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  fillStyle: string,
+  outlineStyle: string,
+  outlineWidth: number
+): void => {
+  ctx.save();
+  ctx.strokeStyle = outlineStyle;
+  ctx.lineWidth = outlineWidth;
+  ctx.lineJoin = 'round';
+  ctx.strokeText(text, x, y);
+  ctx.fillStyle = fillStyle;
+  ctx.fillText(text, x, y);
+  ctx.restore();
 };
 
 const drawBackground = (ctx: CanvasRenderingContext2D, width: number, height: number): void => {
@@ -3110,20 +3363,28 @@ const drawThrowLine = (
   ctx: CanvasRenderingContext2D,
   toScreen: WorldToScreen,
   height: number,
-  label: string
+  label: string,
+  uiScale: number
 ): void => {
   const groundY = height - CAMERA_GROUND_BOTTOM_PADDING;
   const line = toScreen({ xM: THROW_LINE_X_M, yM: 0 });
   ctx.strokeStyle = '#ff5d4e';
-  ctx.lineWidth = 3;
+  ctx.lineWidth = Math.max(2.4, 3 * uiScale);
   ctx.beginPath();
-  ctx.moveTo(line.x, groundY - 24);
-  ctx.lineTo(line.x, groundY + 19);
+  ctx.moveTo(line.x, groundY - 24 * uiScale);
+  ctx.lineTo(line.x, groundY + 19 * uiScale);
   ctx.stroke();
 
-  ctx.fillStyle = '#a3211a';
-  ctx.font = '700 12px ui-sans-serif';
-  ctx.fillText(label, line.x - 28, groundY - 27);
+  ctx.font = `700 ${Math.round(12 * uiScale)}px ui-sans-serif`;
+  drawOutlinedText(
+    ctx,
+    label,
+    line.x - 28 * uiScale,
+    groundY - 27 * uiScale,
+    '#a3211a',
+    'rgba(246, 252, 255, 0.92)',
+    Math.max(2, 1.8 * uiScale)
+  );
 };
 
 const drawTrackAndField = (
@@ -3133,14 +3394,15 @@ const drawTrackAndField = (
   toScreen: WorldToScreen,
   throwLineLabel: string,
   worldMinX: number,
-  worldMaxX: number
+  worldMaxX: number,
+  uiScale: number
 ): void => {
   const groundY = height - CAMERA_GROUND_BOTTOM_PADDING;
   ctx.fillStyle = '#88d37f';
   ctx.fillRect(0, groundY, width, CAMERA_GROUND_BOTTOM_PADDING);
 
   ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 2;
+  ctx.lineWidth = Math.max(1.8, 2 * uiScale);
   ctx.beginPath();
   ctx.moveTo(RUNWAY_OFFSET_X, groundY);
   ctx.lineTo(width - 20, groundY);
@@ -3156,57 +3418,72 @@ const drawTrackAndField = (
     const { x } = toScreen({ xM, yM: 0 });
     const isMajor = relativeM % 10 === 0;
     ctx.strokeStyle = isMajor ? 'rgba(255, 255, 255, 0.85)' : 'rgba(255, 255, 255, 0.4)';
-    ctx.lineWidth = isMajor ? 2 : 1;
+    ctx.lineWidth = isMajor ? Math.max(1.8, 2 * uiScale) : Math.max(1, 1.2 * uiScale);
     ctx.beginPath();
     ctx.moveTo(x, groundY);
-    ctx.lineTo(x, groundY + (isMajor ? 16 : 10));
+    ctx.lineTo(x, groundY + (isMajor ? 16 * uiScale : 10 * uiScale));
     ctx.stroke();
 
     if (isMajor) {
-      ctx.fillStyle = '#0b2238';
-      ctx.font = 'bold 12px ui-sans-serif';
-      ctx.fillText(`${relativeM} m`, x - 12, groundY + 32);
+      ctx.font = `700 ${Math.round(12 * uiScale)}px ui-sans-serif`;
+      drawOutlinedText(
+        ctx,
+        `${relativeM} m`,
+        x - 12 * uiScale,
+        groundY + 32 * uiScale,
+        '#0b2238',
+        'rgba(245, 252, 255, 0.92)',
+        Math.max(1.8, 1.5 * uiScale)
+      );
     }
   }
 
-  drawThrowLine(ctx, toScreen, height, throwLineLabel);
+  drawThrowLine(ctx, toScreen, height, throwLineLabel, uiScale);
 };
 
 const drawWindVane = (
   ctx: CanvasRenderingContext2D,
   width: number,
   windMs: number,
-  localeFormatter: Intl.NumberFormat
+  localeFormatter: Intl.NumberFormat,
+  uiScale: number
 ): void => {
   const dir = windMs >= 0 ? 1 : -1;
-  const x = width - 118;
-  const y = 42;
+  const x = width - 118 * uiScale;
+  const y = Math.max(32, 42 * uiScale);
 
   ctx.strokeStyle = '#0f4165';
-  ctx.lineWidth = 3;
+  ctx.lineWidth = Math.max(2, 3 * uiScale);
   ctx.beginPath();
-  ctx.moveTo(x, y + 22);
-  ctx.lineTo(x, y - 8);
+  ctx.moveTo(x, y + 22 * uiScale);
+  ctx.lineTo(x, y - 8 * uiScale);
   ctx.stroke();
 
   ctx.fillStyle = windMs >= 0 ? '#1f9d44' : '#cf3a2f';
   ctx.beginPath();
   if (dir >= 0) {
-    ctx.moveTo(x, y - 8);
-    ctx.lineTo(x + 26, y - 1);
-    ctx.lineTo(x, y + 7);
+    ctx.moveTo(x, y - 8 * uiScale);
+    ctx.lineTo(x + 26 * uiScale, y - uiScale);
+    ctx.lineTo(x, y + 7 * uiScale);
   } else {
-    ctx.moveTo(x, y - 8);
-    ctx.lineTo(x - 26, y - 1);
-    ctx.lineTo(x, y + 7);
+    ctx.moveTo(x, y - 8 * uiScale);
+    ctx.lineTo(x - 26 * uiScale, y - uiScale);
+    ctx.lineTo(x, y + 7 * uiScale);
   }
   ctx.closePath();
   ctx.fill();
 
-  ctx.fillStyle = '#10314a';
-  ctx.font = '600 12px ui-sans-serif';
+  ctx.font = `700 ${Math.round(12 * uiScale)}px ui-sans-serif`;
   const windText = `${windMs >= 0 ? '+' : ''}${localeFormatter.format(windMs)} m/s`;
-  ctx.fillText(windText, x - 16, y + 34);
+  drawOutlinedText(
+    ctx,
+    windText,
+    x - 16 * uiScale,
+    y + 34 * uiScale,
+    '#10314a',
+    'rgba(245, 252, 255, 0.95)',
+    Math.max(1.8, 1.6 * uiScale)
+  );
 };
 
 const drawJavelinWorld = (
@@ -3281,35 +3558,69 @@ const drawLandingMarker = (
   toScreen: WorldToScreen,
   landingXM: number,
   resultKind: ResultKind,
-  distanceLabel: string
+  distanceLabel: string,
+  uiScale: number
 ): void => {
   const landing = toScreen({ xM: landingXM, yM: 0 });
   const groundY = landing.y;
 
   ctx.strokeStyle = resultKind === 'valid' ? '#1f9d44' : '#cf3a2f';
-  ctx.lineWidth = 2;
+  ctx.lineWidth = Math.max(1.8, 2 * uiScale);
   ctx.beginPath();
-  ctx.moveTo(landing.x, groundY + 5);
-  ctx.lineTo(landing.x, groundY - 36);
+  ctx.moveTo(landing.x, groundY + 5 * uiScale);
+  ctx.lineTo(landing.x, groundY - 36 * uiScale);
   ctx.stroke();
 
   ctx.fillStyle = resultKind === 'valid' ? '#22c272' : '#e0453a';
   ctx.beginPath();
-  ctx.moveTo(landing.x, groundY - 36);
-  ctx.lineTo(landing.x + 28, groundY - 30);
-  ctx.lineTo(landing.x, groundY - 24);
+  ctx.moveTo(landing.x, groundY - 36 * uiScale);
+  ctx.lineTo(landing.x + 28 * uiScale, groundY - 30 * uiScale);
+  ctx.lineTo(landing.x, groundY - 24 * uiScale);
   ctx.closePath();
   ctx.fill();
 
-  ctx.fillStyle = '#ffffff';
-  ctx.font = '700 10px ui-sans-serif';
+  ctx.font = `700 ${Math.round(10 * uiScale)}px ui-sans-serif`;
   ctx.textAlign = 'left';
-  ctx.fillText(distanceLabel, landing.x + 4, groundY - 28);
+  drawOutlinedText(
+    ctx,
+    distanceLabel,
+    landing.x + 4 * uiScale,
+    groundY - 28 * uiScale,
+    '#ffffff',
+    'rgba(8, 35, 56, 0.6)',
+    Math.max(1.6, 1.4 * uiScale)
+  );
 
   ctx.fillStyle = 'rgba(15, 40, 60, 0.35)';
   ctx.beginPath();
-  ctx.arc(landing.x, groundY + 2, 3, 0, Math.PI * 2);
+  ctx.arc(landing.x, groundY + 2 * uiScale, 3 * uiScale, 0, Math.PI * 2);
   ctx.fill();
+};
+
+const drawTrajectoryIndicator = (
+  ctx: CanvasRenderingContext2D,
+  toScreen: WorldToScreen,
+  points: TrajectoryPoint[],
+  uiScale: number
+): void => {
+  if (points.length === 0) {
+    return;
+  }
+
+  const lastIndex = Math.max(1, points.length - 1);
+  const dotRadiusPx = Math.max(2, TRAJECTORY_PREVIEW_DOT_RADIUS_PX * uiScale);
+  ctx.save();
+  ctx.fillStyle = TRAJECTORY_PREVIEW_DOT_COLOR;
+  for (let index = 0; index < points.length; index += 1) {
+    const t = index / lastIndex;
+    const alpha = TRAJECTORY_PREVIEW_BASE_OPACITY + (TRAJECTORY_PREVIEW_END_OPACITY - TRAJECTORY_PREVIEW_BASE_OPACITY) * t;
+    const screen = toScreen(points[index]);
+    ctx.globalAlpha = alpha;
+    ctx.beginPath();
+    ctx.arc(screen.x, screen.y, dotRadiusPx, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
 };
 
 type JavelinRenderState =
@@ -3317,6 +3628,45 @@ type JavelinRenderState =
   | { mode: 'attached'; xM: number; yM: number; angleRad: number; lengthM: number }
   | { mode: 'flight'; xM: number; yM: number; angleRad: number; lengthM: number }
   | { mode: 'landed'; xM: number; yM: number; angleRad: number; lengthM: number };
+
+const RUNWAY_FOOT_CONTACT_Y_M = 0.02;
+const MIN_POSE_GROUNDING_SHIFT_M = 0.0001;
+
+type PosePoint = {
+  xM: number;
+  yM: number;
+};
+
+const shiftPointDown = (point: PosePoint, offsetYM: number): PosePoint => ({
+  xM: point.xM,
+  yM: point.yM - offsetYM
+});
+
+const groundPoseToRunway = (pose: AthletePoseGeometry): AthletePoseGeometry => {
+  const lowestFootYM = Math.min(pose.footFront.yM, pose.footBack.yM);
+  const offsetYM = lowestFootYM - RUNWAY_FOOT_CONTACT_Y_M;
+  if (offsetYM <= MIN_POSE_GROUNDING_SHIFT_M) {
+    return pose;
+  }
+
+  return {
+    ...pose,
+    head: shiftPointDown(pose.head, offsetYM),
+    shoulderCenter: shiftPointDown(pose.shoulderCenter, offsetYM),
+    pelvis: shiftPointDown(pose.pelvis, offsetYM),
+    hipFront: shiftPointDown(pose.hipFront, offsetYM),
+    hipBack: shiftPointDown(pose.hipBack, offsetYM),
+    kneeFront: shiftPointDown(pose.kneeFront, offsetYM),
+    kneeBack: shiftPointDown(pose.kneeBack, offsetYM),
+    footFront: shiftPointDown(pose.footFront, offsetYM),
+    footBack: shiftPointDown(pose.footBack, offsetYM),
+    elbowFront: shiftPointDown(pose.elbowFront, offsetYM),
+    elbowBack: shiftPointDown(pose.elbowBack, offsetYM),
+    handFront: shiftPointDown(pose.handFront, offsetYM),
+    handBack: shiftPointDown(pose.handBack, offsetYM),
+    javelinGrip: shiftPointDown(pose.javelinGrip, offsetYM)
+  };
+};
 
 export const getVisibleJavelinRenderState = (
   state: GameState,
@@ -3343,6 +3693,7 @@ export const getVisibleJavelinRenderState = (
   }
 
   if (
+    state.phase.tag === 'idle' ||
     state.phase.tag === 'runup' ||
     state.phase.tag === 'chargeAim' ||
     state.phase.tag === 'throwAnim'
@@ -3370,68 +3721,70 @@ export const getVisibleJavelinRenderState = (
 };
 
 const getPoseForState = (state: GameState): AthletePoseGeometry => {
-  if (state.phase.tag === 'runup') {
-    return computeAthletePoseGeometry(
-      state.phase.athletePose,
-      state.phase.speedNorm,
-      state.aimAngleDeg,
-      state.phase.runupDistanceM
-    );
-  }
-  if (state.phase.tag === 'chargeAim') {
-    const runToAimBlend01 =
-      state.phase.speedNorm > 0.01
-        ? getRunToAimBlend01(state.phase.chargeStartedAtMs, state.nowMs, RUN_TO_DRAWBACK_BLEND_MS)
-        : 1;
-    return computeAthletePoseGeometry(
-      state.phase.athletePose,
-      state.phase.speedNorm,
-      state.phase.angleDeg,
-      state.phase.runupDistanceM,
-      {
-        runBlendFromAnimT: state.phase.runEntryAnimT,
-        runToAimBlend01
+  const pose = (() => {
+    switch (state.phase.tag) {
+      case 'runup':
+        return computeAthletePoseGeometry(
+          state.phase.athletePose,
+          state.phase.speedNorm,
+          state.aimAngleDeg,
+          state.phase.runupDistanceM
+        );
+      case 'chargeAim': {
+        const runToAimBlend01 =
+          state.phase.speedNorm > 0.01
+            ? getRunToAimBlend01(state.phase.chargeStartedAtMs, state.nowMs, RUN_TO_DRAWBACK_BLEND_MS)
+            : 1;
+        return computeAthletePoseGeometry(
+          state.phase.athletePose,
+          state.phase.speedNorm,
+          state.phase.angleDeg,
+          state.phase.runupDistanceM,
+          {
+            runBlendFromAnimT: state.phase.runEntryAnimT,
+            runToAimBlend01
+          }
+        );
       }
-    );
-  }
-  if (state.phase.tag === 'throwAnim') {
-    return computeAthletePoseGeometry(
-      state.phase.athletePose,
-      state.phase.speedNorm,
-      state.phase.angleDeg,
-      state.phase.athleteXM
-    );
-  }
-  if (state.phase.tag === 'flight') {
-    return computeAthletePoseGeometry(
-      state.phase.athletePose,
-      state.phase.launchedFrom.speedNorm,
-      state.phase.launchedFrom.angleDeg,
-      state.phase.athleteXM
-    );
-  }
-  if (state.phase.tag === 'result') {
-    return computeAthletePoseGeometry(
-      { animTag: 'followThrough', animT: 1 },
-      0.72,
-      24,
-      state.phase.athleteXM
-    );
-  }
-  if (state.phase.tag === 'fault') {
-    return computeAthletePoseGeometry(
-      state.phase.athletePose,
-      0.14,
-      state.aimAngleDeg,
-      state.phase.athleteXM
-    );
-  }
-  return computeAthletePoseGeometry(
-    { animTag: 'idle', animT: 0 },
-    0,
-    state.aimAngleDeg,
-    RUNUP_START_X_M
-  );
+      case 'throwAnim':
+        return computeAthletePoseGeometry(
+          state.phase.athletePose,
+          state.phase.speedNorm,
+          state.phase.angleDeg,
+          state.phase.athleteXM
+        );
+      case 'flight':
+        return computeAthletePoseGeometry(
+          state.phase.athletePose,
+          state.phase.launchedFrom.speedNorm,
+          state.phase.launchedFrom.angleDeg,
+          state.phase.athleteXM
+        );
+      case 'result':
+        return computeAthletePoseGeometry(
+          { animTag: 'followThrough', animT: 1 },
+          0.72,
+          24,
+          state.phase.athleteXM
+        );
+      case 'fault':
+        return computeAthletePoseGeometry(
+          state.phase.athletePose,
+          0.14,
+          state.aimAngleDeg,
+          state.phase.athleteXM
+        );
+      case 'idle':
+        return computeAthletePoseGeometry(
+          { animTag: 'idle', animT: 0 },
+          0,
+          state.aimAngleDeg,
+          RUNUP_START_X_M
+        );
+    }
+  })();
+
+  return groundPoseToRunway(pose);
 };
 
 export const getPlayerAngleAnchorScreen = (
@@ -3468,9 +3821,47 @@ export const renderGame = (
   dtMs: number,
   numberFormat: Intl.NumberFormat,
   throwLineLabel: string,
-  releaseFlashLabels: ReleaseFlashLabels
+  releaseFlashLabels: ReleaseFlashLabels,
+  session: RenderSession
 ): void => {
-  const camera = createWorldToScreen(state, width, height, dtMs);
+  const phaseChanged = state.phase.tag !== session.lastPhaseTag;
+  if (phaseChanged) {
+    switch (state.phase.tag) {
+      case 'chargeAim':
+        playChargeStart();
+        break;
+      case 'throwAnim':
+        playThrowWhoosh(state.phase.speedNorm);
+        break;
+      case 'result':
+        playLandingImpact(state.phase.tipFirst === true);
+        playCrowdReaction(state.phase.resultKind === 'valid' ? 'cheer' : 'groan');
+        break;
+      case 'fault':
+        playFaultOof();
+        playCrowdReaction('groan');
+        break;
+      case 'idle':
+      case 'runup':
+      case 'flight':
+      default:
+        break;
+    }
+  }
+
+  if (state.phase.tag === 'flight') {
+    const speedMs = Math.hypot(
+      state.phase.javelin.vxMs,
+      state.phase.javelin.vyMs,
+      state.phase.javelin.vzMs
+    );
+    setFlightWindIntensity(Math.min(1, speedMs / 38));
+  } else {
+    setFlightWindIntensity(0);
+  }
+
+  const overlayUiScale = getOverlayUiScale(width);
+  const camera = createWorldToScreen(state, width, height, dtMs, session.camera);
   const { toScreen, worldMinX, worldMaxX } = camera;
 
   drawBackground(ctx, width, height);
@@ -3482,9 +3873,10 @@ export const renderGame = (
     toScreen,
     throwLineLabel,
     worldMinX,
-    worldMaxX
+    worldMaxX,
+    overlayUiScale
   );
-  drawWindVane(ctx, width, state.windMs, numberFormat);
+  drawWindVane(ctx, width, state.windMs, numberFormat, overlayUiScale);
 
   const pose = getPoseForState(state);
   const javelin = getVisibleJavelinRenderState(state, pose);
@@ -3505,80 +3897,24 @@ export const renderGame = (
     drawJavelinWorld(ctx, toScreen, javelin.xM, javelin.yM, javelin.angleRad, javelin.lengthM);
   }
 
-  if (state.phase.tag === 'result') {
-    if (state.roundId !== lastResultRoundId) {
-      lastResultRoundId = state.roundId;
-      resultShownAtMs = state.nowMs;
-    }
-    const fadeAgeMs = Math.max(0, state.nowMs - resultShownAtMs);
-    const alpha = Math.min(1, fadeAgeMs / 400);
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    drawLandingMarker(
-      ctx,
-      toScreen,
-      state.phase.landingXM,
-      state.phase.resultKind,
-      `${numberFormat.format(state.phase.distanceM)}m`
-    );
-    ctx.restore();
-  } else {
-    lastResultRoundId = -1;
+  if (state.phase.tag === 'chargeAim') {
+    const trajectoryPreview = computeTrajectoryPreview({
+      originXM: pose.javelinGrip.xM + Math.cos(pose.javelinAngleRad) * JAVELIN_GRIP_OFFSET_M,
+      originYM: pose.javelinGrip.yM + Math.sin(pose.javelinAngleRad) * JAVELIN_GRIP_OFFSET_Y_M,
+      angleDeg: state.phase.angleDeg,
+      speedNorm: state.phase.speedNorm,
+      forceNorm: state.phase.forceNormPreview
+    });
+    drawTrajectoryIndicator(ctx, toScreen, trajectoryPreview.points, overlayUiScale);
   }
 
-  const releaseFeedback =
-    state.phase.tag === 'throwAnim'
-      ? {
-          label: state.phase.lineCrossedAtRelease
-            ? releaseFlashLabels.foulLine
-            : releaseFlashLabels[state.phase.releaseQuality],
-          shownAtMs: state.phase.releaseFlashAtMs
-        }
-      : state.phase.tag === 'flight'
-        ? {
-            label: state.phase.launchedFrom.lineCrossedAtRelease
-              ? releaseFlashLabels.foulLine
-              : releaseFlashLabels[state.phase.launchedFrom.releaseQuality],
-            shownAtMs: state.phase.javelin.releasedAtMs
-          }
-        : null;
+  if (state.phase.tag === 'result'
 
-  if (releaseFeedback !== null) {
-    const feedbackAgeMs = Math.max(0, state.nowMs - releaseFeedback.shownAtMs);
-    const holdMs = 220;
-    const fadeMs = 620;
-    const totalMs = holdMs + fadeMs;
-    if (feedbackAgeMs < totalMs) {
-      const fadeT = feedbackAgeMs <= holdMs ? 0 : (feedbackAgeMs - holdMs) / fadeMs;
-      const alpha = 1 - Math.min(1, fadeT);
-      const scale = 1 + (1 - alpha) * 0.12;
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.font = `900 ${Math.round(28 * scale)}px ui-sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#0b2238';
-      const y = 74 - (1 - alpha) * 8;
-      ctx.fillText(releaseFeedback.label, width / 2, y);
-      ctx.restore();
-    }
-  }
-
-  drawWorldTimingMeter(ctx, state, headScreen);
-
-  if (state.phase.tag === 'runup') {
-    const meterPhase = getRunupMeterPhase01(state);
-    if (meterPhase !== null) {
-      const distToTarget = Math.abs(meterPhase - RHYTHM_TARGET_PHASE01);
-      const wrappedDist = Math.min(distToTarget, 1 - distToTarget);
-      if (wrappedDist < 0.02) {
-        playBeatTick(state.nowMs, wrappedDist < 0.01);
-      }
-    }
-  }
-};
+// [TRUNCATED at 20000 chars]
 
 ```
-> meta: lines=583 chars=16328 truncated=no
+> NOTE: Truncated to 20000 chars (original: 23887).
+> meta: lines=784 chars=22867 truncated=yes
 
 ### Other code & helpers
 
@@ -3720,6 +4056,9 @@ type WorldMeterState = {
   valuePercent: number;
 };
 
+const normalizeUiScale = (uiScale: number): number =>
+  Math.max(0.9, Math.min(1.3, uiScale));
+
 const normalizeMeterPhase01 = (phase01: number): number => {
   if (phase01 <= 0) {
     return 0;
@@ -3816,14 +4155,20 @@ const getWorldMeterState = (state: GameState): WorldMeterState | null => {
 export const drawWorldTimingMeter = (
   ctx: CanvasRenderingContext2D,
   state: GameState,
-  headScreen: HeadAnchor
+  headScreen: HeadAnchor,
+  uiScale = 1
 ): void => {
   const meterState = getWorldMeterState(state);
   if (meterState === null) {
     return;
   }
 
+  const visualScale = normalizeUiScale(uiScale);
+  const meterRadius = WORLD_METER_RADIUS_PX * visualScale;
+  const meterLineWidth = WORLD_METER_LINE_WIDTH_PX * visualScale;
+  const meterCursorRadius = WORLD_METER_CURSOR_RADIUS_PX * visualScale;
   const anchor = getHeadMeterScreenAnchor(headScreen);
+  anchor.y -= (visualScale - 1) * 8;
   if (!Number.isFinite(anchor.x) || !Number.isFinite(anchor.y)) {
     return;
   }
@@ -3835,33 +4180,33 @@ export const drawWorldTimingMeter = (
     ctx,
     anchor.x,
     anchor.y,
-    WORLD_METER_RADIUS_PX,
+    meterRadius,
     0,
     1,
     'rgba(10, 46, 77, 0.34)',
-    WORLD_METER_LINE_WIDTH_PX
+    meterLineWidth
   );
 
   drawSemicircleArc(
     ctx,
     anchor.x,
     anchor.y,
-    WORLD_METER_RADIUS_PX,
+    meterRadius,
     meterState.zones.good.start,
     meterState.zones.good.end,
     'rgba(30, 142, 247, 0.82)',
-    WORLD_METER_LINE_WIDTH_PX
+    meterLineWidth
   );
 
   drawSemicircleArc(
     ctx,
     anchor.x,
     anchor.y,
-    WORLD_METER_RADIUS_PX,
+    meterRadius,
     meterState.zones.perfect.start,
     meterState.zones.perfect.end,
     'rgba(18, 196, 119, 0.98)',
-    WORLD_METER_LINE_WIDTH_PX + 0.8
+    meterLineWidth + 0.8 * visualScale
   );
 
   if (state.phase.tag === 'runup') {
@@ -3874,9 +4219,9 @@ export const drawWorldTimingMeter = (
         ctx.save();
         ctx.globalAlpha = flashAlpha;
         ctx.strokeStyle = '#22c272';
-        ctx.lineWidth = WORLD_METER_LINE_WIDTH_PX + 6;
+        ctx.lineWidth = meterLineWidth + 6 * visualScale;
         ctx.beginPath();
-        ctx.arc(anchor.x, anchor.y, WORLD_METER_RADIUS_PX, Math.PI, Math.PI * 2, false);
+        ctx.arc(anchor.x, anchor.y, meterRadius, Math.PI, Math.PI * 2, false);
         ctx.stroke();
         ctx.restore();
       }
@@ -3884,8 +4229,8 @@ export const drawWorldTimingMeter = (
   }
 
   const cursorAngle = phaseToSemicircleAngle(normalizeMeterPhase01(meterState.phase01));
-  const cursorX = anchor.x + Math.cos(cursorAngle) * WORLD_METER_RADIUS_PX;
-  const cursorY = anchor.y + Math.sin(cursorAngle) * WORLD_METER_RADIUS_PX;
+  const cursorX = anchor.x + Math.cos(cursorAngle) * meterRadius;
+  const cursorY = anchor.y + Math.sin(cursorAngle) * meterRadius;
 
   const cursorFill =
     meterState.feedback === 'perfect'
@@ -3896,22 +4241,69 @@ export const drawWorldTimingMeter = (
 
   ctx.fillStyle = cursorFill;
   ctx.strokeStyle = '#0f3b61';
-  ctx.lineWidth = 2;
+  ctx.lineWidth = Math.max(2, 2 * visualScale);
   ctx.beginPath();
-  ctx.arc(cursorX, cursorY, WORLD_METER_CURSOR_RADIUS_PX, 0, Math.PI * 2);
+  ctx.arc(cursorX, cursorY, meterCursorRadius, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
 
-  ctx.fillStyle = 'rgba(6, 32, 57, 0.9)';
-  ctx.font = '700 11px ui-sans-serif';
+  const valueLabel = `${meterState.valuePercent}%`;
+  ctx.font = `700 ${Math.round(11 * visualScale)}px ui-sans-serif`;
   ctx.textAlign = 'center';
-  ctx.fillText(`${meterState.valuePercent}%`, anchor.x, anchor.y + 16);
+  ctx.strokeStyle = 'rgba(235, 246, 255, 0.95)';
+  ctx.lineWidth = Math.max(2, 1.7 * visualScale);
+  ctx.strokeText(valueLabel, anchor.x, anchor.y + 16 * visualScale);
+  ctx.fillStyle = 'rgba(6, 32, 57, 0.9)';
+  ctx.fillText(valueLabel, anchor.x, anchor.y + 16 * visualScale);
 
   ctx.restore();
 };
 
 ```
-> meta: lines=212 chars=5260 truncated=no
+> meta: lines=225 chars=5838 truncated=no
+
+
+## src/features/javelin/game/rhythm.ts
+_Defines: getCompletedBeatIndex, getNearestBeatIndex, getBeatTimeMs, getNearestBeatTimeMs, getNearestBeatDeltaMs, getTimingQualityFromBeatDelta_
+
+```ts
+import { RHYTHM_TARGET_PHASE01 } from './constants';
+import { wrap01 } from './math';
+import { BEAT_INTERVAL_MS, GOOD_WINDOW_MS, PERFECT_WINDOW_MS } from './tuning';
+import type { TimingQuality } from './types';
+
+export const getCompletedBeatIndex = (startedAtMs: number, atMs: number): number =>
+  Math.floor((atMs - startedAtMs) / BEAT_INTERVAL_MS);
+
+export const getNearestBeatIndex = (startedAtMs: number, atMs: number): number =>
+  Math.round((atMs - startedAtMs) / BEAT_INTERVAL_MS);
+
+export const getBeatTimeMs = (startedAtMs: number, beatIndex: number): number =>
+  startedAtMs + beatIndex * BEAT_INTERVAL_MS;
+
+export const getNearestBeatTimeMs = (startedAtMs: number, atMs: number): number =>
+  getBeatTimeMs(startedAtMs, getNearestBeatIndex(startedAtMs, atMs));
+
+export const getNearestBeatDeltaMs = (startedAtMs: number, atMs: number): number =>
+  Math.abs(atMs - getNearestBeatTimeMs(startedAtMs, atMs));
+
+export const getTimingQualityFromBeatDelta = (deltaMs: number): TimingQuality => {
+  if (deltaMs <= PERFECT_WINDOW_MS) {
+    return 'perfect';
+  }
+  if (deltaMs <= GOOD_WINDOW_MS) {
+    return 'good';
+  }
+  return 'miss';
+};
+
+export const getRunupMeterPhase01AtTime = (startedAtMs: number, nowMs: number): number => {
+  const rawPhase = wrap01((nowMs - startedAtMs) / BEAT_INTERVAL_MS);
+  return wrap01(rawPhase + RHYTHM_TARGET_PHASE01);
+};
+
+```
+> meta: lines=35 chars=1359 truncated=no
 
 
 ## src/features/javelin/game/scoring.ts
@@ -3919,10 +4311,8 @@ _Defines: DISTANCE_MEASURE_MODE, FOUL_ON_LINE_CROSS, REQUIRE_TIP_FIRST, REQUIRE_
 
 ```ts
 import { THROW_LINE_X_M } from './constants';
-import { clamp } from './math';
+import { clamp, roundTo1 } from './math';
 import type { ResultKind, ThrowInput } from './types';
-
-const roundTo1 = (value: number): number => Math.round(value * 10) / 10;
 
 export const DISTANCE_MEASURE_MODE = 'throwLineArc' as const;
 export const FOUL_ON_LINE_CROSS = true as const;
@@ -3947,6 +4337,10 @@ export const releaseEfficiency = (releaseTiming: number): number => {
 export const windEfficiency = (windMs: number): number =>
   clamp(1 + windMs * 0.035, 0.88, 1.12);
 
+/**
+ * @deprecated Legacy formula-based distance estimate kept for tests and balancing experiments.
+ * Runtime scoring uses `computeCompetitionDistanceM` from physical landing data.
+ */
 export const computeThrowDistance = (input: ThrowInput): number => {
   const raw =
     118 *
@@ -4004,7 +4398,7 @@ export const evaluateThrowLegality = ({
 };
 
 ```
-> meta: lines=85 chars=2586 truncated=no
+> meta: lines=87 chars=2708 truncated=no
 
 
 ## src/features/javelin/game/selectors.ts
@@ -4012,7 +4406,7 @@ _Defines: getSpeedPercent, getAngleDeg, getRunupMeterPhase01, getRunupFeedback, 
 
 ```ts
 import { RHYTHM_TARGET_PHASE01, THROW_LINE_X_M } from './constants';
-import { wrap01 } from './math';
+import { getRunupMeterPhase01AtTime } from './rhythm';
 import { BEAT_INTERVAL_MS, GOOD_WINDOW_MS, PERFECT_WINDOW_MS } from './tuning';
 import type { GameState, TimingQuality } from './types';
 
@@ -4027,6 +4421,9 @@ export const getSpeedPercent = (state: GameState): number => {
   if (state.phase.tag === 'flight') {
     return Math.round(state.phase.launchedFrom.speedNorm * 100);
   }
+  if (state.phase.tag === 'result') {
+    return Math.round(state.phase.launchedFrom.speedNorm * 100);
+  }
   return 0;
 };
 
@@ -4036,10 +4433,10 @@ export const getAngleDeg = (state: GameState): number => {
     case 'throwAnim':
       return state.phase.angleDeg;
     case 'flight':
+    case 'result':
       return state.phase.launchedFrom.angleDeg;
     case 'idle':
     case 'runup':
-    case 'result':
     case 'fault':
     default:
       return state.aimAngleDeg;
@@ -4050,8 +4447,7 @@ export const getRunupMeterPhase01 = (state: GameState): number | null => {
   if (state.phase.tag !== 'runup') {
     return null;
   }
-  const rawPhase = wrap01((state.nowMs - state.phase.startedAtMs) / BEAT_INTERVAL_MS);
-  return wrap01(rawPhase + RHYTHM_TARGET_PHASE01);
+  return getRunupMeterPhase01AtTime(state.phase.startedAtMs, state.nowMs);
 };
 
 export const getRunupFeedback = (state: GameState): TimingQuality | null =>
@@ -4113,7 +4509,76 @@ export const getThrowLineRemainingM = (state: GameState): number | null => {
 };
 
 ```
-> meta: lines=101 chars=2869 truncated=no
+> meta: lines=103 chars=2935 truncated=no
+
+
+## src/features/javelin/game/trajectory.ts
+_Defines: TrajectoryPoint, TrajectoryPreview, computeTrajectoryPreview_
+
+```ts
+import { ANGLE_MAX_DEG, ANGLE_MIN_DEG } from './constants';
+import { clamp, toRad } from './math';
+import { computeLaunchSpeedMs } from './physics';
+import { TRAJECTORY_PREVIEW_NUM_POINTS, TRAJECTORY_PREVIEW_TIME_STEP_S } from './tuning';
+
+export type TrajectoryPoint = {
+  xM: number;
+  yM: number;
+};
+
+export type TrajectoryPreview = {
+  points: TrajectoryPoint[];
+};
+
+type ComputeTrajectoryPreviewInput = {
+  originXM: number;
+  originYM: number;
+  angleDeg: number;
+  speedNorm: number;
+  forceNorm: number;
+  numPoints?: number;
+  timeStepS?: number;
+};
+
+/**
+ * Compute a short trajectory preview arc for charge aiming.
+ * Uses a simplified parabola (no drag/lift) for frame-by-frame rendering.
+ */
+export const computeTrajectoryPreview = ({
+  originXM,
+  originYM,
+  angleDeg,
+  speedNorm,
+  forceNorm,
+  numPoints = TRAJECTORY_PREVIEW_NUM_POINTS,
+  timeStepS = TRAJECTORY_PREVIEW_TIME_STEP_S
+}: ComputeTrajectoryPreviewInput): TrajectoryPreview => {
+  const launchSpeedMs = computeLaunchSpeedMs(clamp(speedNorm, 0, 1), clamp(forceNorm, 0, 1));
+  const clampedAngleDeg = clamp(angleDeg, ANGLE_MIN_DEG, ANGLE_MAX_DEG);
+  const angleRad = toRad(clampedAngleDeg);
+  const vxMs = Math.cos(angleRad) * launchSpeedMs;
+  const vyMs = Math.sin(angleRad) * launchSpeedMs;
+
+  const safeNumPoints = Math.max(1, Math.floor(numPoints));
+  const safeTimeStepS = Math.max(0.02, timeStepS);
+  const gravityMs2 = 9.81;
+  const points: TrajectoryPoint[] = [];
+
+  for (let index = 1; index <= safeNumPoints; index += 1) {
+    const t = index * safeTimeStepS;
+    const xM = originXM + vxMs * t;
+    const yM = originYM + vyMs * t - 0.5 * gravityMs2 * t * t;
+    if (yM < 0) {
+      break;
+    }
+    points.push({ xM, yM });
+  }
+
+  return { points };
+};
+
+```
+> meta: lines=61 chars=1740 truncated=no
 
 ### Gameplay systems
 
@@ -4122,7 +4587,7 @@ export const getThrowLineRemainingM = (state: GameState): number | null => {
 _Defines: GameplayTuning, GAMEPLAY_TUNING, BEAT_INTERVAL_MS, PERFECT_WINDOW_MS, GOOD_WINDOW_MS, SPAM_THRESHOLD_MS_
 
 ```ts
-import type { MeterWindow } from './types';
+import type { MeterWindow } from "./types";
 
 type SpeedUpTuning = {
   beatIntervalMs: number;
@@ -4161,10 +4626,39 @@ type MovementTuning = {
   faultStumbleDistanceM: number;
 };
 
+type AngleControlTuning = {
+  stepDeg: number;
+  holdStartDegPerSec: number;
+  holdMaxDegPerSec: number;
+  rampMs: number;
+  pointerDeadzonePx: number;
+  pointerSmoothing: number;
+};
+
+type TrajectoryIndicatorTuning = {
+  numPoints: number;
+  timeStepS: number;
+  dotRadiusPx: number;
+  baseOpacity: number;
+  endOpacity: number;
+  dotColor: string;
+};
+
+type AudioTuning = {
+  masterVolume: number;
+  rhythmVolume: number;
+  crowdVolume: number;
+  effectsVolume: number;
+  crowdAmbientGain: number;
+};
+
 export type GameplayTuning = {
   speedUp: SpeedUpTuning;
   throwPhase: ThrowPhaseTuning;
   movement: MovementTuning;
+  angleControl: AngleControlTuning;
+  trajectoryIndicator: TrajectoryIndicatorTuning;
+  audio: AudioTuning;
 };
 
 /**
@@ -4176,7 +4670,7 @@ export type GameplayTuning = {
  */
 export const GAMEPLAY_TUNING: GameplayTuning = {
   speedUp: {
-    beatIntervalMs: 820,
+    beatIntervalMs: 620,
     perfectWindowMs: 120,
     goodWindowMs: 230,
     spamThresholdMs: 130,
@@ -4184,11 +4678,11 @@ export const GAMEPLAY_TUNING: GameplayTuning = {
     passiveToHalfMs: 3200,
     passiveMaxSpeedNorm: 0.62,
     hitSpeedDelta: {
-      perfect: 0.15,
+      perfect: 0.17,
       good: 0.07,
-      miss: -0.008,
-      inPenalty: -0.025,
-      spam: -0.055,
+      miss: -0.08,
+      inPenalty: -0.25,
+      spam: -0.015,
     },
   },
   throwPhase: {
@@ -4209,6 +4703,29 @@ export const GAMEPLAY_TUNING: GameplayTuning = {
     followThroughStepDistanceM: 0.75,
     faultStumbleDistanceM: 0.82,
   },
+  angleControl: {
+    stepDeg: 1.0,
+    holdStartDegPerSec: 30,
+    holdMaxDegPerSec: 120,
+    rampMs: 600,
+    pointerDeadzonePx: 12,
+    pointerSmoothing: 0.4,
+  },
+  trajectoryIndicator: {
+    numPoints: 10,
+    timeStepS: 0.12,
+    dotRadiusPx: 3,
+    baseOpacity: 0.55,
+    endOpacity: 0.1,
+    dotColor: "#1a6b9a",
+  },
+  audio: {
+    masterVolume: 0.5,
+    rhythmVolume: 0.8,
+    crowdVolume: 0.4,
+    effectsVolume: 0.7,
+    crowdAmbientGain: 0.018,
+  },
 };
 
 export const BEAT_INTERVAL_MS = GAMEPLAY_TUNING.speedUp.beatIntervalMs;
@@ -4216,36 +4733,80 @@ export const PERFECT_WINDOW_MS = GAMEPLAY_TUNING.speedUp.perfectWindowMs;
 export const GOOD_WINDOW_MS = GAMEPLAY_TUNING.speedUp.goodWindowMs;
 export const SPAM_THRESHOLD_MS = GAMEPLAY_TUNING.speedUp.spamThresholdMs;
 export const SPAM_PENALTY_MS = GAMEPLAY_TUNING.speedUp.spamPenaltyMs;
-export const RUNUP_PASSIVE_MAX_SPEED = GAMEPLAY_TUNING.speedUp.passiveMaxSpeedNorm;
+export const RUNUP_PASSIVE_MAX_SPEED =
+  GAMEPLAY_TUNING.speedUp.passiveMaxSpeedNorm;
 export const RUNUP_PASSIVE_TO_HALF_MS = GAMEPLAY_TUNING.speedUp.passiveToHalfMs;
 
-export const RHYTHM_SPEED_DELTA_PERFECT = GAMEPLAY_TUNING.speedUp.hitSpeedDelta.perfect;
-export const RHYTHM_SPEED_DELTA_GOOD = GAMEPLAY_TUNING.speedUp.hitSpeedDelta.good;
-export const RHYTHM_SPEED_DELTA_MISS = GAMEPLAY_TUNING.speedUp.hitSpeedDelta.miss;
-export const RHYTHM_SPEED_DELTA_IN_PENALTY = GAMEPLAY_TUNING.speedUp.hitSpeedDelta.inPenalty;
-export const RHYTHM_SPEED_DELTA_SPAM = GAMEPLAY_TUNING.speedUp.hitSpeedDelta.spam;
+export const RHYTHM_SPEED_DELTA_PERFECT =
+  GAMEPLAY_TUNING.speedUp.hitSpeedDelta.perfect;
+export const RHYTHM_SPEED_DELTA_GOOD =
+  GAMEPLAY_TUNING.speedUp.hitSpeedDelta.good;
+export const RHYTHM_SPEED_DELTA_MISS =
+  GAMEPLAY_TUNING.speedUp.hitSpeedDelta.miss;
+export const RHYTHM_SPEED_DELTA_IN_PENALTY =
+  GAMEPLAY_TUNING.speedUp.hitSpeedDelta.inPenalty;
+export const RHYTHM_SPEED_DELTA_SPAM =
+  GAMEPLAY_TUNING.speedUp.hitSpeedDelta.spam;
 
 export const RUNUP_START_X_M = GAMEPLAY_TUNING.movement.runupStartXM;
-export const RUNUP_SPEED_DECAY_PER_SECOND = GAMEPLAY_TUNING.movement.runupSpeedDecayPerSecond;
-export const CHARGE_AIM_SPEED_DECAY_PER_SECOND = GAMEPLAY_TUNING.movement.chargeAimSpeedDecayPerSecond;
-export const CHARGE_AIM_STOP_SPEED_NORM = GAMEPLAY_TUNING.movement.chargeAimStopSpeedNorm;
-export const FOLLOW_THROUGH_STEP_DISTANCE_M = GAMEPLAY_TUNING.movement.followThroughStepDistanceM;
-export const FAULT_STUMBLE_DISTANCE_M = GAMEPLAY_TUNING.movement.faultStumbleDistanceM;
+export const RUNUP_SPEED_DECAY_PER_SECOND =
+  GAMEPLAY_TUNING.movement.runupSpeedDecayPerSecond;
+export const CHARGE_AIM_SPEED_DECAY_PER_SECOND =
+  GAMEPLAY_TUNING.movement.chargeAimSpeedDecayPerSecond;
+export const CHARGE_AIM_STOP_SPEED_NORM =
+  GAMEPLAY_TUNING.movement.chargeAimStopSpeedNorm;
+export const FOLLOW_THROUGH_STEP_DISTANCE_M =
+  GAMEPLAY_TUNING.movement.followThroughStepDistanceM;
+export const FAULT_STUMBLE_DISTANCE_M =
+  GAMEPLAY_TUNING.movement.faultStumbleDistanceM;
 
-export const CHARGEAIM_SPEED_DECAY_PER_SECOND = CHARGE_AIM_SPEED_DECAY_PER_SECOND;
-export const CHARGEAIM_STOP_SPEED_NORM = CHARGE_AIM_STOP_SPEED_NORM;
+export const ANGLE_KEYBOARD_STEP_DEG = GAMEPLAY_TUNING.angleControl.stepDeg;
+export const ANGLE_KEYBOARD_HOLD_START_DEG_PER_SEC =
+  GAMEPLAY_TUNING.angleControl.holdStartDegPerSec;
+export const ANGLE_KEYBOARD_HOLD_MAX_DEG_PER_SEC =
+  GAMEPLAY_TUNING.angleControl.holdMaxDegPerSec;
+export const ANGLE_KEYBOARD_RAMP_MS = GAMEPLAY_TUNING.angleControl.rampMs;
+export const ANGLE_POINTER_DEADZONE_PX =
+  GAMEPLAY_TUNING.angleControl.pointerDeadzonePx;
+export const ANGLE_POINTER_SMOOTHING =
+  GAMEPLAY_TUNING.angleControl.pointerSmoothing;
 
-export const CHARGE_FILL_DURATION_MS = GAMEPLAY_TUNING.throwPhase.chargeFillDurationMs;
+export const TRAJECTORY_PREVIEW_NUM_POINTS =
+  GAMEPLAY_TUNING.trajectoryIndicator.numPoints;
+export const TRAJECTORY_PREVIEW_TIME_STEP_S =
+  GAMEPLAY_TUNING.trajectoryIndicator.timeStepS;
+export const TRAJECTORY_PREVIEW_DOT_RADIUS_PX =
+  GAMEPLAY_TUNING.trajectoryIndicator.dotRadiusPx;
+export const TRAJECTORY_PREVIEW_BASE_OPACITY =
+  GAMEPLAY_TUNING.trajectoryIndicator.baseOpacity;
+export const TRAJECTORY_PREVIEW_END_OPACITY =
+  GAMEPLAY_TUNING.trajectoryIndicator.endOpacity;
+export const TRAJECTORY_PREVIEW_DOT_COLOR =
+  GAMEPLAY_TUNING.trajectoryIndicator.dotColor;
+
+export const AUDIO_MASTER_VOLUME = GAMEPLAY_TUNING.audio.masterVolume;
+export const AUDIO_RHYTHM_VOLUME = GAMEPLAY_TUNING.audio.rhythmVolume;
+export const AUDIO_CROWD_VOLUME = GAMEPLAY_TUNING.audio.crowdVolume;
+export const AUDIO_EFFECTS_VOLUME = GAMEPLAY_TUNING.audio.effectsVolume;
+export const AUDIO_CROWD_AMBIENT_GAIN = GAMEPLAY_TUNING.audio.crowdAmbientGain;
+
+export const CHARGE_FILL_DURATION_MS =
+  GAMEPLAY_TUNING.throwPhase.chargeFillDurationMs;
 export const CHARGE_MAX_CYCLES = GAMEPLAY_TUNING.throwPhase.chargeMaxCycles;
-export const FAULT_JAVELIN_LAUNCH_SPEED_MS = GAMEPLAY_TUNING.throwPhase.faultJavelinLaunchSpeedMs;
-export const CHARGE_PERFECT_WINDOW = GAMEPLAY_TUNING.throwPhase.chargePerfectWindow;
+export const FAULT_JAVELIN_LAUNCH_SPEED_MS =
+  GAMEPLAY_TUNING.throwPhase.faultJavelinLaunchSpeedMs;
+export const CHARGE_PERFECT_WINDOW =
+  GAMEPLAY_TUNING.throwPhase.chargePerfectWindow;
 export const CHARGE_GOOD_WINDOW = GAMEPLAY_TUNING.throwPhase.chargeGoodWindow;
-export const RUN_TO_DRAWBACK_BLEND_MS = GAMEPLAY_TUNING.throwPhase.runToDrawbackBlendMs;
-export const THROW_ANIM_DURATION_MS = GAMEPLAY_TUNING.throwPhase.throwAnimDurationMs;
-export const THROW_RELEASE_PROGRESS = GAMEPLAY_TUNING.throwPhase.throwReleaseProgress01;
+export const RUN_TO_DRAWBACK_BLEND_MS =
+  GAMEPLAY_TUNING.throwPhase.runToDrawbackBlendMs;
+export const THROW_ANIM_DURATION_MS =
+  GAMEPLAY_TUNING.throwPhase.throwAnimDurationMs;
+export const THROW_RELEASE_PROGRESS =
+  GAMEPLAY_TUNING.throwPhase.throwReleaseProgress01;
 
 ```
-> meta: lines=122 chars=4553 truncated=no
+> meta: lines=218 chars=6981 truncated=no
 
 ### Other code & helpers
 
@@ -4262,24 +4823,7 @@ import {
   JAVELIN_RELEASE_OFFSET_Y_M,
   RUNUP_MAX_TAPS,
   RUNUP_MAX_X_M,
-// ... 45 more import lines from .
-
-const nearestBeatDeltaMs = (startedAtMs: number, atMs: number): number => {
-  const elapsed = atMs - startedAtMs;
-  const beatIndex = Math.round(elapsed / BEAT_INTERVAL_MS);
-  const beatTime = startedAtMs + beatIndex * BEAT_INTERVAL_MS;
-  return Math.abs(atMs - beatTime);
-};
-
-const timingQualityFromBeatDelta = (deltaMs: number): TimingQuality => {
-  if (deltaMs <= PERFECT_WINDOW_MS) {
-    return 'perfect';
-  }
-  if (deltaMs <= GOOD_WINDOW_MS) {
-    return 'good';
-  }
-  return 'miss';
-};
+// ... 47 more import lines from .
 
 const rhythmTapSpeedDelta = (quality: TimingQuality): number => {
   if (quality === 'perfect') {
@@ -4631,6 +5175,7 @@ const tickFlight = (state: GameState, dtMs: number): GameState => {
       phase: {
         tag: 'result',
         athleteXM,
+        launchedFrom: state.phase.launchedFrom,
         distanceM,
         isHighscore: false,
         resultKind: legality.resultKind,
@@ -4696,18 +5241,27 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
         phase.rhythm.lastTapAtMs === null
           ? Number.POSITIVE_INFINITY
           : action.atMs - phase.rhythm.lastTapAtMs;
-      const isSpam = tapInterval < SPAM_THRESHOLD_MS;
-      const beatDelta = nearestBeatDeltaMs(phase.startedAtMs, action.atMs);
-      const quality = timingQualityFromBeatDelta(beatDelta);
+      const beatDelta = getNearestBeatDeltaMs(phase.startedAtMs, action.atMs);
+      const quality = getTimingQualityFromBeatDelta(beatDelta);
+      const beatIndex = getNearestBeatIndex(phase.startedAtMs, action.atMs);
+      const previousBeatIndex =
+        phase.rhythm.lastTapAtMs === null
+          ? null
+          : getNearestBeatIndex(phase.startedAtMs, phase.rhythm.lastTapAtMs);
+      const isRepeatedBeatTap = previousBeatIndex !== null && previousBeatIndex === beatIndex;
+      const isSpam = tapInterval < SPAM_THRESHOLD_MS || isRepeatedBeatTap;
+      const resolvedQuality: TimingQuality = isSpam || inPenalty ? 'miss' : quality;
       const baseDelta = isSpam
         ? RHYTHM_SPEED_DELTA_SPAM
         : inPenalty
           ? RHYTHM_SPEED_DELTA_IN_PENALTY
           : rhythmTapSpeedDelta(quality);
       const speedNorm = clamp(phase.speedNorm + baseDelta, 0, 1);
-      const perfectHits = phase.rhythm.perfectHits + (quality === 'perfect' ? 1 : 0);
-      const goodHits = phase.rhythm.goodHits + (quality !== 'miss' ? 1 : 0);
-      const penaltyUntilMs = isSpam ? action.atMs + SPAM_PENALTY_MS : phase.rhythm.penaltyUntilMs;
+      const perfectHits = phase.rhythm.perfectHits + (resolvedQuality === 'perfect' ? 1 : 0);
+      const goodHits = phase.rhythm.goodHits + (resolvedQuality !== 'miss' ? 1 : 0);
+      const penaltyUntilMs = isSpam
+        ? Math.max(phase.rhythm.penaltyUntilMs, action.atMs + SPAM_PENALTY_MS)
+        : phase.rhythm.penaltyUntilMs;
 
       return {
         ...state,
@@ -4722,7 +5276,7 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
             perfectHits,
             goodHits,
             penaltyUntilMs,
-            lastQuality: isSpam ? 'miss' : quality,
+            lastQuality: resolvedQuality,
             lastQualityAtMs: action.atMs
           },
           athletePose: {
@@ -4916,7 +5470,7 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
 
 
 ```
-> meta: lines=661 chars=19185 truncated=no
+> meta: lines=654 chars=19254 truncated=no
 
 
 ## src/features/javelin/hooks/useGameLoop.ts
@@ -4958,8 +5512,9 @@ _Reusable hook / shared state or side-effect logic._
 
 ```ts
 import { useCallback, useMemo, useState } from 'react';
+import { safeLocalStorageGet, safeLocalStorageSet } from '../../../app/browser';
 import { HIGHSCORE_STORAGE_KEY, MAX_HIGHSCORES } from '../game/constants';
-import type { HighscoreEntry } from '../game/types';
+import type { HighscoreEntry, Locale } from '../game/types';
 
 const compareHighscores = (a: HighscoreEntry, b: HighscoreEntry): number => {
   if (b.distanceM !== a.distanceM) {
@@ -4978,24 +5533,58 @@ export const insertHighscoreSorted = (
   entry: HighscoreEntry
 ): HighscoreEntry[] => [...entries, entry].sort(compareHighscores);
 
+const supportedLocales = new Set<Locale>(['fi', 'sv', 'en']);
+
+const parseEntry = (value: unknown): HighscoreEntry | null => {
+  if (typeof value !== 'object' || value === null) {
+    return null;
+  }
+  const raw = value as Record<string, unknown>;
+  if (typeof raw.id !== 'string' || typeof raw.name !== 'string') {
+    return null;
+  }
+  if (typeof raw.distanceM !== 'number' || !Number.isFinite(raw.distanceM)) {
+    return null;
+  }
+  if (typeof raw.playedAtIso !== 'string' || Number.isNaN(Date.parse(raw.playedAtIso))) {
+    return null;
+  }
+
+  if (raw.locale !== undefined && (typeof raw.locale !== 'string' || !supportedLocales.has(raw.locale as Locale))) {
+    return null;
+  }
+  const locale: Locale = raw.locale === undefined ? 'en' : (raw.locale as Locale);
+
+  if (raw.windMs !== undefined && (typeof raw.windMs !== 'number' || !Number.isFinite(raw.windMs))) {
+    return null;
+  }
+  const windMs = raw.windMs === undefined ? 0 : raw.windMs;
+
+  return {
+    id: raw.id,
+    name: raw.name,
+    distanceM: raw.distanceM,
+    playedAtIso: raw.playedAtIso,
+    locale,
+    windMs
+  };
+};
+
+const isDefined = <T>(value: T | null): value is T => value !== null;
+
 export const loadHighscores = (): HighscoreEntry[] => {
-  const raw = localStorage.getItem(HIGHSCORE_STORAGE_KEY);
+  const raw = safeLocalStorageGet(HIGHSCORE_STORAGE_KEY);
   if (!raw) {
     return [];
   }
   try {
-    const parsed = JSON.parse(raw) as HighscoreEntry[];
+    const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) {
       return [];
     }
     return parsed
-      .filter(
-        (item) =>
-          typeof item.id === 'string' &&
-          typeof item.name === 'string' &&
-          typeof item.distanceM === 'number' &&
-          typeof item.playedAtIso === 'string'
-      )
+      .map(parseEntry)
+      .filter(isDefined)
       .sort(compareHighscores)
       .slice(0, MAX_HIGHSCORES);
   } catch {
@@ -5004,7 +5593,7 @@ export const loadHighscores = (): HighscoreEntry[] => {
 };
 
 export const saveHighscores = (entries: HighscoreEntry[]): void => {
-  localStorage.setItem(HIGHSCORE_STORAGE_KEY, JSON.stringify(entries));
+  safeLocalStorageSet(HIGHSCORE_STORAGE_KEY, JSON.stringify(entries));
 };
 
 type UseLocalHighscoresResult = {
@@ -5049,7 +5638,7 @@ export const useLocalHighscores = (): UseLocalHighscoresResult => {
 };
 
 ```
-> meta: lines=91 chars=2522 truncated=no
+> meta: lines=126 chars=3597 truncated=no
 
 
 ## src/features/javelin/hooks/usePointerControls.ts
@@ -5057,21 +5646,121 @@ _Reusable hook / shared state or side-effect logic._
 
 ```ts
 import { useEffect, useRef } from 'react';
+import { isInteractiveElement } from '../../../app/browser';
 import { resumeAudioContext } from '../game/audio';
-import { keyboardAngleDelta, pointerFromAnchorToAngleDeg } from '../game/controls';
-import { getPlayerAngleAnchorScreen } from '../game/render';
-import type { GameAction, GamePhase, GameState } from '../game/types';
+import {
+  keyboardAngleDelta,
+  keyboardAngleHoldDelta,
+  pointerFromAnchorToAngleDeg,
+  smoothPointerAngleDeg
+// ... 4 more import lines from .., react
 
 type Dispatch = (action: GameAction) => void;
 
 type UsePointerControlsArgs = {
   canvas: HTMLCanvasElement | null;
   dispatch: Dispatch;
-  phaseTag: GamePhase['tag'];
   state: GameState;
 };
 
-export const usePointerControls = ({ canvas, dispatch, phaseTag, state }: UsePointerControlsArgs): void => {
+type TimerHandle = ReturnType<typeof setTimeout>;
+
+type AngleKeyHoldState = {
+  direction: 'up' | 'down';
+  holdStartedAtMs: number;
+  lastAppliedAtMs: number;
+};
+
+type TouchLongPressHandlers = {
+  onTouchStart: () => void;
+  onTouchEnd: () => void;
+  clear: () => void;
+};
+
+type TouchLongPressHandlerArgs = {
+  dispatch: Dispatch;
+  getPhaseTag: () => GameState['phase']['tag'];
+  now: () => number;
+  longPressMs?: number;
+  setTimer?: (callback: () => void, delayMs: number) => TimerHandle;
+  clearTimer?: (timer: TimerHandle) => void;
+};
+
+const TOUCH_LONG_PRESS_MS = 300;
+
+export const isInteractiveEventTarget = (target: EventTarget | null): boolean => {
+  return isInteractiveElement(target);
+};
+
+const allowsArrowAngleAdjust = (phaseTag: GameState['phase']['tag']): boolean =>
+  phaseTag === 'idle' || phaseTag === 'runup' || phaseTag === 'chargeAim';
+
+export const shouldReleaseChargeFromEnterKeyUp = (
+  code: string,
+  phaseTag: GameState['phase']['tag'],
+  target: EventTarget | null
+): boolean => code === 'Enter' && phaseTag === 'chargeAim' && !isInteractiveEventTarget(target);
+
+export const shouldHandleAngleAdjustKeyDown = (
+  code: string,
+  phaseTag: GameState['phase']['tag'],
+  target: EventTarget | null
+): boolean =>
+  (code === 'ArrowUp' || code === 'ArrowDown') &&
+  allowsArrowAngleAdjust(phaseTag) &&
+  !isInteractiveEventTarget(target);
+
+export const createTouchLongPressHandlers = ({
+  dispatch,
+  getPhaseTag,
+  now,
+  longPressMs = TOUCH_LONG_PRESS_MS,
+  setTimer = (callback, delayMs) => globalThis.setTimeout(callback, delayMs),
+  clearTimer = (timer) => globalThis.clearTimeout(timer)
+}: TouchLongPressHandlerArgs): TouchLongPressHandlers => {
+  let longPressTimer: TimerHandle | null = null;
+
+  const clear = (): void => {
+    if (longPressTimer !== null) {
+      clearTimer(longPressTimer);
+      longPressTimer = null;
+    }
+  };
+
+  const onTouchStart = (): void => {
+    const phaseTag = getPhaseTag();
+    if (phaseTag === 'runup') {
+      dispatch({ type: 'rhythmTap', atMs: now() });
+      clear();
+      longPressTimer = setTimer(() => {
+        if (getPhaseTag() === 'runup') {
+          dispatch({ type: 'beginChargeAim', atMs: now() });
+        }
+        longPressTimer = null;
+      }, longPressMs);
+      return;
+    }
+
+    if (phaseTag === 'idle' || phaseTag === 'result') {
+      dispatch({ type: 'rhythmTap', atMs: now() });
+    }
+  };
+
+  const onTouchEnd = (): void => {
+    clear();
+    if (getPhaseTag() === 'chargeAim') {
+      dispatch({ type: 'releaseCharge', atMs: now() });
+    }
+  };
+
+  return {
+    onTouchStart,
+    onTouchEnd,
+    clear
+  };
+};
+
+export const usePointerControls = ({ canvas, dispatch, state }: UsePointerControlsArgs): void => {
   const stateRef = useRef(state);
 
   useEffect(() => {
@@ -5084,25 +5773,30 @@ export const usePointerControls = ({ canvas, dispatch, phaseTag, state }: UsePoi
     }
 
     const now = (): number => performance.now();
-    let longPressTimer: number | null = null;
-    const LONG_PRESS_MS = 300;
-    const clearLongPressTimer = (): void => {
-      if (longPressTimer !== null) {
-        window.clearTimeout(longPressTimer);
-        longPressTimer = null;
-      }
-    };
+    const touchLongPressHandlers = createTouchLongPressHandlers({
+      dispatch,
+      getPhaseTag: () => stateRef.current.phase.tag,
+      now
+    });
+    let angleKeyHoldState: AngleKeyHoldState | null = null;
+    let lastPointerAngleDeg: number | null = null;
     const dispatchAngleFromPointer = (clientX: number, clientY: number): void => {
       const rect = canvas.getBoundingClientRect();
       const anchor = getPlayerAngleAnchorScreen(stateRef.current, rect.width, rect.height);
+      const angleDeg = pointerFromAnchorToAngleDeg(
+        clientX,
+        clientY,
+        rect.left + anchor.x,
+        rect.top + anchor.y
+      );
+      if (Number.isNaN(angleDeg)) {
+        return;
+      }
+      const smoothedAngleDeg = smoothPointerAngleDeg(lastPointerAngleDeg, angleDeg);
+      lastPointerAngleDeg = smoothedAngleDeg;
       dispatch({
         type: 'setAngle',
-        angleDeg: pointerFromAnchorToAngleDeg(
-          clientX,
-          clientY,
-          rect.left + anchor.x,
-          rect.top + anchor.y
-        )
+        angleDeg: smoothedAngleDeg
       });
     };
 
@@ -5125,6 +5819,7 @@ export const usePointerControls = ({ canvas, dispatch, phaseTag, state }: UsePoi
     };
 
     const onMouseMove = (event: MouseEvent): void => {
+      const phaseTag = stateRef.current.phase.tag;
       const shouldTrackPointerAngle =
         phaseTag === 'idle' ||
         phaseTag === 'runup' ||
@@ -5142,28 +5837,11 @@ export const usePointerControls = ({ canvas, dispatch, phaseTag, state }: UsePoi
     const onTouchStart = (event: TouchEvent): void => {
       event.preventDefault();
       resumeAudioContext();
-      const currentPhaseTag = stateRef.current.phase.tag;
-      if (currentPhaseTag === 'runup') {
-        dispatch({ type: 'rhythmTap', atMs: now() });
-        clearLongPressTimer();
-        longPressTimer = window.setTimeout(() => {
-          if (stateRef.current.phase.tag === 'runup') {
-            dispatch({ type: 'beginChargeAim', atMs: now() });
-          }
-          longPressTimer = null;
-        }, LONG_PRESS_MS);
-        return;
-      }
-      if (currentPhaseTag === 'idle' || currentPhaseTag === 'result') {
-        dispatch({ type: 'rhythmTap', atMs: now() });
-      }
+      touchLongPressHandlers.onTouchStart();
     };
 
     const onTouchEnd = (): void => {
-      clearLongPressTimer();
-      if (stateRef.current.phase.tag === 'chargeAim') {
-        dispatch({ type: 'releaseCharge', atMs: now() });
-      }
+      touchLongPressHandlers.onTouchEnd();
     };
 
     const onTouchMove = (event: TouchEvent): void => {
@@ -5179,33 +5857,74 @@ export const usePointerControls = ({ canvas, dispatch, phaseTag, state }: UsePoi
     };
 
     const onKeyDown = (event: KeyboardEvent): void => {
+      if (isInteractiveEventTarget(event.target)) {
+        return;
+      }
+      const phaseTag = stateRef.current.phase.tag;
       if (event.code === 'Space' && !event.repeat) {
         resumeAudioContext();
         event.preventDefault();
         dispatch({ type: 'rhythmTap', atMs: now() });
         return;
       }
-      if (event.code === 'Enter' && !event.repeat) {
+      if (event.code === 'Enter' && !event.repeat && phaseTag === 'runup') {
         resumeAudioContext();
         event.preventDefault();
-        if (phaseTag === 'runup') {
-          dispatch({ type: 'beginChargeAim', atMs: now() });
+        dispatch({ type: 'beginChargeAim', atMs: now() });
+        return;
+      }
+      if (
+        (event.code === 'ArrowUp' || event.code === 'ArrowDown') &&
+        shouldHandleAngleAdjustKeyDown(event.code, phaseTag, event.target)
+      ) {
+        event.preventDefault();
+        const direction = event.code === 'ArrowUp' ? 'up' : 'down';
+        const timestampMs = now();
+        const shouldRestartHold =
+          !event.repeat ||
+          angleKeyHoldState === null ||
+          angleKeyHoldState.direction !== direction;
+        if (shouldRestartHold) {
+          angleKeyHoldState = {
+            direction,
+            holdStartedAtMs: timestampMs,
+            lastAppliedAtMs: timestampMs
+          };
+          dispatch({
+            type: 'adjustAngle',
+            deltaDeg: keyboardAngleDelta(direction, ANGLE_KEYBOARD_STEP_DEG)
+          });
+          return;
         }
-        return;
-      }
-      if (event.code === 'ArrowUp') {
-        event.preventDefault();
-        dispatch({ type: 'adjustAngle', deltaDeg: keyboardAngleDelta('up') });
-        return;
-      }
-      if (event.code === 'ArrowDown') {
-        event.preventDefault();
-        dispatch({ type: 'adjustAngle', deltaDeg: keyboardAngleDelta('down') });
+        const holdState = angleKeyHoldState;
+        if (holdState === null) {
+          return;
+        }
+        const holdDurationMs = timestampMs - holdState.holdStartedAtMs;
+        const dtMs = timestampMs - holdState.lastAppliedAtMs;
+        dispatch({
+          type: 'adjustAngle',
+          deltaDeg: keyboardAngleHoldDelta(direction, holdDurationMs, dtMs)
+        });
+        angleKeyHoldState = {
+          ...holdState,
+          lastAppliedAtMs: timestampMs
+        };
       }
     };
 
     const onKeyUp = (event: KeyboardEvent): void => {
-      if (event.code === 'Enter') {
+      if (isInteractiveEventTarget(event.target)) {
+        return;
+      }
+      if (
+        (event.code === 'ArrowUp' && angleKeyHoldState?.direction === 'up') ||
+        (event.code === 'ArrowDown' && angleKeyHoldState?.direction === 'down')
+      ) {
+        angleKeyHoldState = null;
+      }
+      
+      if (shouldReleaseChargeFromEnterKeyUp(event.code, stateRef.current.phase.tag, event.target)) {
         event.preventDefault();
         dispatch({ type: 'releaseCharge', atMs: now() });
       }
@@ -5223,7 +5942,7 @@ export const usePointerControls = ({ canvas, dispatch, phaseTag, state }: UsePoi
     window.addEventListener('keyup', onKeyUp);
 
     return () => {
-      clearLongPressTimer();
+      touchLongPressHandlers.clear();
       canvas.removeEventListener('mousedown', onMouseDown);
       canvas.removeEventListener('mousemove', onMouseMove);
       canvas.removeEventListener('contextmenu', onContextMenu);
@@ -5235,31 +5954,112 @@ export const usePointerControls = ({ canvas, dispatch, phaseTag, state }: UsePoi
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, [canvas, dispatch, phaseTag]);
+  }, [canvas, dispatch]);
 };
 
 ```
-> meta: lines=182 chars=6189 truncated=no
+> meta: lines=312 chars=9833 truncated=no
 
 
 ## src/features/javelin/JavelinPage.tsx
 _Defines: JavelinPage_
 
 ```tsx
-import { useEffect, useMemo, useReducer, useState, type ReactElement } from 'react';
+import { memo, useEffect, useMemo, useReducer, useState, type ReactElement } from 'react';
 import { LanguageSwitch } from './components/LanguageSwitch';
 import { HudPanel } from './components/HudPanel';
 import { GameCanvas } from './components/GameCanvas';
-import { ScoreBoard } from './components/ScoreBoard';
-import { ControlHelp } from './components/ControlHelp';
+import { ScoreBoard, ScoreBoardContent } from './components/ScoreBoard';
+import { ControlHelp, ControlHelpContent } from './components/ControlHelp';
 import { gameReducer } from './game/reducer';
 import { WIND_MAX_MS, WIND_MIN_MS } from './game/constants';
-// ... 5 more import lines from ., .., react
+// ... 6 more import lines from ., .., react
 
 const randomWind = (): number =>
   Math.round((WIND_MIN_MS + Math.random() * (WIND_MAX_MS - WIND_MIN_MS)) * 10) / 10;
 
 const faultReasonKey = (reason: FaultReason): string => `result.fault.${reason}`;
+
+type TopBarProps = {
+  appTitle: string;
+  gameTitle: string;
+};
+
+const TopBarComponent = ({ appTitle, gameTitle }: TopBarProps): ReactElement => (
+  <header className="topbar">
+    <div className="topbar-title">
+      <p className="eyebrow">{appTitle}</p>
+      <h1>{gameTitle}</h1>
+    </div>
+    <LanguageSwitch />
+  </header>
+);
+
+const TopBar = memo(TopBarComponent);
+
+type SideColumnProps = {
+  highscores: HighscoreEntry[];
+  clearHighscores: () => void;
+};
+
+const SideColumnComponent = ({ highscores, clearHighscores }: SideColumnProps): ReactElement => {
+  const { t } = useI18n();
+  return (
+    <aside className="side-column">
+      <ControlHelp />
+      <ScoreBoard highscores={highscores} />
+      <button type="button" className="ghost" onClick={clearHighscores}>
+        {t('action.resetScores')}
+      </button>
+    </aside>
+  );
+};
+
+const SideColumn = memo(SideColumnComponent);
+
+type CompactSideColumnProps = {
+  highscores: HighscoreEntry[];
+  clearHighscores: () => void;
+};
+
+const CompactSideColumnComponent = ({
+  highscores,
+  clearHighscores
+}: CompactSideColumnProps): ReactElement => {
+  const { t } = useI18n();
+  const hasScores = highscores.length > 0;
+  const [isScoreboardOpen, setIsScoreboardOpen] = useState<boolean>(hasScores);
+
+  useEffect(() => {
+    setIsScoreboardOpen(hasScores);
+  }, [hasScores]);
+
+  return (
+    <section className="compact-side-column">
+      <details className="card disclosure disclosure-help">
+        <summary>{t('help.title')}</summary>
+        <div className="disclosure-body">
+          <ControlHelpContent />
+        </div>
+      </details>
+      <details
+        className="card disclosure disclosure-scoreboard"
+        open={isScoreboardOpen}
+        onToggle={(event) => setIsScoreboardOpen(event.currentTarget.open)}
+      >
+        <summary>{t('scoreboard.title')}</summary>
+        <div className="disclosure-body">
+          <ScoreBoardContent highscores={highscores} />
+        </div>
+      </details>
+      <button type="button" className="ghost reset-scores" onClick={clearHighscores}>
+        {t('action.resetScores')}
+      </button>
+    </section>
+  );
+};
+
+const CompactSideColumn = memo(CompactSideColumnComponent);
 
 export const JavelinPage = (): ReactElement => {
   const { t, formatNumber, locale } = useI18n();
@@ -5267,6 +6067,7 @@ export const JavelinPage = (): ReactElement => {
   const [nameInput, setNameInput] = useState('AAA');
   const [savedRoundId, setSavedRoundId] = useState<number>(-1);
   const { highscores, addHighscore, clearHighscores, isHighscore } = useLocalHighscores();
+  const isCompactLayout = useMediaQuery('(max-width: 1023px)');
 
   useGameLoop(dispatch);
 
@@ -5338,13 +6139,7 @@ export const JavelinPage = (): ReactElement => {
 
   return (
     <main className="page">
-      <header className="topbar">
-        <div>
-          <p className="eyebrow">{t('app.title')}</p>
-          <h1>{t('javelin.title')}</h1>
-        </div>
-        <LanguageSwitch />
-      </header>
+      <TopBar appTitle={t('app.title')} gameTitle={t('javelin.title')} />
 
       <section className="layout">
         <div className="main-column">
@@ -5353,17 +6148,25 @@ export const JavelinPage = (): ReactElement => {
           <div className="actions">
             <button
               type="button"
-              onClick={() =>
+              onClick={(event) => {
                 dispatch({
                   type: 'startRound',
                   atMs: performance.now(),
                   windMs: randomWind()
-                })
-              }
+                });
+                event.currentTarget.blur();
+              }}
             >
               {state.phase.tag === 'idle' ? t('action.start') : t('action.playAgain')}
             </button>
-            <button type="button" className="ghost" onClick={() => dispatch({ type: 'resetToIdle' })}>
+            <button
+              type="button"
+              className="ghost"
+              onClick={(event) => {
+                dispatch({ type: 'resetToIdle' });
+                event.currentTarget.blur();
+              }}
+            >
               {t('phase.idle')}
             </button>
           </div>
@@ -5385,7 +6188,7 @@ export const JavelinPage = (): ReactElement => {
                 event.preventDefault();
                 addHighscore({
                   id: crypto.randomUUID(),
-                  name: nameInput.trim().slice(0, 10) || 'PLAYER',
+                  name: nameInput.trim().slice(0, 10) || t('scoreboard.defaultName'),
                   distanceM: resultDistanceM ?? 0,
                   playedAtIso: new Date().toISOString(),
                   locale,
@@ -5400,35 +6203,17 @@ export const JavelinPage = (): ReactElement => {
                   minLength={3}
                   maxLength={10}
                   value={nameInput}
-                  onChange={(event) => setNameInput(event.target.value.toUpperCase())}
-                />
-              </label>
-              <button type="submit">{t('action.saveScore')}</button>
-            </form>
-          )}
-          {state.phase.tag === 'result' && state.phase.resultKind === 'valid' && state.phase.isHighscore && (
-            <div className="badge">{t('result.highscore')}</div>
-          )}
-        </div>
+                  onChange={(event) => setNameInput(event.target.value.toUpperCase())
 
-        <aside className="side-column">
-          <ControlHelp />
-          <ScoreBoard highscores={highscores} />
-          <button type="button" className="ghost" onClick={clearHighscores}>
-            {t('action.resetScores')}
-          </button>
-        </aside>
-      </section>
-    </main>
-  );
-};
+// [TRUNCATED at 8000 chars]
 
 ```
-> meta: lines=177 chars=6262 truncated=no
+> NOTE: Truncated to 8000 chars (original: 8906).
+> meta: lines=259 chars=8614 truncated=yes
 
 
 ## src/i18n/init.tsx
-_Defines: I18nProvider, useI18n_
+_Defines: readStoredLocale, getBrowserLocale, resolveLocale, persistLocale, I18nProvider, useI18n_
 
 ```tsx
 import {
@@ -5439,7 +6224,7 @@ import {
   useState,
   type PropsWithChildren,
   type ReactElement
-// ... 3 more import lines from ., .., react
+// ... 4 more import lines from ., .., react
 
 const LOCALE_STORAGE_KEY = 'sg2026-javelin-locale-v1';
 
@@ -5452,12 +6237,29 @@ type I18nContextValue = {
 
 const I18nContext = createContext<I18nContextValue | null>(null);
 
-const detectLocale = (): Locale => {
-  const stored = localStorage.getItem(LOCALE_STORAGE_KEY);
+export const readStoredLocale = (): Locale | null => {
+  const stored = safeLocalStorageGet(LOCALE_STORAGE_KEY);
   if (stored === 'fi' || stored === 'sv' || stored === 'en') {
     return stored;
   }
-  const browserLocale = navigator.language.toLowerCase();
+  return null;
+};
+
+export const getBrowserLocale = (): string => {
+  try {
+    if (typeof navigator === 'undefined' || typeof navigator.language !== 'string') {
+      return '';
+    }
+    return navigator.language.toLowerCase();
+  } catch {
+    return '';
+  }
+};
+
+export const resolveLocale = (stored: Locale | null, browserLocale: string): Locale => {
+  if (stored !== null) {
+    return stored;
+  }
   if (browserLocale.startsWith('fi')) {
     return 'fi';
   }
@@ -5467,12 +6269,20 @@ const detectLocale = (): Locale => {
   return 'en';
 };
 
+export const persistLocale = (locale: Locale): void => {
+  safeLocalStorageSet(LOCALE_STORAGE_KEY, locale);
+};
+
+const detectLocale = (): Locale => {
+  return resolveLocale(readStoredLocale(), getBrowserLocale());
+};
+
 export const I18nProvider = ({ children }: PropsWithChildren): ReactElement => {
   const [locale, setLocaleState] = useState<Locale>(detectLocale);
 
   const setLocale = useCallback((next: Locale) => {
     setLocaleState(next);
-    localStorage.setItem(LOCALE_STORAGE_KEY, next);
+    persistLocale(next);
   }, []);
 
   const t = useCallback(
@@ -5503,7 +6313,7 @@ export const useI18n = (): I18nContextValue => {
 };
 
 ```
-> meta: lines=71 chars=1909 truncated=no
+> meta: lines=96 chars=2459 truncated=no
 
 
 ## src/i18n/resources.ts
@@ -5573,8 +6383,11 @@ export const resources: Record<Locale, Messages> = {
     'result.fault.lowAngle': 'Virhe: kulma liian matala',
     'scoreboard.title': 'Paikallinen ennätystaulukko',
     'scoreboard.name': 'Nimi',
+    'scoreboard.defaultName': 'Pelaaja',
     'scoreboard.empty': 'Ei vielä tuloksia.',
-    'language.label': 'Kieli'
+    'language.label': 'Kieli',
+    'a11y.gameCanvas': 'Keihäänheiton pelialue',
+    'a11y.hudPanel': 'Tilapaneeli'
   },
   sv: {
     'app.title': 'Browser Games 2026',
@@ -5634,8 +6447,11 @@ export const resources: Record<Locale, Messages> = {
     'result.fault.lowAngle': 'Fel: för låg vinkel',
     'scoreboard.title': 'Lokal topplista',
     'scoreboard.name': 'Namn',
+    'scoreboard.defaultName': 'Spelare',
     'scoreboard.empty': 'Inga resultat än.',
-    'language.label': 'Språk'
+    'language.label': 'Språk',
+    'a11y.gameCanvas': 'Spjutkastning spelplan',
+    'a11y.hudPanel': 'Statuspanel'
   },
   en: {
     'app.title': 'Browser Games 2026',
@@ -5695,13 +6511,16 @@ export const resources: Record<Locale, Messages> = {
     'result.fault.lowAngle': 'Fault: angle too low',
     'scoreboard.title': 'Local leaderboard',
     'scoreboard.name': 'Name',
+    'scoreboard.defaultName': 'PLAYER',
     'scoreboard.empty': 'No scores yet.',
-    'language.label': 'Language'
+    'language.label': 'Language',
+    'a11y.gameCanvas': 'Javelin throw play area',
+    'a11y.hudPanel': 'Status panel'
   }
 };
 
 ```
-> meta: lines=190 chars=8078 truncated=no
+> meta: lines=199 chars=8457 truncated=no
 
 
 ## src/index.css
@@ -5714,9 +6533,9 @@ export const resources: Record<Locale, Messages> = {
   font-weight: 500;
   text-rendering: optimizeLegibility;
   --bg-main: #f2fbff;
-  --bg-card: rgba(255, 255, 255, 0.82);
+  --bg-card: rgba(255, 255, 255, 0.9);
   --text-main: #0e2b42;
-  --text-soft: #4a657b;
+  --text-soft: #36566f;
   --accent: #008f55;
   --accent-strong: #0064be;
   --warning: #bc3c2a;
@@ -5730,12 +6549,13 @@ export const resources: Record<Locale, Messages> = {
 
 body {
   margin: 0;
+  min-height: 100vh;
+  font-size: 16px;
   color: var(--text-main);
   background:
     radial-gradient(circle at 20% 10%, rgba(84, 196, 255, 0.28), transparent 35%),
     radial-gradient(circle at 80% 10%, rgba(255, 201, 101, 0.24), transparent 30%),
     linear-gradient(135deg, #e7f8ff 0%, #f6fff2 100%);
-  min-height: 100vh;
 }
 
 button,
@@ -5746,7 +6566,8 @@ select {
 
 button:focus-visible,
 input:focus-visible,
-select:focus-visible {
+select:focus-visible,
+summary:focus-visible {
   outline: 3px solid #003f77;
   outline-offset: 2px;
 }
@@ -5754,15 +6575,20 @@ select:focus-visible {
 .page {
   max-width: 1100px;
   margin: 0 auto;
-  padding: 20px;
+  padding: 16px;
+  display: grid;
+  gap: 14px;
 }
 
 .topbar {
-  display: flex;
-  gap: 16px;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+}
+
+.topbar-title {
+  min-width: 0;
 }
 
 .eyebrow {
@@ -5770,22 +6596,26 @@ select:focus-visible {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--text-soft);
-  font-size: 0.8rem;
+  font-size: 0.875rem;
+  line-height: 1.3;
 }
 
 h1 {
   margin: 0;
-  font-size: clamp(1.7rem, 3.4vw, 2.5rem);
+  font-size: clamp(1.95rem, 8.6vw, 2.5rem);
+  line-height: 1.08;
+  overflow-wrap: anywhere;
 }
 
 .layout {
   display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: 16px;
+  grid-template-columns: 1fr;
+  gap: 14px;
 }
 
 .main-column,
-.side-column {
+.side-column,
+.compact-side-column {
   display: grid;
   gap: 12px;
   align-content: start;
@@ -5800,7 +6630,7 @@ h1 {
 }
 
 .hud-panel {
-  padding: 12px 16px;
+  padding: 14px 16px;
 }
 
 .hud-topline {
@@ -5812,7 +6642,7 @@ h1 {
 }
 
 .hud-hint {
-  font-size: 0.84rem;
+  font-size: 0.875rem;
   color: var(--text-soft);
   margin-bottom: 8px;
 }
@@ -5829,7 +6659,7 @@ h1 {
 }
 
 .hud-item {
-  padding: 6px 10px;
+  padding: 8px 10px;
   border-radius: 12px;
   background: rgba(0, 100, 190, 0.09);
   display: grid;
@@ -5837,105 +6667,12 @@ h1 {
 }
 
 .hud-item span {
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   color: var(--text-soft);
 }
 
 .hud-item strong {
   font-size: 1.2rem;
-}
-
-.release-box {
-  margin-top: 10px;
-  display: grid;
-  gap: 2px;
-}
-
-.release-box progress {
-  width: 100%;
-  height: 8px;
-}
-
-.meter-row {
-  margin-top: 10px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.timing-meter {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: 14px;
-  background: rgba(11, 61, 98, 0.08);
-  border: 1px solid rgba(8, 52, 87, 0.14);
-}
-
-.timing-meter svg {
-  width: 94px;
-  height: 94px;
-}
-
-.timing-track {
-  fill: none;
-  stroke: rgba(11, 34, 56, 0.2);
-  stroke-width: 8;
-}
-
-.timing-zone {
-  fill: none;
-  stroke-linecap: round;
-}
-
-.zone-good {
-  stroke: rgba(30, 142, 247, 0.7);
-  stroke-width: 8;
-}
-
-.zone-perfect {
-  stroke: rgba(18, 196, 119, 0.95);
-  stroke-width: 9;
-}
-
-.timing-cursor {
-  fill: #f6d255;
-  stroke: #0f3b61;
-  stroke-width: 2;
-}
-
-.timing-meter-meta {
-  display: grid;
-  gap: 2px;
-}
-
-.timing-meter-meta span {
-  color: var(--text-soft);
-  font-size: 0.83rem;
-}
-
-.timing-meter-meta strong {
-  font-size: 1rem;
-}
-
-.timing-meter-meta small {
-  color: #0e4f77;
-  font-weight: 700;
-}
-
-.timing-meter.feedback-perfect {
-  background: rgba(18, 196, 119, 0.16);
-}
-
-.timing-meter.feedback-good {
-  background: rgba(30, 142, 247, 0.13);
-}
-
-.timing-meter.is-active {
-  border-color: rgba(11, 92, 163, 0.45);
-  box-shadow: inset 0 0 0 1px rgba(11, 92, 163, 0.18);
 }
 
 .canvas-frame {
@@ -5946,7 +6683,7 @@ h1 {
 
 .game-canvas {
   width: 100%;
-  height: min(54vh, 460px);
+  height: clamp(170px, 36vh, 300px);
   display: block;
   background: #dff5ff;
   touch-action: none;
@@ -5954,18 +6691,94 @@ h1 {
 
 .actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
 .attempt-counter,
 .session-best {
-  display: inli
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(0, 100, 190, 0.1);
+  color: #0f3b61;
+  font-size: 0.875rem;
+}
+
+button {
+  border: 0;
+  border-radius: 12px;
+  min-height: 44px;
+  padding: 10px 16px;
+  font-weight: 700;
+  background: var(--accent-strong);
+  color: #fff;
+  cursor: pointer;
+}
+
+button.ghost {
+  background: #e5f1ff;
+  color: #0f3b61;
+}
+
+.side-column > button.ghost,
+.reset-scores {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.result-live {
+  min-height: 1.6em;
+  font-size: 1.02rem;
+  font-weight: 700;
+  margin: 2px 0 0;
+}
+
+.result-live.is-foul {
+  color: #9b2217;
+}
+
+.result-note {
+  margin: -4px 0 0;
+  min-height: 1.2em;
+  font-size: 0.9rem;
+  color: var(--text-soft);
+  font-weight: 600;
+}
+
+.result-note.is-foul {
+  color: #9b2217;
+}
+
+.save-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: end;
+}
+
+.save-form label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.875rem;
+}
+
+.save-form input {
+  border: 1px solid rgba(15, 59, 97, 0.28);
+  border-radius: 10px;
+  min-height: 44px;
+  padding: 9px 10px;
+  width: min(190px, 100%);
+  text-transform: uppercase;
+  background: #fff;
+  color:
 
 // [TRUNCATED at 4000 chars]
 
 ```
-> NOTE: Truncated to 4000 chars (original: 6316).
-> meta: lines=406 chars=6316 truncated=yes
+> NOTE: Truncated to 4000 chars (original: 7105).
+> meta: lines=453 chars=7105 truncated=yes
 
 ### Entry points & app wiring
 
@@ -6051,6 +6864,96 @@ export default defineConfig({
 ```
 > meta: lines=11 chars=230 truncated=no
 
+### Entry points & app wiring
+
+
+## src/app/browser.test.ts
+
+```ts
+import { afterEach, describe, expect, it } from 'vitest';
+import { isInteractiveElement, safeLocalStorageGet, safeLocalStorageSet } from './browser';
+
+type StorageMock = {
+  getItem: (key: string) => string | null;
+  setItem: (key: string, value: string) => void;
+};
+
+const setStorageMock = (mock: StorageMock): void => {
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: mock
+  });
+};
+
+const makeTarget = (overrides: {
+  tagName?: string;
+  isContentEditable?: boolean;
+  closest?: (selector: string) => unknown;
+} = {}): EventTarget =>
+  ({
+    tagName: 'DIV',
+    isContentEditable: false,
+    closest: () => null,
+    ...overrides
+  }) as unknown as EventTarget;
+
+afterEach(() => {
+  delete (globalThis as { localStorage?: unknown }).localStorage;
+});
+
+describe('browser helpers', () => {
+  it('detects interactive event targets', () => {
+    expect(isInteractiveElement(makeTarget({ tagName: 'INPUT' }))).toBe(true);
+    expect(isInteractiveElement(makeTarget({ isContentEditable: true }))).toBe(true);
+    expect(
+      isInteractiveElement(
+        makeTarget({
+          closest: () => ({})
+        })
+      )
+    ).toBe(true);
+    expect(isInteractiveElement(makeTarget())).toBe(false);
+  });
+
+  it('treats ARIA textbox-like roles as interactive by closest lookup', () => {
+    const selectors: string[] = [];
+    const target = makeTarget({
+      closest: (selector) => {
+        selectors.push(selector);
+        return selector.includes('[role="combobox"]') ? {} : null;
+      }
+    });
+
+    expect(isInteractiveElement(target)).toBe(true);
+    expect(selectors).toHaveLength(1);
+  });
+
+  it('returns null when storage getter throws', () => {
+    setStorageMock({
+      getItem: () => {
+        throw new Error('blocked');
+      },
+      setItem: () => undefined
+    });
+    expect(safeLocalStorageGet('x')).toBeNull();
+  });
+
+  it('does not throw when storage setter throws', () => {
+    setStorageMock({
+      getItem: () => null,
+      setItem: () => {
+        throw new Error('quota');
+      }
+    });
+    expect(() => safeLocalStorageSet('x', '1')).not.toThrow();
+  });
+});
+
+```
+> meta: lines=79 chars=2130 truncated=no
+
+### Other code & helpers
+
 
 ## src/features/javelin/game/athletePose.test.ts
 
@@ -6134,6 +7037,38 @@ describe('athlete pose helpers', () => {
 > meta: lines=78 chars=3345 truncated=yes
 
 
+## src/features/javelin/game/audio.test.ts
+
+```ts
+import { describe, expect, it } from 'vitest';
+import {
+  playBeatTick,
+  playChargeStart,
+  playCrowdReaction,
+  playFaultOof,
+  playLandingImpact,
+  setFlightWindIntensity,
+// ... 3 more import lines from ., vitest
+
+describe('audio no-op fallback', () => {
+  it('does not throw when AudioContext is unavailable', () => {
+    expect(() => resumeAudioContext()).not.toThrow();
+    expect(() => playBeatTick(1000, 'perfect')).not.toThrow();
+    expect(() => playBeatTick(1020, true)).not.toThrow();
+    expect(() => playChargeStart()).not.toThrow();
+    expect(() => playThrowWhoosh(0.75)).not.toThrow();
+    expect(() => setFlightWindIntensity(0.5)).not.toThrow();
+    expect(() => playLandingImpact(true)).not.toThrow();
+    expect(() => playCrowdReaction('cheer')).not.toThrow();
+    expect(() => playCrowdReaction('groan')).not.toThrow();
+    expect(() => playFaultOof()).not.toThrow();
+  });
+});
+
+```
+> meta: lines=25 chars=900 truncated=no
+
+
 ## src/features/javelin/game/chargeMeter.test.ts
 
 ```ts
@@ -6175,7 +7110,12 @@ describe('charge meter helpers', () => {
 
 ```ts
 import { describe, expect, it } from 'vitest';
-import { pointerFromAnchorToAngleDeg } from './controls';
+import { ANGLE_MAX_DEG, ANGLE_MIN_DEG } from './constants';
+import {
+  keyboardAngleHoldDelta,
+  pointerFromAnchorToAngleDeg,
+  smoothPointerAngleDeg
+} from './controls';
 
 describe('pointerFromAnchorToAngleDeg', () => {
   it('maps points above/below anchor to expected vertical angles', () => {
@@ -6183,9 +7123,9 @@ describe('pointerFromAnchorToAngleDeg', () => {
     const middle = pointerFromAnchorToAngleDeg(500, 300, 300, 300);
     const bottom = pointerFromAnchorToAngleDeg(300, 500, 300, 300);
 
-    expect(top).toBe(90);
-    expect(middle).toBe(0);
-    expect(bottom).toBe(-90);
+    expect(top).toBe(ANGLE_MAX_DEG);
+    expect(middle).toBe(ANGLE_MIN_DEG);
+    expect(bottom).toBe(ANGLE_MIN_DEG);
   });
 
   it('responds strongly when pointer is close to anchor horizontally', () => {
@@ -6193,12 +7133,53 @@ describe('pointerFromAnchorToAngleDeg', () => {
     const farAnchor = pointerFromAnchorToAngleDeg(520, 250, 300, 300);
 
     expect(nearAnchor).toBeGreaterThan(farAnchor);
-    expect(nearAnchor).toBeGreaterThan(80);
+    expect(nearAnchor).toBeCloseTo(ANGLE_MAX_DEG, 4);
+  });
+
+  it('returns NaN inside pointer deadzone', () => {
+    const deadzoneAngle = pointerFromAnchorToAngleDeg(307, 295, 300, 300);
+    expect(Number.isNaN(deadzoneAngle)).toBe(true);
+  });
+});
+
+describe('keyboardAngleHoldDelta', () => {
+  it('accelerates hold delta from start to ramp maximum', () => {
+    const start = keyboardAngleHoldDelta('up', 0, 16);
+    const mid = keyboardAngleHoldDelta('up', 300, 16);
+    const max = keyboardAngleHoldDelta('up', 600, 16);
+
+    expect(start).toBeGreaterThan(0);
+    expect(mid).toBeGreaterThan(start);
+    expect(max).toBeGreaterThan(mid);
+  });
+
+  it('applies direction sign and handles non-positive dt', () => {
+    const down = keyboardAngleHoldDelta('down', 600, 16);
+    const noDt = keyboardAngleHoldDelta('up', 600, 0);
+
+    expect(down).toBeLessThan(0);
+    expect(noDt).toBe(0);
+  });
+});
+
+describe('smoothPointerAngleDeg', () => {
+  it('returns raw angle on first pointer sample', () => {
+    expect(smoothPointerAngleDeg(null, 50)).toBe(50);
+  });
+
+  it('blends toward raw angle using smoothing factor', () => {
+    const smoothed = smoothPointerAngleDeg(20, 40, 0.4);
+    expect(smoothed).toBeCloseTo(28, 5);
+  });
+
+  it('clamps smoothing factor bounds', () => {
+    expect(smoothPointerAngleDeg(20, 40, 0)).toBe(20);
+    expect(smoothPointerAngleDeg(20, 40, 1.2)).toBe(40);
   });
 });
 
 ```
-> meta: lines=23 chars=850 truncated=no
+> meta: lines=69 chars=2341 truncated=no
 
 
 ## src/features/javelin/game/physics.test.ts
@@ -6396,16 +7377,16 @@ describe('gameReducer', () => {
     }
   });
 
-  it('runup locomotion advances and can cross throw line', () => {
+  it('penalizes repeated taps in the same beat window', () => {
     let state = createInitialGameState();
     state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0 });
-    state = gameReducer(state, { type: 'rhythmTap', atMs: 130
+    state = gameReducer(state, { type: 'rhythmTap', atMs: 1000 }
 
 // [TRUNCATED at 3000 chars]
 
 ```
-> NOTE: Truncated to 3000 chars (original: 13664).
-> meta: lines=319 chars=13489 truncated=yes
+> NOTE: Truncated to 3000 chars (original: 15156).
+> meta: lines=356 chars=14981 truncated=yes
 
 
 ## src/features/javelin/game/render.test.ts
@@ -6413,9 +7394,13 @@ describe('gameReducer', () => {
 ```ts
 import { describe, expect, it } from 'vitest';
 import { computeAthletePoseGeometry } from './athletePose';
-import { getCameraTargetX, getHeadMeterScreenAnchor, getVisibleJavelinRenderState } from './render';
-import { RUNUP_START_X_M } from './tuning';
-import type { GameState } from './types';
+import {
+  createRenderSession,
+  getCameraTargetX,
+  getHeadMeterScreenAnchor,
+  getPlayerAngleAnchorScreen,
+  getVisibleJavelinRenderState
+// ... 3 more import lines from ., vitest
 
 const baseState: Pick<GameState, 'nowMs' | 'roundId' | 'windMs' | 'aimAngleDeg'> = {
   nowMs: 2000,
@@ -6425,6 +7410,19 @@ const baseState: Pick<GameState, 'nowMs' | 'roundId' | 'windMs' | 'aimAngleDeg'>
 };
 
 describe('javelin visibility state', () => {
+  it('creates isolated render sessions', () => {
+    const sessionA = createRenderSession();
+    const sessionB = createRenderSession();
+
+    sessionA.resultMarker.lastRoundId = 9;
+    sessionA.camera.targetX = 18;
+    sessionA.lastPhaseTag = 'result';
+
+    expect(sessionB.resultMarker.lastRoundId).toBe(-1);
+    expect(sessionB.camera.targetX).toBe(RUNUP_START_X_M);
+    expect(sessionB.lastPhaseTag).toBe('idle');
+  });
+
   it('is attached during runup and charge', () => {
     const runupState: GameState = {
       ...baseState,
@@ -6493,37 +7491,21 @@ describe('javelin visibility state', () => {
     expect(getVisibleJavelinRenderState(chargeState, chargePose).mode).toBe('attached');
   });
 
-  it('switches to flight mode after release', () => {
-    const flightState: GameState = {
+  it('keeps javelin attached in idle pose', () => {
+    const idleState: GameState = {
       ...baseState,
       phase: {
-        tag: 'flight',
-        athleteXM: 17.9,
-        javelin: {
-          xM: 20,
-          yM: 6.1,
-          zM: 0.3,
-          vxMs: 18,
-          vyMs: 4,
-          vzMs: 0.1,
-          angleRad: 0.2,
-          angularVelRad: 0.3,
-          releasedAtMs: 1900,
-          lengthM: 2.6
-        },
-        launchedFrom: {
-          speedNorm: 0.83,
-          angleDeg: 35,
-          forceNorm: 0.9,
-          windMs: 0.2,
-          launchSpeedMs: 28,
-        
+        tag: 'idle'
+      }
+    };
+
+    const i
 
 // [TRUNCATED at 3000 chars]
 
 ```
-> NOTE: Truncated to 3000 chars (original: 5813).
-> meta: lines=203 chars=5813 truncated=yes
+> NOTE: Truncated to 3000 chars (original: 9820).
+> meta: lines=364 chars=9757 truncated=yes
 
 
 ## src/features/javelin/game/scoring.test.ts
@@ -6622,7 +7604,7 @@ describe('scoring helpers', () => {
 ```ts
 import { describe, expect, it } from 'vitest';
 import { RHYTHM_TARGET_PHASE01 } from './constants';
-import { getRunupMeterPhase01 } from './selectors';
+import { getAngleDeg, getRunupMeterPhase01, getSpeedPercent } from './selectors';
 import { BEAT_INTERVAL_MS } from './tuning';
 import type { GameState } from './types';
 
@@ -6663,17 +7645,169 @@ describe('runup meter phase', () => {
   });
 });
 
+describe('result throw specs', () => {
+  it('keeps throw speed in result phase', () => {
+    const state: GameState = {
+      nowMs: 3200,
+      roundId: 2,
+      windMs: 0.4,
+      aimAngleDeg: 12,
+      phase: {
+        tag: 'result',
+        athleteXM: 18.6,
+        launchedFrom: {
+          speedNorm: 0.83,
+          angleDeg: 41,
+          forceNorm: 0.77,
+          windMs: 0.4,
+          launchSpeedMs: 30.5,
+          athleteXM: 18.2,
+          releaseQuality: 'perfect',
+          lineCrossedAtRelease: false
+        },
+        distanceM: 65.2,
+        isHighscore: false,
+        resultKind: 'valid',
+        tipFirst: true,
+        landingXM: 83.4,
+        landingYM: 0,
+        landingAngleRad: -0.3
+      }
+    };
+
+    expect(getSpeedPercent(state)).toBe(83);
+    expect(getAngleDeg(state)).toBe(41);
+  });
+});
+
 ```
-> meta: lines=43 chars=1131 truncated=no
+> meta: lines=78 chars=1988 truncated=no
+
+
+## src/features/javelin/game/trajectory.test.ts
+
+```ts
+import { describe, expect, it } from 'vitest';
+import { computeTrajectoryPreview } from './trajectory';
+
+describe('computeTrajectoryPreview', () => {
+  it('generates points with strictly increasing x', () => {
+    const preview = computeTrajectoryPreview({
+      originXM: 0,
+      originYM: 1.5,
+      angleDeg: 36,
+      speedNorm: 0.7,
+      forceNorm: 0.7,
+      numPoints: 12,
+      timeStepS: 0.12
+    });
+
+    expect(preview.points.length).toBeGreaterThan(1);
+    for (let index = 1; index < preview.points.length; index += 1) {
+      expect(preview.points[index].xM).toBeGreaterThan(preview.points[index - 1].xM);
+    }
+  });
+
+  it('stops before emitting points below ground', () => {
+    const maxPoints = 40;
+    const preview = computeTrajectoryPreview({
+      originXM: 2,
+      originYM: 0.2,
+      angleDeg: 15,
+      speedNorm: 0,
+      forceNorm: 0,
+      numPoints: maxPoints,
+      timeStepS: 0.1
+    });
+
+    expect(preview.points.length).toBeLessThan(maxPoints);
+    expect(preview.points.every((point) => point.yM >= 0)).toBe(true);
+  });
+
+  it('produces higher first-point altitude for higher release angle', () => {
+    const low = computeTrajectoryPreview({
+      originXM: 0,
+      originYM: 1.3,
+      angleDeg: 20,
+      speedNorm: 0.65,
+      forceNorm: 0.8,
+      numPoints: 6,
+      timeStepS: 0.12
+    });
+    const high = computeTrajectoryPreview({
+      originXM: 0,
+      originYM: 1.3,
+      angleDeg: 50,
+      speedNorm: 0.65,
+      forceNorm: 0.8,
+      numPoints: 6,
+      timeStepS: 0.12
+    });
+
+    expect(low.points.length).toBeGreaterThan(0);
+    expect(high.points.length).toBeGreaterThan(0);
+    expect(high.points[0].yM).toBeGreaterThan(low.points[0].yM);
+  });
+
+  it('returns a valid preview with zero force', () => {
+    const preview = computeTrajectoryPreview({
+      originXM: 4,
+      originYM: 1.2,
+      angleDeg: 36,
+      speedNorm: 0,
+      forceNorm: 0,
+      numPoints: 10,
+      timeStepS: 0.1
+    });
+
+    expect(preview.points.length).toBeGreaterThan(0);
+    for (const point of preview.points) {
+      expect(Number.isFinite(point.xM)).toBe(true);
+      expect(Number.isFinite(point.yM)).toBe(true);
+    }
+  });
+
+  it('never returns more points than requested', () => {
+    const maxPoints = 7;
+    const preview = computeTrajectoryPreview({
+      originXM: 0,
+      originYM: 1.4,
+      angleDeg: 40,
+      speedNorm: 0.9,
+      forceNorm: 0.9,
+      numPoints: maxPoints,
+      timeStepS: 0.12
+    });
+
+    expect(preview.points.length).toBeLessThanOrEqual(maxPoints);
+  });
+});
+
+```
+> meta: lines=96 chars=2545 truncated=no
 
 
 ## src/features/javelin/hooks/useLocalHighscores.test.ts
 _Reusable hook / shared state or side-effect logic._
 
 ```ts
-import { describe, expect, it } from 'vitest';
-import { insertHighscoreSorted, pruneHighscores } from './useLocalHighscores';
-import type { HighscoreEntry } from '../game/types';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { HIGHSCORE_STORAGE_KEY } from '../game/constants';
+import {
+  insertHighscoreSorted,
+  loadHighscores,
+  pruneHighscores,
+  saveHighscores
+} from './useLocalHighscores';
+// ... 1 more import lines from ., .., vitest
+
+type StorageMock = {
+  getItem: ReturnType<typeof vi.fn<(key: string) => string | null>>;
+  setItem: ReturnType<typeof vi.fn<(key: string, value: string) => void>>;
+  clear: ReturnType<typeof vi.fn<() => void>>;
+};
+
+let storage: StorageMock;
 
 const makeEntry = (name: string, distanceM: number, playedAtIso: string): HighscoreEntry => ({
   id: `${name}-${distanceM}`,
@@ -6682,6 +7816,28 @@ const makeEntry = (name: string, distanceM: number, playedAtIso: string): Highsc
   playedAtIso,
   locale: 'fi',
   windMs: 0
+});
+
+beforeEach(() => {
+  const store = new Map<string, string>();
+  storage = {
+    getItem: vi.fn((key: string) => store.get(key) ?? null),
+    setItem: vi.fn((key: string, value: string) => {
+      store.set(key, value);
+    }),
+    clear: vi.fn(() => {
+      store.clear();
+    })
+  };
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: storage
+  });
+  localStorage.clear();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe('highscore helpers', () => {
@@ -6706,7 +7862,220 @@ describe('highscore helpers', () => {
     );
     expect(pruneHighscores(list, 10)).toHaveLength(10);
   });
+
+  it('returns empty when storage getter throws', () => {
+    storage.getItem.mockImplementation(() => {
+      throw new Error('blocked');
+    });
+
+    expect(loadHighscores()).toEqual([]);
+  });
+
+  it('ignores malformed and invalid stored entries', () => {
+    const valid = makeEntry('VALID', 75.2, '2026-02-21T09:10:00.000Z');
+    localStorage.setItem(
+      HIGHSCORE_STORAGE_KEY,
+      JSON.stringify([
+        valid,
+        { ...valid, distanceM: Number.NaN },
+        { ...valid, playedAtIso: 'not-a-date' },
+        { ...valid, locale: 'xx' },
+        { ...valid, windMs: Number.POSITIVE_INFINITY }
+      ])
+    );
+
+    expect(loadHighscores()).toEqual([valid]);
+  });
+
+  it('swallows storage setter errors', () => {
+    storage.setItem.mockImplementation(() => {
+      throw new Error('quota');
+    });
+
+    expect(() => saveHighscores([makeEntry('A', 70, '2026-0
+
+// [TRUNCATED at 3000 chars]
+
+```
+> NOTE: Truncated to 3000 chars (original: 3056).
+> meta: lines=105 chars=3049 truncated=yes
+
+
+## src/features/javelin/hooks/usePointerControls.test.ts
+_Reusable hook / shared state or side-effect logic._
+
+```ts
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { GameAction, GameState } from '../game/types';
+import {
+  createTouchLongPressHandlers,
+  isInteractiveEventTarget,
+  shouldHandleAngleAdjustKeyDown,
+  shouldReleaseChargeFromEnterKeyUp
+} from './usePointerControls';
+
+const inputTarget = (): EventTarget => ({
+  tagName: 'INPUT',
+  isContentEditable: false,
+  closest: () => null
+}) as unknown as EventTarget;
+
+const selectTarget = (): EventTarget => ({
+  tagName: 'SELECT',
+  isContentEditable: false,
+  closest: () => null
+}) as unknown as EventTarget;
+
+const plainTarget = (): EventTarget => ({
+  tagName: 'DIV',
+  isContentEditable: false,
+  closest: () => null
+}) as unknown as EventTarget;
+
+const contentEditableTarget = (): EventTarget => ({
+  tagName: 'DIV',
+  isContentEditable: true,
+  closest: () => null
+}) as unknown as EventTarget;
+
+const dispatchSpy = () => vi.fn<(action: GameAction) => void>();
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+describe('usePointerControls key guards', () => {
+  it('treats form controls as interactive targets', () => {
+    expect(isInteractiveEventTarget(inputTarget())).toBe(true);
+    expect(isInteractiveEventTarget(selectTarget())).toBe(true);
+    expect(isInteractiveEventTarget(contentEditableTarget())).toBe(true);
+    expect(isInteractiveEventTarget(plainTarget())).toBe(false);
+  });
+
+  it('does not handle Enter release from interactive targets', () => {
+    expect(shouldReleaseChargeFromEnterKeyUp('Enter', 'chargeAim', inputTarget())).toBe(false);
+  });
+
+  it('releases charge on Enter keyup during chargeAim for gameplay target', () => {
+    expect(shouldReleaseChargeFromEnterKeyUp('Enter', 'chargeAim', plainTarget())).toBe(true);
+  });
+
+  it('does not release charge outside chargeAim phase', () => {
+    expect(shouldReleaseChargeFromEnterKeyUp('Enter', 'runup', plainTarget())).toBe(false);
+    expect(shouldReleaseChargeFromEnterKeyUp('Enter', 'idle', plainTarget())).toBe(false);
+  });
+
+  it('does not adjust angle from arrow keys inside interactive controls', () => {
+    expect(shouldHandleAngleAdjustKeyDown('ArrowUp', 'runup', inputTarget())).toBe(false);
+    expect(shouldHandleAngleAdjustKeyDown('ArrowDown', 'chargeAim', selectTarget())).toBe(false);
+  });
+});
+
+describe('usePointerControls touch long press', () => {
+  it('starts charge after long press during runup', () => {
+    vi.useFakeTimers();
+    let phaseTag: GameState['phase']['tag'] = 'runup';
+    let nowMs = 1000;
+    const dispatch = dispatchSpy();
+    const handlers = createTouchLongPressHandlers({
+      dispatch,
+      getPhaseTag: () => phaseTag,
+      now: () => nowMs
+    });
+
+    handlers.onTouchStart();
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(dispatch).toHaveBeenNthCalledWith(1, { type: 'rhythmTap', atMs: 1000 });
+
+    nowMs = 1305;
+    vi.advanceTimersByTime(305);
+
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    expect(dispatch).toHaveBeenNthCalledWith(2, { type: 'beginChargeAim', atMs: 1305 });
+
+// [TRUNCATED at 3000 chars]
+
+```
+> NOTE: Truncated to 3000 chars (original: 4132).
+> meta: lines=126 chars=4132 truncated=yes
+
+
+## src/i18n/init.test.ts
+
+```ts
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { getBrowserLocale, persistLocale, readStoredLocale, resolveLocale } from './init';
+
+const installStorageMock = (options: {
+  getItem?: (key: string) => string | null;
+  setItem?: (key: string, value: string) => void;
+} = {}): void => {
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: options.getItem ?? (() => null),
+      setItem: options.setItem ?? (() => undefined)
+    }
+  });
+};
+
+const installNavigatorMock = (value: unknown): void => {
+  Object.defineProperty(globalThis, 'navigator', {
+    configurable: true,
+    value
+  });
+};
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  delete (globalThis as { navigator?: unknown }).navigator;
+});
+
+describe('i18n locale guards', () => {
+  it('prefers stored locale when present', () => {
+    expect(resolveLocale('fi', 'en-us')).toBe('fi');
+    expect(resolveLocale('sv', 'fi-fi')).toBe('sv');
+  });
+
+  it('falls back to browser locale when storage is empty', () => {
+    expect(resolveLocale(null, 'fi-fi')).toBe('fi');
+    expect(resolveLocale(null, 'sv-se')).toBe('sv');
+    expect(resolveLocale(null, 'en-us')).toBe('en');
+  });
+
+  it('returns null when reading storage throws', () => {
+    installStorageMock({
+      getItem: () => {
+        throw new Error('blocked');
+      }
+    });
+
+    expect(readStoredLocale()).toBeNull();
+  });
+
+  it('swallows storage write failures when persisting locale', () => {
+    installStorageMock({
+      setItem: () => {
+        throw new Error('quota');
+      }
+    });
+
+    expect(() => persistLocale('en')).not.toThrow();
+  });
+
+  it('returns empty browser locale when navigator is missing or invalid', () => {
+    installNavigatorMock(undefined);
+    expect(getBrowserLocale()).toBe('');
+
+    installNavigatorMock({});
+    expect(getBrowserLocale()).toBe('');
+  });
+
+  it('returns lowercased browser locale string', () => {
+    installNavigatorMock({ language: 'FI-FI' });
+    expect(getBrowserLocale()).toBe('fi-fi');
+  });
 });
 
 ```
-> meta: lines=37 chars=1305 truncated=no
+> meta: lines=74 chars=2047 truncated=no

@@ -1,5 +1,5 @@
 import { RHYTHM_TARGET_PHASE01, THROW_LINE_X_M } from './constants';
-import { wrap01 } from './math';
+import { getRunupMeterPhase01AtTime } from './rhythm';
 import { BEAT_INTERVAL_MS, GOOD_WINDOW_MS, PERFECT_WINDOW_MS } from './tuning';
 import type { GameState, TimingQuality } from './types';
 
@@ -40,8 +40,7 @@ export const getRunupMeterPhase01 = (state: GameState): number | null => {
   if (state.phase.tag !== 'runup') {
     return null;
   }
-  const rawPhase = wrap01((state.nowMs - state.phase.startedAtMs) / BEAT_INTERVAL_MS);
-  return wrap01(rawPhase + RHYTHM_TARGET_PHASE01);
+  return getRunupMeterPhase01AtTime(state.phase.startedAtMs, state.nowMs);
 };
 
 export const getRunupFeedback = (state: GameState): TimingQuality | null =>

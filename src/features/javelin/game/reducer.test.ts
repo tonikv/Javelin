@@ -76,6 +76,43 @@ describe('gameReducer', () => {
     }
   });
 
+  it('penalizes repeated taps in the same beat window', () => {
+    let state = createInitialGameState();
+    state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0 });
+    state = gameReducer(state, { type: 'rhythmTap', atMs: 1000 });
+    const speedAfterFirst = state.phase.tag === 'runup' ? state.phase.speedNorm : 0;
+    state = gameReducer(state, { type: 'rhythmTap', atMs: 1300 });
+
+    expect(state.phase.tag).toBe('runup');
+    if (state.phase.tag === 'runup') {
+      expect(state.phase.speedNorm).toBeLessThan(speedAfterFirst);
+      expect(state.phase.rhythm.lastQuality).toBe('miss');
+    }
+  });
+
+  it('rewards beat-timed taps more than rapid spam taps', () => {
+    let timed = createInitialGameState();
+    timed = gameReducer(timed, { type: 'startRound', atMs: 1000, windMs: 0 });
+    for (let index = 0; index < 5; index += 1) {
+      timed = gameReducer(timed, {
+        type: 'rhythmTap',
+        atMs: 1000 + index * BEAT_INTERVAL_MS
+      });
+    }
+
+    let spam = createInitialGameState();
+    spam = gameReducer(spam, { type: 'startRound', atMs: 1000, windMs: 0 });
+    for (let atMs = 1000; atMs <= 1000 + BEAT_INTERVAL_MS * 4; atMs += 170) {
+      spam = gameReducer(spam, { type: 'rhythmTap', atMs });
+    }
+
+    expect(timed.phase.tag).toBe('runup');
+    expect(spam.phase.tag).toBe('runup');
+    if (timed.phase.tag === 'runup' && spam.phase.tag === 'runup') {
+      expect(timed.phase.speedNorm).toBeGreaterThan(spam.phase.speedNorm);
+    }
+  });
+
   it('runup locomotion advances and can cross throw line', () => {
     let state = createInitialGameState();
     state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0 });

@@ -23,7 +23,6 @@ import {
   evaluateThrowLegality
 } from './scoring';
 import {
-  BEAT_INTERVAL_MS,
   CHARGE_AIM_SPEED_DECAY_PER_SECOND,
   CHARGE_AIM_STOP_SPEED_NORM,
   CHARGE_FILL_DURATION_MS,
@@ -33,8 +32,6 @@ import {
   FAULT_JAVELIN_LAUNCH_SPEED_MS,
   FAULT_STUMBLE_DISTANCE_M,
   FOLLOW_THROUGH_STEP_DISTANCE_M,
-  GOOD_WINDOW_MS,
-  PERFECT_WINDOW_MS,
   RHYTHM_SPEED_DELTA_GOOD,
   RHYTHM_SPEED_DELTA_IN_PENALTY,
   RHYTHM_SPEED_DELTA_MISS,
@@ -50,24 +47,12 @@ import {
   THROW_ANIM_DURATION_MS,
   THROW_RELEASE_PROGRESS
 } from './tuning';
+import {
+  getNearestBeatDeltaMs,
+  getNearestBeatIndex,
+  getTimingQualityFromBeatDelta
+} from './rhythm';
 import type { GameAction, GameState, TimingQuality } from './types';
-
-const nearestBeatDeltaMs = (startedAtMs: number, atMs: number): number => {
-  const elapsed = atMs - startedAtMs;
-  const beatIndex = Math.round(elapsed / BEAT_INTERVAL_MS);
-  const beatTime = startedAtMs + beatIndex * BEAT_INTERVAL_MS;
-  return Math.abs(atMs - beatTime);
-};
-
-const timingQualityFromBeatDelta = (deltaMs: number): TimingQuality => {
-  if (deltaMs <= PERFECT_WINDOW_MS) {
-    return 'perfect';
-  }
-  if (deltaMs <= GOOD_WINDOW_MS) {
-    return 'good';
-  }
-  return 'miss';
-};
 
 const rhythmTapSpeedDelta = (quality: TimingQuality): number => {
   if (quality === 'perfect') {
@@ -485,18 +470,27 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
         phase.rhythm.lastTapAtMs === null
           ? Number.POSITIVE_INFINITY
           : action.atMs - phase.rhythm.lastTapAtMs;
-      const isSpam = tapInterval < SPAM_THRESHOLD_MS;
-      const beatDelta = nearestBeatDeltaMs(phase.startedAtMs, action.atMs);
-      const quality = timingQualityFromBeatDelta(beatDelta);
+      const beatDelta = getNearestBeatDeltaMs(phase.startedAtMs, action.atMs);
+      const quality = getTimingQualityFromBeatDelta(beatDelta);
+      const beatIndex = getNearestBeatIndex(phase.startedAtMs, action.atMs);
+      const previousBeatIndex =
+        phase.rhythm.lastTapAtMs === null
+          ? null
+          : getNearestBeatIndex(phase.startedAtMs, phase.rhythm.lastTapAtMs);
+      const isRepeatedBeatTap = previousBeatIndex !== null && previousBeatIndex === beatIndex;
+      const isSpam = tapInterval < SPAM_THRESHOLD_MS || isRepeatedBeatTap;
+      const resolvedQuality: TimingQuality = isSpam || inPenalty ? 'miss' : quality;
       const baseDelta = isSpam
         ? RHYTHM_SPEED_DELTA_SPAM
         : inPenalty
           ? RHYTHM_SPEED_DELTA_IN_PENALTY
           : rhythmTapSpeedDelta(quality);
       const speedNorm = clamp(phase.speedNorm + baseDelta, 0, 1);
-      const perfectHits = phase.rhythm.perfectHits + (quality === 'perfect' ? 1 : 0);
-      const goodHits = phase.rhythm.goodHits + (quality !== 'miss' ? 1 : 0);
-      const penaltyUntilMs = isSpam ? action.atMs + SPAM_PENALTY_MS : phase.rhythm.penaltyUntilMs;
+      const perfectHits = phase.rhythm.perfectHits + (resolvedQuality === 'perfect' ? 1 : 0);
+      const goodHits = phase.rhythm.goodHits + (resolvedQuality !== 'miss' ? 1 : 0);
+      const penaltyUntilMs = isSpam
+        ? Math.max(phase.rhythm.penaltyUntilMs, action.atMs + SPAM_PENALTY_MS)
+        : phase.rhythm.penaltyUntilMs;
 
       return {
         ...state,
@@ -511,7 +505,7 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
             perfectHits,
             goodHits,
             penaltyUntilMs,
-            lastQuality: isSpam ? 'miss' : quality,
+            lastQuality: resolvedQuality,
             lastQualityAtMs: action.atMs
           },
           athletePose: {

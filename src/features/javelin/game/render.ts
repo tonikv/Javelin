@@ -27,12 +27,11 @@ import {
   JAVELIN_GRIP_OFFSET_M,
   JAVELIN_GRIP_OFFSET_Y_M,
   JAVELIN_LENGTH_M,
-  RHYTHM_TARGET_PHASE01,
   THROW_LINE_X_M
 } from './constants';
 import { drawAthlete } from './renderAthlete';
 import { drawWorldTimingMeter } from './renderMeter';
-import { getRunupMeterPhase01 } from './selectors';
+import { getCompletedBeatIndex, getNearestBeatDeltaMs, getTimingQualityFromBeatDelta } from './rhythm';
 import {
   RUNUP_START_X_M,
   RUN_TO_DRAWBACK_BLEND_MS,
@@ -96,6 +95,7 @@ type ResultMarkerFadeState = {
 export type RenderSession = {
   camera: CameraSmoothingState;
   resultMarker: ResultMarkerFadeState;
+  lastRunupBeatIndex: number | null;
   lastPhaseTag: GameState['phase']['tag'];
 };
 
@@ -105,6 +105,7 @@ export const createRenderSession = (): RenderSession => ({
     lastRoundId: -1,
     shownAtMs: 0
   },
+  lastRunupBeatIndex: null,
   lastPhaseTag: 'idle'
 });
 
@@ -801,14 +802,16 @@ export const renderGame = (
   drawWorldTimingMeter(ctx, state, headScreen, overlayUiScale);
 
   if (state.phase.tag === 'runup') {
-    const meterPhase = getRunupMeterPhase01(state);
-    if (meterPhase !== null) {
-      const distToTarget = Math.abs(meterPhase - RHYTHM_TARGET_PHASE01);
-      const wrappedDist = Math.min(distToTarget, 1 - distToTarget);
-      if (wrappedDist < 0.02) {
-        playBeatTick(state.nowMs, wrappedDist < 0.01 ? 'perfect' : 'good');
-      }
+    const beatIndex = getCompletedBeatIndex(state.phase.startedAtMs, state.nowMs);
+    if (session.lastRunupBeatIndex === null || beatIndex < session.lastRunupBeatIndex) {
+      session.lastRunupBeatIndex = beatIndex;
+    } else if (beatIndex > session.lastRunupBeatIndex) {
+      const beatDeltaMs = getNearestBeatDeltaMs(state.phase.startedAtMs, state.nowMs);
+      playBeatTick(state.nowMs, getTimingQualityFromBeatDelta(beatDeltaMs));
+      session.lastRunupBeatIndex = beatIndex;
     }
+  } else {
+    session.lastRunupBeatIndex = null;
   }
 
   session.lastPhaseTag = state.phase.tag;
