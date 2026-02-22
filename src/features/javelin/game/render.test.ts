@@ -4,6 +4,7 @@ import {
   createRenderSession,
   getCameraTargetX,
   getHeadMeterScreenAnchor,
+  getPlayerAngleAnchorScreen,
   getVisibleJavelinRenderState
 } from './render';
 import { RUNUP_START_X_M } from './tuning';
@@ -184,6 +185,52 @@ describe('javelin visibility state', () => {
     expect(getCameraTargetX(chargeState2)).toBeGreaterThan(getCameraTargetX(chargeState1));
   });
 
+  it('keeps idle camera target on runup start anchor', () => {
+    const idleState: GameState = {
+      ...baseState,
+      phase: {
+        tag: 'idle'
+      }
+    };
+
+    expect(getCameraTargetX(idleState)).toBe(0);
+  });
+
+  it('keeps athlete screen anchor stable when transitioning idle to runup', () => {
+    const idleState: GameState = {
+      ...baseState,
+      phase: {
+        tag: 'idle'
+      }
+    };
+    const runupState: GameState = {
+      ...baseState,
+      phase: {
+        tag: 'runup',
+        speedNorm: 0,
+        startedAtMs: 1000,
+        tapCount: 0,
+        runupDistanceM: RUNUP_START_X_M,
+        rhythm: {
+          firstTapAtMs: null,
+          lastTapAtMs: null,
+          perfectHits: 0,
+          goodHits: 0,
+          penaltyUntilMs: 0,
+          lastQuality: null,
+          lastQualityAtMs: 0
+        },
+        athletePose: { animTag: 'idle', animT: 0 }
+      }
+    };
+
+    const idleAnchor = getPlayerAngleAnchorScreen(idleState, 900, 420);
+    const runupAnchor = getPlayerAngleAnchorScreen(runupState, 900, 420);
+
+    expect(runupAnchor.x).toBeCloseTo(idleAnchor.x, 5);
+    expect(runupAnchor.y).toBeCloseTo(idleAnchor.y, 5);
+  });
+
   it('keeps result camera target at landed javelin position', () => {
     const resultState: GameState = {
       ...baseState,
@@ -214,5 +261,75 @@ describe('javelin visibility state', () => {
 
     const cameraTargetX = getCameraTargetX(resultState);
     expect(cameraTargetX).toBe(3.1);
+  });
+
+  it('tracks javelin during flight phase', () => {
+    const flightState: GameState = {
+      ...baseState,
+      phase: {
+        tag: 'flight',
+        athleteXM: 16.2,
+        javelin: {
+          xM: 28.4,
+          yM: 5.1,
+          zM: 0.2,
+          vxMs: 20,
+          vyMs: 3.5,
+          vzMs: 0.1,
+          angleRad: 0.2,
+          angularVelRad: 0.3,
+          releasedAtMs: 1900,
+          lengthM: 2.6
+        },
+        launchedFrom: {
+          speedNorm: 0.8,
+          angleDeg: 34,
+          forceNorm: 0.85,
+          windMs: 0.2,
+          launchSpeedMs: 28,
+          athleteXM: 16.2,
+          releaseQuality: 'good',
+          lineCrossedAtRelease: false
+        },
+        athletePose: { animTag: 'followThrough', animT: 0.5 }
+      }
+    };
+
+    expect(getCameraTargetX(flightState)).toBe(28.4);
+  });
+
+  it('prevents backward camera jump when javelin just launched', () => {
+    const flightState: GameState = {
+      ...baseState,
+      phase: {
+        tag: 'flight',
+        athleteXM: 18,
+        javelin: {
+          xM: 19,
+          yM: 5,
+          zM: 0,
+          vxMs: 18,
+          vyMs: 3,
+          vzMs: 0,
+          angleRad: 0.2,
+          angularVelRad: 0.3,
+          releasedAtMs: 1900,
+          lengthM: 2.6
+        },
+        launchedFrom: {
+          speedNorm: 0.8,
+          angleDeg: 34,
+          forceNorm: 0.85,
+          windMs: 0.2,
+          launchSpeedMs: 28,
+          athleteXM: 18,
+          releaseQuality: 'good',
+          lineCrossedAtRelease: false
+        },
+        athletePose: { animTag: 'followThrough', animT: 0.4 }
+      }
+    };
+
+    expect(getCameraTargetX(flightState)).toBe(25.6);
   });
 });

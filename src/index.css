@@ -389,6 +389,10 @@ button.ghost {
 }
 
 @media (min-width: 1024px) {
+  .page {
+    max-width: 1380px;
+  }
+
   .topbar {
     display: flex;
     gap: 16px;
@@ -402,12 +406,12 @@ button.ghost {
   }
 
   .layout {
-    grid-template-columns: 2fr 1fr;
+    grid-template-columns: minmax(0, 2.45fr) minmax(280px, 1fr);
     gap: 16px;
   }
 
   .game-canvas {
-    height: min(54vh, 460px);
+    height: clamp(240px, 36vh, 320px);
   }
 
   .language-switch select {

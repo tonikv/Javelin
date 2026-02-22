@@ -6,9 +6,7 @@ import {
   CAMERA_RESULT_TARGET_AHEAD,
   CAMERA_RESULT_VIEW_WIDTH_M,
   CAMERA_RUNUP_TARGET_AHEAD,
-  CAMERA_RUNUP_VIEW_WIDTH_M,
   CAMERA_THROW_TARGET_AHEAD,
-  CAMERA_THROW_VIEW_WIDTH_M,
   CAMERA_Y_SCALE_FLIGHT,
   CAMERA_Y_SCALE_RESULT,
   CAMERA_Y_SCALE_RUNUP,
@@ -43,6 +41,13 @@ type SmoothedCamera = {
 
 export type CameraSmoothingState = SmoothedCamera;
 
+const PLAYER_ANCHOR_OFFSET_M = -RUNUP_START_X_M;
+const FLIGHT_CAMERA_PROFILE_LERP_SPEED = 5.8;
+const FLIGHT_CAMERA_TARGET_LERP_SPEED = 8.4;
+
+const lerpToward = (current: number, target: number, factor: number): number =>
+  current + (target - current) * Math.min(1, Math.max(0, factor));
+
 const PHASE_CAMERA_CONFIG: Record<GamePhase['tag'], PhaseCameraConfig> = {
   idle: {
     viewWidthM: CAMERA_DEFAULT_VIEW_WIDTH_M,
@@ -50,19 +55,19 @@ const PHASE_CAMERA_CONFIG: Record<GamePhase['tag'], PhaseCameraConfig> = {
     yScale: CAMERA_Y_SCALE_RUNUP
   },
   runup: {
-    viewWidthM: CAMERA_RUNUP_VIEW_WIDTH_M,
+    viewWidthM: CAMERA_DEFAULT_VIEW_WIDTH_M,
     aheadRatio: CAMERA_RUNUP_TARGET_AHEAD,
     yScale: CAMERA_Y_SCALE_RUNUP
   },
   chargeAim: {
-    viewWidthM: CAMERA_THROW_VIEW_WIDTH_M,
-    aheadRatio: CAMERA_THROW_TARGET_AHEAD,
+    viewWidthM: CAMERA_DEFAULT_VIEW_WIDTH_M,
+    aheadRatio: CAMERA_RUNUP_TARGET_AHEAD,
     yScale: CAMERA_Y_SCALE_RUNUP
   },
   throwAnim: {
-    viewWidthM: CAMERA_THROW_VIEW_WIDTH_M,
+    viewWidthM: CAMERA_DEFAULT_VIEW_WIDTH_M,
     aheadRatio: CAMERA_THROW_TARGET_AHEAD,
-    yScale: CAMERA_Y_SCALE_THROW
+    yScale: CAMERA_Y_SCALE_RUNUP
   },
   flight: {
     viewWidthM: CAMERA_FLIGHT_VIEW_WIDTH_M,
@@ -75,13 +80,11 @@ const PHASE_CAMERA_CONFIG: Record<GamePhase['tag'], PhaseCameraConfig> = {
     yScale: CAMERA_Y_SCALE_RESULT
   },
   fault: {
-    viewWidthM: CAMERA_THROW_VIEW_WIDTH_M,
+    viewWidthM: CAMERA_DEFAULT_VIEW_WIDTH_M,
     aheadRatio: CAMERA_THROW_TARGET_AHEAD,
     yScale: CAMERA_Y_SCALE_THROW
   }
 };
-
-const CAMERA_LERP_SPEED = 4.5;
 
 const createInitialCameraState = (): CameraSmoothingState => ({
   viewWidthM: CAMERA_DEFAULT_VIEW_WIDTH_M,
@@ -93,9 +96,6 @@ const createInitialCameraState = (): CameraSmoothingState => ({
 export const createCameraSmoothingState = (): CameraSmoothingState =>
   createInitialCameraState();
 
-const lerpToward = (current: number, target: number, factor: number): number =>
-  current + (target - current) * Math.min(1, Math.max(0, factor));
-
 const resetSmoothCamera = (cameraState: CameraSmoothingState): void => {
   Object.assign(cameraState, createInitialCameraState());
 };
@@ -104,18 +104,21 @@ export const getCameraTargetX = (state: GameState): number => {
   switch (state.phase.tag) {
     case 'runup':
     case 'chargeAim':
-      return state.phase.runupDistanceM;
+      return state.phase.runupDistanceM + PLAYER_ANCHOR_OFFSET_M;
     case 'throwAnim':
-      return state.phase.athleteXM;
-    case 'flight':
-      return state.phase.javelin.xM;
+      return state.phase.athleteXM + PLAYER_ANCHOR_OFFSET_M;
+    case 'flight': {
+      // Prevent a backward jump on release when the javelin is still near the athlete.
+      const releaseAnchorTarget = state.phase.athleteXM + PLAYER_ANCHOR_OFFSET_M;
+      return Math.max(releaseAnchorTarget, state.phase.javelin.xM);
+    }
     case 'result':
       return state.phase.landingXM;
     case 'fault':
-      return state.phase.athleteXM;
+      return state.phase.athleteXM + PLAYER_ANCHOR_OFFSET_M;
     case 'idle':
     default:
-      return 5;
+      return RUNUP_START_X_M + PLAYER_ANCHOR_OFFSET_M;
   }
 };
 
@@ -168,14 +171,33 @@ const updateSmoothedCamera = (
   const targetViewWidth = getViewWidthM(state);
   const targetYScale = getVerticalScale(state);
   const targetX = getCameraTargetX(state);
-  const dt = (Math.max(0, dtMs) / 1000) * CAMERA_LERP_SPEED;
   const phaseChanged = state.phase.tag !== cameraState.lastPhaseTag;
-  const lerpFactor = phaseChanged ? Math.min(1, dt * 2.5) : Math.min(1, dt);
+  const isFlightTrackingPhase = state.phase.tag === 'flight' || state.phase.tag === 'result';
+
+  if (!isFlightTrackingPhase) {
+    Object.assign(cameraState, {
+      viewWidthM: targetViewWidth,
+      yScale: targetYScale,
+      targetX,
+      lastPhaseTag: state.phase.tag
+    });
+    return;
+  }
+
+  const dt = Math.max(0, dtMs) / 1000;
+  const profileLerpFactor = Math.min(
+    1,
+    dt * (phaseChanged ? FLIGHT_CAMERA_PROFILE_LERP_SPEED * 0.75 : FLIGHT_CAMERA_PROFILE_LERP_SPEED)
+  );
+  const targetLerpFactor = Math.min(
+    1,
+    dt * (phaseChanged ? FLIGHT_CAMERA_TARGET_LERP_SPEED * 0.75 : FLIGHT_CAMERA_TARGET_LERP_SPEED)
+  );
 
   Object.assign(cameraState, {
-    viewWidthM: lerpToward(cameraState.viewWidthM, targetViewWidth, lerpFactor),
-    yScale: lerpToward(cameraState.yScale, targetYScale, lerpFactor),
-    targetX: lerpToward(cameraState.targetX, targetX, Math.min(1, dt * 1.2)),
+    viewWidthM: lerpToward(cameraState.viewWidthM, targetViewWidth, profileLerpFactor),
+    yScale: lerpToward(cameraState.yScale, targetYScale, profileLerpFactor),
+    targetX: lerpToward(cameraState.targetX, targetX, targetLerpFactor),
     lastPhaseTag: state.phase.tag
   });
 };
