@@ -5,7 +5,7 @@ export type Messages = Record<string, string>;
 export const resources: Record<Locale, Messages> = {
   fi: {
     'app.title': 'Selain Games 2026',
-    'javelin.title': 'Keihäänheitto',
+    'javelin.title': 'Keihään​heitto',
     'javelin.runupHint': 'Naputa nopeasti vauhtia. Heittoviivalle',
     'javelin.throwLine': 'Heittoviiva',
     'javelin.speedPassiveHint': 'Vauhti hiipuu tähtäyksessä - vapauta vihreällä alueella.',
@@ -67,7 +67,7 @@ export const resources: Record<Locale, Messages> = {
   },
   sv: {
     'app.title': 'Browser Games 2026',
-    'javelin.title': 'Spjutkastning',
+    'javelin.title': 'Spjut​kastning',
     'javelin.runupHint': 'Tryck snabbt för fart. Kvar till linjen',
     'javelin.throwLine': 'Kastlinje',
     'javelin.speedPassiveHint': 'Farten avtar under laddning - släpp i gröna zonen.',

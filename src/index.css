@@ -76,7 +76,8 @@ h1 {
   margin: 0;
   font-size: clamp(1.95rem, 8.6vw, 2.5rem);
   line-height: 1.08;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  text-wrap: balance;
 }
 
 .layout {
