@@ -9,14 +9,9 @@ export type MeterWindow = {
   end: number;
 };
 
-export type RhythmState = {
-  firstTapAtMs: number | null;
+export type RunupTapState = {
   lastTapAtMs: number | null;
-  perfectHits: number;
-  goodHits: number;
-  penaltyUntilMs: number;
-  lastQuality: TimingQuality | null;
-  lastQualityAtMs: number;
+  lastTapGainNorm: number;
 };
 
 /**
@@ -78,7 +73,7 @@ export type GamePhase =
       startedAtMs: number;
       tapCount: number;
       runupDistanceM: number;
-      rhythm: RhythmState;
+      tap: RunupTapState;
       athletePose: AthletePoseState;
     }
   | {

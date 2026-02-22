@@ -5,8 +5,6 @@ export const THROW_LINE_X_M = 18.2;
 export const CHARGE_ZONE_MARGIN_M = 1.4;
 export const RUNUP_MAX_X_M = 22.4;
 
-export const RHYTHM_TARGET_PHASE01 = 0.5;
-
 export const ANGLE_MIN_DEG = 15;
 export const ANGLE_MAX_DEG = 55;
 export const ANGLE_DEFAULT_DEG = 36;

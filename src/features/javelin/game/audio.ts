@@ -4,18 +4,15 @@ import {
   AUDIO_CROWD_VOLUME,
   AUDIO_EFFECTS_VOLUME,
   AUDIO_MASTER_VOLUME,
-  AUDIO_RHYTHM_VOLUME
+  AUDIO_RUNUP_TAP_VOLUME
 } from './tuning';
-import type { TimingQuality } from './types';
-
-type BeatTickQuality = TimingQuality;
 type CrowdReaction = 'cheer' | 'groan';
 
 type AudioEngine = {
   ctx: AudioContext;
   master: GainNode;
   channels: {
-    rhythm: GainNode;
+    runup: GainNode;
     crowd: GainNode;
     effects: GainNode;
   };
@@ -24,8 +21,8 @@ type AudioEngine = {
   flightWindSource: AudioBufferSourceNode | null;
   flightWindGain: GainNode | null;
   noiseBuffer: AudioBuffer | null;
-  lastBeatAtMs: number;
-  minBeatIntervalMs: number;
+  lastRunupTapAtMs: number;
+  minRunupTapIntervalMs: number;
   crowdBaseGain: number;
 };
 
@@ -74,16 +71,16 @@ const ensureAudioEngine = (): AudioEngine | null => {
 
   const ctx = new AudioContextCtor();
   const master = ctx.createGain();
-  const rhythm = ctx.createGain();
+  const runup = ctx.createGain();
   const crowd = ctx.createGain();
   const effects = ctx.createGain();
 
   master.gain.value = clamp(AUDIO_MASTER_VOLUME, 0, 1);
-  rhythm.gain.value = clamp(AUDIO_RHYTHM_VOLUME, 0, 1);
+  runup.gain.value = clamp(AUDIO_RUNUP_TAP_VOLUME, 0, 1);
   crowd.gain.value = clamp(AUDIO_CROWD_VOLUME, 0, 1);
   effects.gain.value = clamp(AUDIO_EFFECTS_VOLUME, 0, 1);
 
-  rhythm.connect(master);
+  runup.connect(master);
   crowd.connect(master);
   effects.connect(master);
   master.connect(ctx.destination);
@@ -92,7 +89,7 @@ const ensureAudioEngine = (): AudioEngine | null => {
     ctx,
     master,
     channels: {
-      rhythm,
+      runup,
       crowd,
       effects
     },
@@ -101,8 +98,8 @@ const ensureAudioEngine = (): AudioEngine | null => {
     flightWindSource: null,
     flightWindGain: null,
     noiseBuffer: null,
-    lastBeatAtMs: 0,
-    minBeatIntervalMs: 200,
+    lastRunupTapAtMs: 0,
+    minRunupTapIntervalMs: 36,
     crowdBaseGain: clamp(AUDIO_CROWD_AMBIENT_GAIN, 0.001, 0.25)
   };
 
@@ -247,58 +244,32 @@ const runWithAudio = (callback: (audio: AudioEngine) => void): void => {
   callback(audio);
 };
 
-/**
- * Play a short rhythm tick sound.
- * `qualityOrInZone` supports legacy boolean call sites.
- */
-export const playBeatTick = (nowMs: number, qualityOrInZone: BeatTickQuality | boolean): void => {
+export const playRunupTap = (intensity01: number): void => {
   runWithAudio((audio) => {
-    if (nowMs - audio.lastBeatAtMs < audio.minBeatIntervalMs) {
+    const nowMs = audio.ctx.currentTime * 1000;
+    if (nowMs - audio.lastRunupTapAtMs < audio.minRunupTapIntervalMs) {
       return;
     }
-    audio.lastBeatAtMs = nowMs;
+    audio.lastRunupTapAtMs = nowMs;
 
-    const quality: BeatTickQuality =
-      typeof qualityOrInZone === 'boolean'
-        ? qualityOrInZone
-          ? 'perfect'
-          : 'good'
-        : qualityOrInZone;
+    const intensity = clamp(intensity01, 0, 1);
+    const baseFrequencyHz = lerp(260, 520, intensity);
+    const baseVolume = lerp(0.055, 0.11, intensity);
 
-    if (quality === 'perfect') {
-      playTone(audio, audio.channels.rhythm, {
-        frequencyHz: 660,
-        type: 'square',
-        volume: 0.12,
-        durationS: 0.04,
-        attackS: 0.004
-      });
-      playTone(audio, audio.channels.rhythm, {
-        frequencyHz: 880,
-        type: 'square',
-        volume: 0.09,
-        durationS: 0.03,
-        attackS: 0.003,
-        startOffsetS: 0.035
-      });
-      return;
-    }
-
-    if (quality === 'good') {
-      playTone(audio, audio.channels.rhythm, {
-        frequencyHz: 440,
-        type: 'triangle',
-        volume: 0.08,
-        durationS: 0.05
-      });
-      return;
-    }
-
-    playTone(audio, audio.channels.rhythm, {
-      frequencyHz: 220,
-      type: 'sine',
-      volume: 0.04,
-      durationS: 0.06
+    playTone(audio, audio.channels.runup, {
+      frequencyHz: baseFrequencyHz,
+      type: 'triangle',
+      volume: baseVolume,
+      durationS: 0.045,
+      attackS: 0.003
+    });
+    playTone(audio, audio.channels.runup, {
+      frequencyHz: baseFrequencyHz * 1.35,
+      type: 'square',
+      volume: baseVolume * 0.55,
+      durationS: 0.028,
+      attackS: 0.002,
+      startOffsetS: 0.015
     });
   });
 };

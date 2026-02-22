@@ -1,19 +1,54 @@
 import { describe, expect, it } from 'vitest';
 import {
+  RUNUP_MAX_TAPS,
   RUNUP_MAX_X_M,
   THROW_LINE_X_M
 } from './constants';
 import { gameReducer } from './reducer';
 import {
-  BEAT_INTERVAL_MS,
   CHARGE_FILL_DURATION_MS,
   CHARGE_MAX_CYCLES,
-  RUNUP_PASSIVE_MAX_SPEED,
-  RUNUP_PASSIVE_TO_HALF_MS,
   RUNUP_START_X_M,
+  RUNUP_TAP_SOFT_CAP_INTERVAL_MS,
   THROW_ANIM_DURATION_MS
 } from './tuning';
 import { createInitialGameState } from './update';
+
+const tapRunupNTimes = (
+  state: ReturnType<typeof createInitialGameState>,
+  firstTapAtMs: number,
+  count: number,
+  intervalMs: number
+) => {
+  let nextState = state;
+  for (let index = 0; index < count; index += 1) {
+    nextState = gameReducer(nextState, {
+      type: 'rhythmTap',
+      atMs: firstTapAtMs + index * intervalMs
+    });
+  }
+  return nextState;
+};
+
+const tickForDuration = (
+  state: ReturnType<typeof createInitialGameState>,
+  startAtMs: number,
+  durationMs: number,
+  stepMs = 16
+) => {
+  let nextState = state;
+  let elapsedMs = 0;
+  while (elapsedMs < durationMs) {
+    const dtMs = Math.min(stepMs, durationMs - elapsedMs);
+    elapsedMs += dtMs;
+    nextState = gameReducer(nextState, {
+      type: 'tick',
+      dtMs,
+      nowMs: startAtMs + elapsedMs
+    });
+  }
+  return nextState;
+};
 
 describe('gameReducer', () => {
   it('starts a round into runup', () => {
@@ -23,7 +58,7 @@ describe('gameReducer', () => {
     expect(next.windMs).toBe(1.2);
   });
 
-  it('stays still before first tap and then builds passive speed', () => {
+  it('stays still before first tap and starts moving after tap input', () => {
     let state = createInitialGameState();
     state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0 });
     state = gameReducer(state, { type: 'tick', dtMs: 2000, nowMs: 3000 });
@@ -36,88 +71,75 @@ describe('gameReducer', () => {
     }
 
     state = gameReducer(state, { type: 'rhythmTap', atMs: 3200 });
-    state = gameReducer(state, {
-      type: 'tick',
-      dtMs: RUNUP_PASSIVE_TO_HALF_MS,
-      nowMs: 3200 + RUNUP_PASSIVE_TO_HALF_MS
-    });
     expect(state.phase.tag).toBe('runup');
     if (state.phase.tag === 'runup') {
-      expect(state.phase.speedNorm).toBeCloseTo(RUNUP_PASSIVE_MAX_SPEED, 2);
+      expect(state.phase.speedNorm).toBeGreaterThan(0);
+      expect(state.phase.athletePose.animTag).toBe('run');
     }
   });
 
-  it('perfect timing tap boosts speed above passive baseline', () => {
-    let state = createInitialGameState();
-    state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0 });
-    state = gameReducer(state, { type: 'rhythmTap', atMs: 1300 });
-    state = gameReducer(state, {
-      type: 'tick',
-      dtMs: RUNUP_PASSIVE_TO_HALF_MS,
-      nowMs: 1300 + RUNUP_PASSIVE_TO_HALF_MS
-    });
-    const baseline = state.phase.tag === 'runup' ? state.phase.speedNorm : 0;
-    state = gameReducer(state, { type: 'rhythmTap', atMs: 1000 + BEAT_INTERVAL_MS * 6 });
-    expect(state.phase.tag).toBe('runup');
-    if (state.phase.tag === 'runup') {
-      expect(state.phase.speedNorm).toBeGreaterThan(baseline);
+  it('slower tap cadence builds more speed than very rapid tapping', () => {
+    let spaced = createInitialGameState();
+    spaced = gameReducer(spaced, { type: 'startRound', atMs: 1000, windMs: 0 });
+    spaced = tapRunupNTimes(spaced, 1000, 5, RUNUP_TAP_SOFT_CAP_INTERVAL_MS + 15);
+
+    let rapid = createInitialGameState();
+    rapid = gameReducer(rapid, { type: 'startRound', atMs: 1000, windMs: 0 });
+    rapid = tapRunupNTimes(rapid, 1000, 5, 20);
+
+    expect(spaced.phase.tag).toBe('runup');
+    expect(rapid.phase.tag).toBe('runup');
+    if (spaced.phase.tag === 'runup' && rapid.phase.tag === 'runup') {
+      expect(spaced.phase.speedNorm).toBeGreaterThan(rapid.phase.speedNorm);
     }
   });
 
-  it('spam tapping is penalized', () => {
-    let state = createInitialGameState();
-    state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0 });
-    state = gameReducer(state, { type: 'rhythmTap', atMs: 1880 });
-    const speedAfterFirst = state.phase.tag === 'runup' ? state.phase.speedNorm : 0;
-    state = gameReducer(state, { type: 'rhythmTap', atMs: 1940 });
-    expect(state.phase.tag).toBe('runup');
-    if (state.phase.tag === 'runup') {
-      expect(state.phase.speedNorm).toBeLessThan(speedAfterFirst);
-    }
-  });
-
-  it('penalizes repeated taps in the same beat window', () => {
+  it('rapid tapping still increases speed but with reduced per-tap gain', () => {
     let state = createInitialGameState();
     state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0 });
     state = gameReducer(state, { type: 'rhythmTap', atMs: 1000 });
     const speedAfterFirst = state.phase.tag === 'runup' ? state.phase.speedNorm : 0;
-    state = gameReducer(state, { type: 'rhythmTap', atMs: 1300 });
-
+    state = gameReducer(state, { type: 'rhythmTap', atMs: 1015 });
     expect(state.phase.tag).toBe('runup');
     if (state.phase.tag === 'runup') {
-      expect(state.phase.speedNorm).toBeLessThan(speedAfterFirst);
-      expect(state.phase.rhythm.lastQuality).toBe('miss');
+      const rapidGain = state.phase.speedNorm - speedAfterFirst;
+      expect(rapidGain).toBeGreaterThan(0);
+      expect(rapidGain).toBeLessThan(speedAfterFirst);
     }
   });
 
-  it('rewards beat-timed taps more than rapid spam taps', () => {
-    let timed = createInitialGameState();
-    timed = gameReducer(timed, { type: 'startRound', atMs: 1000, windMs: 0 });
-    for (let index = 0; index < 5; index += 1) {
-      timed = gameReducer(timed, {
-        type: 'rhythmTap',
-        atMs: 1000 + index * BEAT_INTERVAL_MS
-      });
+  it('applies stronger gain for spaced taps than near-instant repeats', () => {
+    let state = createInitialGameState();
+    state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0 });
+    state = gameReducer(state, { type: 'rhythmTap', atMs: 1000 });
+    const speedAfterFirst = state.phase.tag === 'runup' ? state.phase.speedNorm : 0;
+    state = gameReducer(state, { type: 'rhythmTap', atMs: 1015 });
+    const nearInstantTotal = state.phase.tag === 'runup' ? state.phase.speedNorm : 0;
+    state = gameReducer(state, { type: 'rhythmTap', atMs: 1140 });
+    expect(state.phase.tag).toBe('runup');
+    if (state.phase.tag === 'runup') {
+      const nearInstantGain = nearInstantTotal - speedAfterFirst;
+      const spacedGain = state.phase.speedNorm - nearInstantTotal;
+      expect(spacedGain).toBeGreaterThan(nearInstantGain);
     }
+  });
 
-    let spam = createInitialGameState();
-    spam = gameReducer(spam, { type: 'startRound', atMs: 1000, windMs: 0 });
-    for (let atMs = 1000; atMs <= 1000 + BEAT_INTERVAL_MS * 4; atMs += 170) {
-      spam = gameReducer(spam, { type: 'rhythmTap', atMs });
-    }
+  it('caps tap count to configured runup max taps', () => {
+    let state = createInitialGameState();
+    state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0 });
+    state = tapRunupNTimes(state, 1000, RUNUP_MAX_TAPS + 8, 25);
 
-    expect(timed.phase.tag).toBe('runup');
-    expect(spam.phase.tag).toBe('runup');
-    if (timed.phase.tag === 'runup' && spam.phase.tag === 'runup') {
-      expect(timed.phase.speedNorm).toBeGreaterThan(spam.phase.speedNorm);
+    expect(state.phase.tag).toBe('runup');
+    if (state.phase.tag === 'runup') {
+      expect(state.phase.tapCount).toBe(RUNUP_MAX_TAPS);
     }
   });
 
   it('runup locomotion advances and can cross throw line', () => {
     let state = createInitialGameState();
     state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0 });
-    state = gameReducer(state, { type: 'rhythmTap', atMs: 1300 });
-    state = gameReducer(state, { type: 'tick', dtMs: 9000, nowMs: 10000 });
+    state = tapRunupNTimes(state, 1100, 12, 120);
+    state = tickForDuration(state, 2420, 5600, 16);
     expect(state.phase.tag).toBe('runup');
     if (state.phase.tag === 'runup') {
       expect(state.phase.runupDistanceM).toBeGreaterThan(THROW_LINE_X_M);
@@ -337,18 +359,19 @@ describe('gameReducer', () => {
   it('crossing line at release ends as foul_line', () => {
     let state = createInitialGameState();
     state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0.3 });
-    state = gameReducer(state, { type: 'rhythmTap', atMs: 1880 });
-    state = gameReducer(state, { type: 'rhythmTap', atMs: 2760 });
-    state = gameReducer(state, { type: 'rhythmTap', atMs: 3640 });
-    state = gameReducer(state, { type: 'tick', dtMs: 7800, nowMs: 8800 });
-    state = gameReducer(state, { type: 'beginChargeAim', atMs: 8820 });
+    state = tapRunupNTimes(state, 1100, 12, 120);
+    state = tickForDuration(state, 2420, 5600, 16);
+    state = gameReducer(state, { type: 'beginChargeAim', atMs: 8040 });
     expect(state.phase.tag).toBe('chargeAim');
-    state = gameReducer(state, { type: 'tick', dtMs: 300, nowMs: 9120 });
-    state = gameReducer(state, { type: 'releaseCharge', atMs: 9130 });
+    state = tickForDuration(state, 8040, 220, 16);
+    state = gameReducer(state, { type: 'releaseCharge', atMs: 8270 });
     expect(state.phase.tag).toBe('throwAnim');
+    if (state.phase.tag === 'throwAnim') {
+      expect(state.phase.lineCrossedAtRelease).toBe(true);
+    }
 
     for (let i = 0; i < 700; i += 1) {
-      state = gameReducer(state, { type: 'tick', dtMs: 16, nowMs: 9130 + i * 16 });
+      state = gameReducer(state, { type: 'tick', dtMs: 16, nowMs: 8270 + i * 16 });
       if (state.phase.tag === 'result') {
         break;
       }

@@ -1,21 +1,14 @@
 import {
-  RHYTHM_TARGET_PHASE01,
   WORLD_METER_CURSOR_RADIUS_PX,
   WORLD_METER_LINE_WIDTH_PX,
   WORLD_METER_OFFSET_Y_PX,
   WORLD_METER_RADIUS_PX
 } from './constants';
 import { clamp01, wrap01 } from './math';
-import {
-  getForcePreviewPercent,
-  getRhythmHotZones,
-  getRunupFeedback,
-  getRunupMeterPhase01,
-  getSpeedPercent
-} from './selectors';
+import { getForcePreviewPercent, getRunupMeterPhase01, getSpeedPercent } from './selectors';
 import { CHARGE_GOOD_WINDOW, CHARGE_PERFECT_WINDOW } from './tuning';
-import type { GameState, TimingQuality } from './types';
 import type { HeadAnchor } from './renderAthlete';
+import type { GameState, TimingQuality } from './types';
 
 type MeterZones = {
   perfect: { start: number; end: number };
@@ -24,13 +17,12 @@ type MeterZones = {
 
 type WorldMeterState = {
   phase01: number;
-  zones: MeterZones;
+  zones: MeterZones | null;
   feedback: TimingQuality | null;
   valuePercent: number;
 };
 
-const normalizeUiScale = (uiScale: number): number =>
-  Math.max(0.9, Math.min(1.3, uiScale));
+const normalizeUiScale = (uiScale: number): number => Math.max(0.9, Math.min(1.3, uiScale));
 
 const normalizeMeterPhase01 = (phase01: number): number => {
   if (phase01 <= 0) {
@@ -42,8 +34,7 @@ const normalizeMeterPhase01 = (phase01: number): number => {
   return wrap01(phase01);
 };
 
-const phaseToSemicircleAngle = (phase01: number): number =>
-  Math.PI + clamp01(phase01) * Math.PI;
+const phaseToSemicircleAngle = (phase01: number): number => Math.PI + clamp01(phase01) * Math.PI;
 
 const drawSemicircleArc = (
   ctx: CanvasRenderingContext2D,
@@ -92,8 +83,8 @@ const getWorldMeterState = (state: GameState): WorldMeterState | null => {
     }
     return {
       phase01: meterPhase,
-      zones: getRhythmHotZones(),
-      feedback: getRunupFeedback(state),
+      zones: null,
+      feedback: null,
       valuePercent: getSpeedPercent(state)
     };
   }
@@ -165,40 +156,34 @@ export const drawWorldTimingMeter = (
     anchor.x,
     anchor.y,
     meterRadius,
-    meterState.zones.good.start,
-    meterState.zones.good.end,
-    'rgba(30, 142, 247, 0.82)',
+    0,
+    meterState.phase01,
+    meterState.zones === null ? 'rgba(18, 196, 119, 0.9)' : 'rgba(246, 210, 85, 0.72)',
     meterLineWidth
   );
 
-  drawSemicircleArc(
-    ctx,
-    anchor.x,
-    anchor.y,
-    meterRadius,
-    meterState.zones.perfect.start,
-    meterState.zones.perfect.end,
-    'rgba(18, 196, 119, 0.98)',
-    meterLineWidth + 0.8 * visualScale
-  );
+  if (meterState.zones !== null) {
+    drawSemicircleArc(
+      ctx,
+      anchor.x,
+      anchor.y,
+      meterRadius,
+      meterState.zones.good.start,
+      meterState.zones.good.end,
+      'rgba(30, 142, 247, 0.82)',
+      meterLineWidth
+    );
 
-  if (state.phase.tag === 'runup') {
-    const meterPhase = getRunupMeterPhase01(state);
-    if (meterPhase !== null) {
-      const distToTarget = Math.abs(meterPhase - RHYTHM_TARGET_PHASE01);
-      const wrappedDist = Math.min(distToTarget, 1 - distToTarget);
-      if (wrappedDist < 0.06) {
-        const flashAlpha = (1 - wrappedDist / 0.06) * 0.5;
-        ctx.save();
-        ctx.globalAlpha = flashAlpha;
-        ctx.strokeStyle = '#22c272';
-        ctx.lineWidth = meterLineWidth + 6 * visualScale;
-        ctx.beginPath();
-        ctx.arc(anchor.x, anchor.y, meterRadius, Math.PI, Math.PI * 2, false);
-        ctx.stroke();
-        ctx.restore();
-      }
-    }
+    drawSemicircleArc(
+      ctx,
+      anchor.x,
+      anchor.y,
+      meterRadius,
+      meterState.zones.perfect.start,
+      meterState.zones.perfect.end,
+      'rgba(18, 196, 119, 0.98)',
+      meterLineWidth + 0.8 * visualScale
+    );
   }
 
   const cursorAngle = phaseToSemicircleAngle(normalizeMeterPhase01(meterState.phase01));
@@ -206,11 +191,13 @@ export const drawWorldTimingMeter = (
   const cursorY = anchor.y + Math.sin(cursorAngle) * meterRadius;
 
   const cursorFill =
-    meterState.feedback === 'perfect'
+    meterState.zones === null
       ? '#22c272'
-      : meterState.feedback === 'good'
-        ? '#329cf5'
-        : '#f6d255';
+      : meterState.feedback === 'perfect'
+        ? '#22c272'
+        : meterState.feedback === 'good'
+          ? '#329cf5'
+          : '#f6d255';
 
   ctx.fillStyle = cursorFill;
   ctx.strokeStyle = '#0f3b61';

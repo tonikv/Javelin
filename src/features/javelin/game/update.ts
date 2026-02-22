@@ -32,48 +32,26 @@ import {
   FAULT_JAVELIN_LAUNCH_SPEED_MS,
   FAULT_STUMBLE_DISTANCE_M,
   FOLLOW_THROUGH_STEP_DISTANCE_M,
-  RHYTHM_SPEED_DELTA_GOOD,
-  RHYTHM_SPEED_DELTA_IN_PENALTY,
-  RHYTHM_SPEED_DELTA_MISS,
-  RHYTHM_SPEED_DELTA_PERFECT,
-  RHYTHM_SPEED_DELTA_SPAM,
-  RUNUP_PASSIVE_MAX_SPEED,
-  RUNUP_PASSIVE_TO_HALF_MS,
+  RUNUP_TAP_GAIN_NORM,
+  RUNUP_TAP_SOFT_CAP_INTERVAL_MS,
+  RUNUP_TAP_SOFT_CAP_MIN_MULTIPLIER,
   RUNUP_SPEED_DECAY_PER_SECOND,
   RUNUP_START_X_M,
   RUN_TO_DRAWBACK_BLEND_MS,
-  SPAM_PENALTY_MS,
-  SPAM_THRESHOLD_MS,
   THROW_ANIM_DURATION_MS,
   THROW_RELEASE_PROGRESS
 } from './tuning';
-import {
-  getNearestBeatDeltaMs,
-  getNearestBeatIndex,
-  getTimingQualityFromBeatDelta
-} from './rhythm';
 import type { GameAction, GameState, TimingQuality } from './types';
 
-const rhythmTapSpeedDelta = (quality: TimingQuality): number => {
-  if (quality === 'perfect') {
-    return RHYTHM_SPEED_DELTA_PERFECT;
-  }
-  if (quality === 'good') {
-    return RHYTHM_SPEED_DELTA_GOOD;
-  }
-  return RHYTHM_SPEED_DELTA_MISS;
+const runupTapGainMultiplier = (deltaMs: number): number => {
+  const ratio = clamp(deltaMs / RUNUP_TAP_SOFT_CAP_INTERVAL_MS, 0, 1);
+  return Math.max(RUNUP_TAP_SOFT_CAP_MIN_MULTIPLIER, ratio * ratio);
 };
 
 const runStrideHz = (speedNorm: number): number => 1 + speedNorm * 2.2;
 
 const advanceRunAnimT = (currentAnimT: number, dtMs: number, speedNorm: number): number =>
   wrap01(currentAnimT + (Math.max(0, dtMs) / 1000) * runStrideHz(speedNorm));
-
-const passiveSpeedTarget = (startedAtMs: number, nowMs: number): number => {
-  const elapsedMs = Math.max(0, nowMs - startedAtMs);
-  const t = clamp(elapsedMs / RUNUP_PASSIVE_TO_HALF_MS, 0, 1);
-  return RUNUP_PASSIVE_MAX_SPEED * easeOutQuad(t);
-};
 
 const runSpeedMsFromNorm = (speedNorm: number): number =>
   RUNUP_SPEED_MIN_MS + (RUNUP_SPEED_MAX_MS - RUNUP_SPEED_MIN_MS) * speedNorm;
@@ -200,23 +178,18 @@ const tickFault = (state: GameState, dtMs: number): GameState => {
   };
 };
 
-const tickRunup = (state: GameState, dtMs: number, nowMs: number): GameState => {
+const tickRunup = (state: GameState, dtMs: number): GameState => {
   if (state.phase.tag !== 'runup') {
     return state;
   }
 
-  const hasStartedRunup = state.phase.rhythm.firstTapAtMs !== null;
-  const passiveTarget =
-    state.phase.rhythm.firstTapAtMs === null
-      ? 0
-      : passiveSpeedTarget(state.phase.rhythm.firstTapAtMs, nowMs);
   const speedAfterDecay = clamp(
     state.phase.speedNorm - (dtMs / 1000) * RUNUP_SPEED_DECAY_PER_SECOND,
     0,
     1
   );
-  const speedNorm = Math.max(speedAfterDecay, passiveTarget);
-  const runSpeedMs = hasStartedRunup ? runSpeedMsFromNorm(speedNorm) : 0;
+  const speedNorm = speedAfterDecay;
+  const runSpeedMs = isRunning(speedNorm) ? runSpeedMsFromNorm(speedNorm) : 0;
   const runupDistanceM = clamp(
     state.phase.runupDistanceM + runSpeedMs * (dtMs / 1000),
     RUNUP_START_X_M,
@@ -444,14 +417,9 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
           startedAtMs: action.atMs,
           tapCount: 0,
           runupDistanceM: RUNUP_START_X_M,
-          rhythm: {
-            firstTapAtMs: null,
+          tap: {
             lastTapAtMs: null,
-            perfectHits: 0,
-            goodHits: 0,
-            penaltyUntilMs: 0,
-            lastQuality: null,
-            lastQualityAtMs: 0
+            lastTapGainNorm: 0
           },
           athletePose: {
             animTag: 'idle',
@@ -465,32 +433,12 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
         return state;
       }
       const phase = state.phase;
-      const inPenalty = action.atMs < phase.rhythm.penaltyUntilMs;
-      const tapInterval =
-        phase.rhythm.lastTapAtMs === null
-          ? Number.POSITIVE_INFINITY
-          : action.atMs - phase.rhythm.lastTapAtMs;
-      const beatDelta = getNearestBeatDeltaMs(phase.startedAtMs, action.atMs);
-      const quality = getTimingQualityFromBeatDelta(beatDelta);
-      const beatIndex = getNearestBeatIndex(phase.startedAtMs, action.atMs);
-      const previousBeatIndex =
-        phase.rhythm.lastTapAtMs === null
-          ? null
-          : getNearestBeatIndex(phase.startedAtMs, phase.rhythm.lastTapAtMs);
-      const isRepeatedBeatTap = previousBeatIndex !== null && previousBeatIndex === beatIndex;
-      const isSpam = tapInterval < SPAM_THRESHOLD_MS || isRepeatedBeatTap;
-      const resolvedQuality: TimingQuality = isSpam || inPenalty ? 'miss' : quality;
-      const baseDelta = isSpam
-        ? RHYTHM_SPEED_DELTA_SPAM
-        : inPenalty
-          ? RHYTHM_SPEED_DELTA_IN_PENALTY
-          : rhythmTapSpeedDelta(quality);
-      const speedNorm = clamp(phase.speedNorm + baseDelta, 0, 1);
-      const perfectHits = phase.rhythm.perfectHits + (resolvedQuality === 'perfect' ? 1 : 0);
-      const goodHits = phase.rhythm.goodHits + (resolvedQuality !== 'miss' ? 1 : 0);
-      const penaltyUntilMs = isSpam
-        ? Math.max(phase.rhythm.penaltyUntilMs, action.atMs + SPAM_PENALTY_MS)
-        : phase.rhythm.penaltyUntilMs;
+      const lastTapAtMs = phase.tap.lastTapAtMs;
+      const tapIntervalMs =
+        lastTapAtMs === null ? Number.POSITIVE_INFINITY : Math.max(0, action.atMs - lastTapAtMs);
+      const tapGainMultiplier = lastTapAtMs === null ? 1 : runupTapGainMultiplier(tapIntervalMs);
+      const tapGainNorm = RUNUP_TAP_GAIN_NORM * tapGainMultiplier;
+      const speedNorm = clamp(phase.speedNorm + tapGainNorm, 0, 1);
 
       return {
         ...state,
@@ -499,14 +447,9 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
           ...phase,
           speedNorm,
           tapCount: Math.min(phase.tapCount + 1, RUNUP_MAX_TAPS),
-          rhythm: {
-            firstTapAtMs: phase.rhythm.firstTapAtMs ?? action.atMs,
+          tap: {
             lastTapAtMs: action.atMs,
-            perfectHits,
-            goodHits,
-            penaltyUntilMs,
-            lastQuality: resolvedQuality,
-            lastQualityAtMs: action.atMs
+            lastTapGainNorm: tapGainMultiplier
           },
           athletePose: {
             animTag: isRunning(speedNorm) ? 'run' : 'idle',
@@ -662,7 +605,7 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
         case 'fault':
           return tickFault(nextState, action.dtMs);
         case 'runup':
-          return tickRunup(nextState, action.dtMs, action.nowMs);
+          return tickRunup(nextState, action.dtMs);
         case 'chargeAim':
           return tickChargeAim(nextState, action.dtMs, action.nowMs);
         case 'throwAnim':

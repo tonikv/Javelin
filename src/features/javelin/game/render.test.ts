@@ -40,14 +40,9 @@ describe('javelin visibility state', () => {
         startedAtMs: 1000,
         tapCount: 4,
         runupDistanceM: 10,
-        rhythm: {
-          firstTapAtMs: 1200,
+        tap: {
           lastTapAtMs: 1880,
-          perfectHits: 2,
-          goodHits: 3,
-          penaltyUntilMs: 0,
-          lastQuality: 'good',
-          lastQualityAtMs: 1880
+          lastTapGainNorm: 0.85
         },
         athletePose: { animTag: 'run', animT: 0.4 }
       }
@@ -231,14 +226,9 @@ describe('javelin visibility state', () => {
         startedAtMs: 1000,
         tapCount: 0,
         runupDistanceM: RUNUP_START_X_M,
-        rhythm: {
-          firstTapAtMs: null,
+        tap: {
           lastTapAtMs: null,
-          perfectHits: 0,
-          goodHits: 0,
-          penaltyUntilMs: 0,
-          lastQuality: null,
-          lastQualityAtMs: 0
+          lastTapGainNorm: 0
         },
         athletePose: { animTag: 'idle', animT: 0 }
       }

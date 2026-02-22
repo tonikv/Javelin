@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  playBeatTick,
+  playRunupTap,
   playChargeStart,
   playCrowdReaction,
   playFaultOof,
@@ -13,8 +13,8 @@ import {
 describe('audio no-op fallback', () => {
   it('does not throw when AudioContext is unavailable', () => {
     expect(() => resumeAudioContext()).not.toThrow();
-    expect(() => playBeatTick(1000, 'perfect')).not.toThrow();
-    expect(() => playBeatTick(1020, true)).not.toThrow();
+    expect(() => playRunupTap(1)).not.toThrow();
+    expect(() => playRunupTap(0.3)).not.toThrow();
     expect(() => playChargeStart()).not.toThrow();
     expect(() => playThrowWhoosh(0.75)).not.toThrow();
     expect(() => setFlightWindIntensity(0.5)).not.toThrow();

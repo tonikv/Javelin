@@ -5,11 +5,11 @@ import {
   type AthletePoseGeometry
 } from './athletePose';
 import {
-  playBeatTick,
   playChargeStart,
   playCrowdReaction,
   playFaultOof,
   playLandingImpact,
+  playRunupTap,
   playThrowWhoosh,
   setFlightWindIntensity
 } from './audio';
@@ -31,7 +31,6 @@ import {
 } from './constants';
 import { drawAthlete } from './renderAthlete';
 import { drawWorldTimingMeter } from './renderMeter';
-import { getCompletedBeatIndex, getNearestBeatDeltaMs, getTimingQualityFromBeatDelta } from './rhythm';
 import {
   RUNUP_START_X_M,
   RUN_TO_DRAWBACK_BLEND_MS,
@@ -95,7 +94,7 @@ type ResultMarkerFadeState = {
 export type RenderSession = {
   camera: CameraSmoothingState;
   resultMarker: ResultMarkerFadeState;
-  lastRunupBeatIndex: number | null;
+  lastRunupTapAtMs: number | null;
   lastPhaseTag: GameState['phase']['tag'];
 };
 
@@ -105,7 +104,7 @@ export const createRenderSession = (): RenderSession => ({
     lastRoundId: -1,
     shownAtMs: 0
   },
-  lastRunupBeatIndex: null,
+  lastRunupTapAtMs: null,
   lastPhaseTag: 'idle'
 });
 
@@ -802,16 +801,15 @@ export const renderGame = (
   drawWorldTimingMeter(ctx, state, headScreen, overlayUiScale);
 
   if (state.phase.tag === 'runup') {
-    const beatIndex = getCompletedBeatIndex(state.phase.startedAtMs, state.nowMs);
-    if (session.lastRunupBeatIndex === null || beatIndex < session.lastRunupBeatIndex) {
-      session.lastRunupBeatIndex = beatIndex;
-    } else if (beatIndex > session.lastRunupBeatIndex) {
-      const beatDeltaMs = getNearestBeatDeltaMs(state.phase.startedAtMs, state.nowMs);
-      playBeatTick(state.nowMs, getTimingQualityFromBeatDelta(beatDeltaMs));
-      session.lastRunupBeatIndex = beatIndex;
+    const currentTapAtMs = state.phase.tap.lastTapAtMs;
+    if (currentTapAtMs !== null && currentTapAtMs !== session.lastRunupTapAtMs) {
+      playRunupTap(state.phase.tap.lastTapGainNorm);
+      session.lastRunupTapAtMs = currentTapAtMs;
+    } else if (currentTapAtMs === null) {
+      session.lastRunupTapAtMs = null;
     }
   } else {
-    session.lastRunupBeatIndex = null;
+    session.lastRunupTapAtMs = null;
   }
 
   session.lastPhaseTag = state.phase.tag;

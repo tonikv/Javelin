@@ -15,12 +15,12 @@ npm run dev
 ## Controls
 
 - Mouse:
-  - Left click: rhythm taps during run-up
+  - Left click: tap rapidly to build run-up speed
   - Right click down: enter throw prep
   - Right click release: release throw
   - Move mouse up/down while holding right button: adjust angle
 - Keyboard:
-  - `Space`: rhythm tap
+  - `Space`: tap for run-up speed
   - `Enter`: start throw prep / release
   - `ArrowUp` / `ArrowDown`: adjust angle
 
