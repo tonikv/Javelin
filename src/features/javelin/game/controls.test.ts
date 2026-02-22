@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { ANGLE_MAX_DEG, ANGLE_MIN_DEG } from './constants';
-import { keyboardAngleHoldDelta, pointerFromAnchorToAngleDeg } from './controls';
+import {
+  keyboardAngleHoldDelta,
+  pointerFromAnchorToAngleDeg,
+  smoothPointerAngleDeg
+} from './controls';
 
 describe('pointerFromAnchorToAngleDeg', () => {
   it('maps points above/below anchor to expected vertical angles', () => {
@@ -44,5 +48,21 @@ describe('keyboardAngleHoldDelta', () => {
 
     expect(down).toBeLessThan(0);
     expect(noDt).toBe(0);
+  });
+});
+
+describe('smoothPointerAngleDeg', () => {
+  it('returns raw angle on first pointer sample', () => {
+    expect(smoothPointerAngleDeg(null, 50)).toBe(50);
+  });
+
+  it('blends toward raw angle using smoothing factor', () => {
+    const smoothed = smoothPointerAngleDeg(20, 40, 0.4);
+    expect(smoothed).toBeCloseTo(28, 5);
+  });
+
+  it('clamps smoothing factor bounds', () => {
+    expect(smoothPointerAngleDeg(20, 40, 0)).toBe(20);
+    expect(smoothPointerAngleDeg(20, 40, 1.2)).toBe(40);
   });
 });

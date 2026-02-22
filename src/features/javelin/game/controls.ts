@@ -4,6 +4,7 @@ import {
   ANGLE_KEYBOARD_HOLD_MAX_DEG_PER_SEC,
   ANGLE_KEYBOARD_HOLD_START_DEG_PER_SEC,
   ANGLE_KEYBOARD_RAMP_MS,
+  ANGLE_POINTER_SMOOTHING,
   ANGLE_KEYBOARD_STEP_DEG,
   ANGLE_POINTER_DEADZONE_PX
 } from './tuning';
@@ -53,4 +54,16 @@ export const pointerFromAnchorToAngleDeg = (
   const absDx = Math.max(Math.abs(dx), 1);
   const angleDeg = (Math.atan2(dy, absDx) * 180) / Math.PI;
   return clamp(angleDeg, ANGLE_MIN_DEG, ANGLE_MAX_DEG);
+};
+
+export const smoothPointerAngleDeg = (
+  previousAngleDeg: number | null,
+  rawAngleDeg: number,
+  smoothing = ANGLE_POINTER_SMOOTHING
+): number => {
+  const t = clamp(smoothing, 0, 1);
+  if (previousAngleDeg === null || t >= 1) {
+    return rawAngleDeg;
+  }
+  return previousAngleDeg + (rawAngleDeg - previousAngleDeg) * t;
 };

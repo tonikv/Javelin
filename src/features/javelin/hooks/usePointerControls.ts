@@ -1,7 +1,12 @@
 import { useEffect, useRef } from 'react';
 import { isInteractiveElement } from '../../../app/browser';
 import { resumeAudioContext } from '../game/audio';
-import { keyboardAngleDelta, keyboardAngleHoldDelta, pointerFromAnchorToAngleDeg } from '../game/controls';
+import {
+  keyboardAngleDelta,
+  keyboardAngleHoldDelta,
+  pointerFromAnchorToAngleDeg,
+  smoothPointerAngleDeg
+} from '../game/controls';
 import { getPlayerAngleAnchorScreen } from '../game/render';
 import { ANGLE_KEYBOARD_STEP_DEG } from '../game/tuning';
 import type { GameAction, GameState } from '../game/types';
@@ -130,6 +135,7 @@ export const usePointerControls = ({ canvas, dispatch, state }: UsePointerContro
       now
     });
     let angleKeyHoldState: AngleKeyHoldState | null = null;
+    let lastPointerAngleDeg: number | null = null;
     const dispatchAngleFromPointer = (clientX: number, clientY: number): void => {
       const rect = canvas.getBoundingClientRect();
       const anchor = getPlayerAngleAnchorScreen(stateRef.current, rect.width, rect.height);
@@ -142,9 +148,11 @@ export const usePointerControls = ({ canvas, dispatch, state }: UsePointerContro
       if (Number.isNaN(angleDeg)) {
         return;
       }
+      const smoothedAngleDeg = smoothPointerAngleDeg(lastPointerAngleDeg, angleDeg);
+      lastPointerAngleDeg = smoothedAngleDeg;
       dispatch({
         type: 'setAngle',
-        angleDeg
+        angleDeg: smoothedAngleDeg
       });
     };
 

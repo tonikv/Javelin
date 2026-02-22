@@ -43,6 +43,7 @@ type AngleControlTuning = {
   holdMaxDegPerSec: number;
   rampMs: number;
   pointerDeadzonePx: number;
+  pointerSmoothing: number;
 };
 
 type TrajectoryIndicatorTuning = {
@@ -119,6 +120,7 @@ export const GAMEPLAY_TUNING: GameplayTuning = {
     holdMaxDegPerSec: 120,
     rampMs: 600,
     pointerDeadzonePx: 12,
+    pointerSmoothing: 0.4
   },
   trajectoryIndicator: {
     numPoints: 10,
@@ -163,6 +165,7 @@ export const ANGLE_KEYBOARD_HOLD_START_DEG_PER_SEC = GAMEPLAY_TUNING.angleContro
 export const ANGLE_KEYBOARD_HOLD_MAX_DEG_PER_SEC = GAMEPLAY_TUNING.angleControl.holdMaxDegPerSec;
 export const ANGLE_KEYBOARD_RAMP_MS = GAMEPLAY_TUNING.angleControl.rampMs;
 export const ANGLE_POINTER_DEADZONE_PX = GAMEPLAY_TUNING.angleControl.pointerDeadzonePx;
+export const ANGLE_POINTER_SMOOTHING = GAMEPLAY_TUNING.angleControl.pointerSmoothing;
 
 export const TRAJECTORY_PREVIEW_NUM_POINTS = GAMEPLAY_TUNING.trajectoryIndicator.numPoints;
 export const TRAJECTORY_PREVIEW_TIME_STEP_S = GAMEPLAY_TUNING.trajectoryIndicator.timeStepS;
