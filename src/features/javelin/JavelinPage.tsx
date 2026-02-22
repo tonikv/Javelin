@@ -140,17 +140,25 @@ export const JavelinPage = (): ReactElement => {
           <div className="actions">
             <button
               type="button"
-              onClick={() =>
+              onClick={(event) => {
                 dispatch({
                   type: 'startRound',
                   atMs: performance.now(),
                   windMs: randomWind()
-                })
-              }
+                });
+                event.currentTarget.blur();
+              }}
             >
               {state.phase.tag === 'idle' ? t('action.start') : t('action.playAgain')}
             </button>
-            <button type="button" className="ghost" onClick={() => dispatch({ type: 'resetToIdle' })}>
+            <button
+              type="button"
+              className="ghost"
+              onClick={(event) => {
+                dispatch({ type: 'resetToIdle' });
+                event.currentTarget.blur();
+              }}
+            >
               {t('phase.idle')}
             </button>
           </div>
