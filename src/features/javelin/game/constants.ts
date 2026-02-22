@@ -35,9 +35,11 @@ export const JAVELIN_GRIP_OFFSET_M = 0.12;
 export const JAVELIN_GRIP_OFFSET_Y_M = 0.03;
 export const JAVELIN_RELEASE_OFFSET_Y_M = 0.06;
 
-export const LAUNCH_SPEED_MIN_MS = 9;
-export const LAUNCH_SPEED_MAX_MS = 44;
-export const LAUNCH_POWER_EXP = 1.42;
+export const LAUNCH_SPEED_MIN_MS = 11;
+export const LAUNCH_SPEED_MAX_MS = 42.8;
+export const LAUNCH_POWER_EXP = 1.3;
+export const LAUNCH_RUNUP_WEIGHT = 0.58;
+export const LAUNCH_FORCE_WEIGHT = 0.42;
 
 export const DRAG_COEFFICIENT = 0.00835;
 export const LIFT_COEFFICIENT = 0.00024;

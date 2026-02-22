@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  RUNUP_SPEED_MAX_MS,
+  RUNUP_SPEED_MIN_MS
+} from './constants';
+import {
   computeLaunchSpeedMs,
   createPhysicalJavelin,
   updatePhysicalJavelin
@@ -13,7 +17,8 @@ const simulateDistanceFromLine = (
   windMs: number,
   athleteXM: number
 ): { distanceM: number; tipFirst: boolean; inSector: boolean } => {
-  const athleteForwardMs = 1.8 + speedNorm * 4.5;
+  const athleteForwardMs =
+    (RUNUP_SPEED_MIN_MS + (RUNUP_SPEED_MAX_MS - RUNUP_SPEED_MIN_MS) * speedNorm) * 0.34;
   let javelin = createPhysicalJavelin({
     xM: athleteXM + 0.42,
     yM: 1.6,
@@ -156,16 +161,21 @@ describe('physical javelin simulation', () => {
     }
   });
 
-  it('calibrates early and best-case throw bands', () => {
-    const early = simulateDistanceFromLine(0.34, 0.98, 35, 0, 6.4);
-    const best = simulateDistanceFromLine(0.99, 1, 35, 1.2, 17.8);
+  it('calibrates standing and full-speed throw ranges', () => {
+    const standing = simulateDistanceFromLine(0, 1, 36, 0, 18);
+    const fullHeadwind = simulateDistanceFromLine(1, 1, 36, -2.5, 18);
+    const fullTailwind = simulateDistanceFromLine(1, 1, 36, 2.5, 18);
 
-    expect(early.distanceM).toBeGreaterThanOrEqual(28);
-    expect(early.distanceM).toBeLessThanOrEqual(42);
+    expect(standing.distanceM).toBeGreaterThanOrEqual(30);
+    expect(standing.distanceM).toBeLessThanOrEqual(40);
 
-    expect(best.distanceM).toBeGreaterThanOrEqual(97);
-    expect(best.distanceM).toBeLessThanOrEqual(108);
-    expect(best.tipFirst).toBe(true);
-    expect(best.inSector).toBe(true);
+    expect(fullHeadwind.distanceM).toBeGreaterThanOrEqual(90);
+    expect(fullTailwind.distanceM).toBeLessThanOrEqual(105);
+    expect(fullTailwind.distanceM).toBeGreaterThan(fullHeadwind.distanceM);
+
+    expect(fullHeadwind.tipFirst).toBe(true);
+    expect(fullTailwind.tipFirst).toBe(true);
+    expect(fullHeadwind.inSector).toBe(true);
+    expect(fullTailwind.inSector).toBe(true);
   });
 });

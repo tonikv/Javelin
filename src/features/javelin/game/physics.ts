@@ -7,7 +7,9 @@ import {
   DRAG_COEFFICIENT,
   FIELD_MAX_DISTANCE_M,
   JAVELIN_LENGTH_M,
+  LAUNCH_FORCE_WEIGHT,
   LAUNCH_POWER_EXP,
+  LAUNCH_RUNUP_WEIGHT,
   LAUNCH_SPEED_MAX_MS,
   LAUNCH_SPEED_MIN_MS,
   LIFT_COEFFICIENT,
@@ -40,7 +42,11 @@ const isFiniteState = (javelin: PhysicalJavelinState): boolean =>
   Number.isFinite(javelin.angularVelRad);
 
 export const computeLaunchSpeedMs = (speedNorm: number, forceNorm: number): number => {
-  const combinedPowerNorm = clamp(0.74 * speedNorm + 0.26 * forceNorm, 0, 1);
+  const combinedPowerNorm = clamp(
+    LAUNCH_RUNUP_WEIGHT * speedNorm + LAUNCH_FORCE_WEIGHT * forceNorm,
+    0,
+    1
+  );
   return (
     LAUNCH_SPEED_MIN_MS +
     (LAUNCH_SPEED_MAX_MS - LAUNCH_SPEED_MIN_MS) * combinedPowerNorm ** LAUNCH_POWER_EXP
