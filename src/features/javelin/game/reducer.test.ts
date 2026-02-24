@@ -13,7 +13,7 @@ import {
   THROW_ANIM_DURATION_MS
 } from './tuning';
 import { createInitialGameState } from './update';
-import { advanceWindMs } from './wind';
+import { advanceCrosswindMs, advanceWindMs } from './wind';
 
 const tapRunupNTimes = (
   state: ReturnType<typeof createInitialGameState>,
@@ -54,9 +54,15 @@ const tickForDuration = (
 describe('gameReducer', () => {
   it('starts a round into runup', () => {
     const state = createInitialGameState();
-    const next = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 1.2 });
+    const next = gameReducer(state, {
+      type: 'startRound',
+      atMs: 1000,
+      windMs: 1.2,
+      windZMs: -0.4
+    });
     expect(next.phase.tag).toBe('runup');
     expect(next.windMs).toBe(1.2);
+    expect(next.windZMs).toBe(-0.4);
   });
 
   it('updates wind during idle ticks', () => {
@@ -64,11 +70,13 @@ describe('gameReducer', () => {
       ...createInitialGameState(),
       nowMs: 0,
       windMs: 0,
+      windZMs: 0,
       phase: { tag: 'idle' as const }
     };
     const next = gameReducer(state, { type: 'tick', dtMs: 1200, nowMs: 1200 });
     expect(next.phase.tag).toBe('idle');
     expect(next.windMs).toBe(advanceWindMs(state.windMs, 1200, 1200));
+    expect(next.windZMs).toBe(advanceCrosswindMs(state.windZMs, 1200, 1200));
   });
 
   it('stays still before first tap and starts moving after tap input', () => {
@@ -446,6 +454,7 @@ describe('gameReducer', () => {
       ...createInitialGameState(),
       nowMs: 5000,
       windMs: 0.4,
+      windZMs: -0.2,
       roundId: 4,
       phase
     };
@@ -454,5 +463,6 @@ describe('gameReducer', () => {
     expect(next.phase.tag).toBe('result');
     expect(next.phase).toBe(phase);
     expect(next.windMs).toBe(advanceWindMs(0.4, 1400, 6400));
+    expect(next.windZMs).toBe(advanceCrosswindMs(-0.2, 1400, 6400));
   });
 });

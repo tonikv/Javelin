@@ -308,13 +308,20 @@ const drawLandedJavelin = (
   yM: number,
   angleRad: number,
   lengthM: number,
-  tipFirst: boolean
+  tipFirst: boolean,
+  landingTipXM?: number
 ): void => {
+  const centerFromTip = (renderAngleRad: number): number =>
+    landingTipXM !== undefined
+      ? landingTipXM - (Math.cos(renderAngleRad) * lengthM) / 2
+      : xM;
+
   if (tipFirst) {
     const stuckAngle = Math.max(angleRad, -Math.PI * 0.35);
-    drawJavelinWorld(ctx, toScreen, xM, yM, stuckAngle, lengthM);
+    const centerXM = centerFromTip(stuckAngle);
+    drawJavelinWorld(ctx, toScreen, centerXM, yM, stuckAngle, lengthM);
 
-    const tip = toScreen({ xM: xM + (Math.cos(stuckAngle) * lengthM) / 2, yM: 0 });
+    const tip = toScreen({ xM: centerXM + (Math.cos(stuckAngle) * lengthM) / 2, yM: 0 });
     ctx.save();
     ctx.fillStyle = 'rgba(80, 50, 20, 0.3)';
     ctx.beginPath();
@@ -326,9 +333,10 @@ const drawLandedJavelin = (
 
   const flatAngle = angleRad * 0.3;
   const lyingYM = Math.max(0.05, yM * 0.3);
-  drawJavelinWorld(ctx, toScreen, xM, lyingYM, flatAngle, lengthM);
+  const centerXM = centerFromTip(flatAngle);
+  drawJavelinWorld(ctx, toScreen, centerXM, lyingYM, flatAngle, lengthM);
 
-  const center = toScreen({ xM, yM: 0 });
+  const center = toScreen({ xM: centerXM, yM: 0 });
   ctx.save();
   ctx.strokeStyle = 'rgba(80, 50, 20, 0.2)';
   ctx.lineWidth = 1;
@@ -670,6 +678,7 @@ export const renderGame = (
 
   if (javelin.mode === 'landed') {
     const tipFirst = state.phase.tag === 'result' ? state.phase.tipFirst === true : false;
+    const landingTipXM = state.phase.tag === 'result' ? state.phase.landingTipXM : undefined;
     drawLandedJavelin(
       ctx,
       toScreen,
@@ -677,7 +686,8 @@ export const renderGame = (
       javelin.yM,
       javelin.angleRad,
       javelin.lengthM,
-      tipFirst
+      tipFirst,
+      landingTipXM
     );
   } else if (javelin.mode !== 'none') {
     drawJavelinWorld(ctx, toScreen, javelin.xM, javelin.yM, javelin.angleRad, javelin.lengthM);
@@ -689,7 +699,8 @@ export const renderGame = (
       originYM: pose.javelinGrip.yM + Math.sin(pose.javelinAngleRad) * JAVELIN_GRIP_OFFSET_Y_M,
       angleDeg: state.phase.angleDeg,
       speedNorm: state.phase.speedNorm,
-      forceNorm: state.phase.forceNormPreview
+      forceNorm: state.phase.forceNormPreview,
+      windMs: state.windMs
     });
     drawTrajectoryIndicator(ctx, toScreen, trajectoryPreview.points, overlayUiScale);
   }

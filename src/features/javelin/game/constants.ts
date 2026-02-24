@@ -44,6 +44,7 @@ export const LAUNCH_FORCE_WEIGHT = 0.42;
 export const DRAG_COEFFICIENT = 0.00835;
 export const LIFT_COEFFICIENT = 0.00024;
 export const AOA_MAX_RAD = 0.75;
+export const LATERAL_DRAG_MULTIPLIER = 2.2;
 export const MAX_LINEAR_ACCEL = 42;
 export const MAX_ANGULAR_VEL_RAD = 8;
 export const MAX_ANGULAR_ACC_RAD = 80;
@@ -55,6 +56,8 @@ export const JAVELIN_LENGTH_M = 2.6;
 
 export const WIND_MIN_MS = -2.5;
 export const WIND_MAX_MS = 2.5;
+export const CROSSWIND_MIN_MS = -1.0;
+export const CROSSWIND_MAX_MS = 1.0;
 export const FIELD_MAX_DISTANCE_M = 132;
 
 export const MAX_HIGHSCORES = 10;

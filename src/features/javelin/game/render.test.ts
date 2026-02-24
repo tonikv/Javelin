@@ -10,10 +10,11 @@ import {
 import { RUNUP_START_X_M } from './tuning';
 import type { GameState } from './types';
 
-const baseState: Pick<GameState, 'nowMs' | 'roundId' | 'windMs' | 'aimAngleDeg'> = {
+const baseState: Pick<GameState, 'nowMs' | 'roundId' | 'windMs' | 'windZMs' | 'aimAngleDeg'> = {
   nowMs: 2000,
   roundId: 1,
   windMs: 0.2,
+  windZMs: 0.05,
   aimAngleDeg: 18
 };
 

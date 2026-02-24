@@ -189,7 +189,8 @@ export const JavelinPage = (): ReactElement => {
                 dispatch({
                   type: 'startRound',
                   atMs: performance.now(),
-                  windMs: state.windMs
+                  windMs: state.windMs,
+                  windZMs: state.windZMs
                 });
                 event.currentTarget.blur();
               }}

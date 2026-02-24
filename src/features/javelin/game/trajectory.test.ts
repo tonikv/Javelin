@@ -92,4 +92,44 @@ describe('computeTrajectoryPreview', () => {
 
     expect(preview.points.length).toBeLessThanOrEqual(maxPoints);
   });
+
+  it('extends preview arc under headwind and shortens under tailwind', () => {
+    const neutral = computeTrajectoryPreview({
+      originXM: 0,
+      originYM: 1.4,
+      angleDeg: 36,
+      speedNorm: 0.8,
+      forceNorm: 0.8,
+      numPoints: 16,
+      timeStepS: 0.12,
+      windMs: 0
+    });
+    const headwind = computeTrajectoryPreview({
+      originXM: 0,
+      originYM: 1.4,
+      angleDeg: 36,
+      speedNorm: 0.8,
+      forceNorm: 0.8,
+      numPoints: 16,
+      timeStepS: 0.12,
+      windMs: -1.5
+    });
+    const tailwind = computeTrajectoryPreview({
+      originXM: 0,
+      originYM: 1.4,
+      angleDeg: 36,
+      speedNorm: 0.8,
+      forceNorm: 0.8,
+      numPoints: 16,
+      timeStepS: 0.12,
+      windMs: 1.5
+    });
+
+    const neutralLast = neutral.points[neutral.points.length - 1]?.xM ?? 0;
+    const headwindLast = headwind.points[headwind.points.length - 1]?.xM ?? 0;
+    const tailwindLast = tailwind.points[tailwind.points.length - 1]?.xM ?? 0;
+
+    expect(headwindLast).toBeGreaterThan(neutralLast);
+    expect(tailwindLast).toBeLessThan(neutralLast);
+  });
 });

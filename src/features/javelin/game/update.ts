@@ -22,7 +22,12 @@ import {
   computeCompetitionDistanceM,
   evaluateThrowLegality
 } from './scoring';
-import { advanceWindMs, sampleWindTargetMs } from './wind';
+import {
+  advanceCrosswindMs,
+  advanceWindMs,
+  sampleCrosswindTargetMs,
+  sampleWindTargetMs
+} from './wind';
 import {
   CHARGE_AIM_SPEED_DECAY_PER_SECOND,
   CHARGE_AIM_STOP_SPEED_NORM,
@@ -135,6 +140,7 @@ export const createInitialGameState = (): GameState => {
     nowMs,
     roundId: 0,
     windMs: sampleWindTargetMs(nowMs),
+    windZMs: sampleCrosswindTargetMs(nowMs),
     aimAngleDeg: ANGLE_DEFAULT_DEG,
     phase: { tag: 'idle' }
   };
@@ -154,7 +160,7 @@ const tickFault = (state: GameState, dtMs: number): GameState => {
     faultStumbleOffsetM(nextFaultAnimT) - faultStumbleOffsetM(state.phase.athletePose.animT);
   const javelinUpdate = state.phase.javelinLanded
     ? null
-    : updatePhysicalJavelin(state.phase.javelin, dtMs, state.windMs);
+    : updatePhysicalJavelin(state.phase.javelin, dtMs, state.windMs, state.windZMs);
 
   return {
     ...state,
@@ -364,7 +370,12 @@ const tickFlight = (state: GameState, dtMs: number): GameState => {
     followThroughStepOffsetM(nextFollowAnimT) -
     followThroughStepOffsetM(state.phase.athletePose.animT);
   const athleteXM = state.phase.athleteXM + stepDeltaM;
-  const updated = updatePhysicalJavelin(state.phase.javelin, dtMs, state.windMs);
+  const updated = updatePhysicalJavelin(
+    state.phase.javelin,
+    dtMs,
+    state.windMs,
+    state.windZMs
+  );
   if (updated.landed) {
     const landingTipXM = updated.landingTipXM ?? updated.javelin.xM;
     const landingTipZM = updated.landingTipZM ?? updated.javelin.zM;
@@ -416,6 +427,7 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
         nowMs: action.atMs,
         roundId: state.roundId + 1,
         windMs: action.windMs,
+        windZMs: action.windZMs ?? state.windZMs,
         phase: {
           tag: 'runup',
           speedNorm: 0,
@@ -604,7 +616,8 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
       const nextState: GameState = {
         ...state,
         nowMs: action.nowMs,
-        windMs: advanceWindMs(state.windMs, action.dtMs, action.nowMs)
+        windMs: advanceWindMs(state.windMs, action.dtMs, action.nowMs),
+        windZMs: advanceCrosswindMs(state.windZMs, action.dtMs, action.nowMs)
       };
       if (nextState.phase.tag === 'idle' || nextState.phase.tag === 'result') {
         return nextState;

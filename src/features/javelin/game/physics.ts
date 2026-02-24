@@ -12,10 +12,12 @@ import {
   LAUNCH_RUNUP_WEIGHT,
   LAUNCH_SPEED_MAX_MS,
   LAUNCH_SPEED_MIN_MS,
+  LATERAL_DRAG_MULTIPLIER,
   LIFT_COEFFICIENT,
   MAX_ANGULAR_ACC_RAD,
   MAX_ANGULAR_VEL_RAD,
-  MAX_LINEAR_ACCEL
+  MAX_LINEAR_ACCEL,
+  WIND_MAX_MS
 } from './constants';
 import { clamp, roundTo1 } from './math';
 import type { PhysicalJavelinState } from './types';
@@ -111,7 +113,8 @@ const isTipFirstLanding = (javelin: PhysicalJavelinState): boolean => {
 export const updatePhysicalJavelin = (
   javelin: PhysicalJavelinState,
   dtMs: number,
-  windMs: number
+  windMs: number,
+  windZMs = 0
 ): {
   javelin: PhysicalJavelinState;
   landed: boolean;
@@ -144,16 +147,23 @@ export const updatePhysicalJavelin = (
     };
   }
 
-  const airVx = javelin.vxMs - windMs;
+  const airVx = javelin.vxMs + windMs;
   const airVy = javelin.vyMs;
-  const airVz = javelin.vzMs;
+  const airVz = javelin.vzMs - windZMs;
   const airSpeed = Math.max(0.001, Math.hypot(airVx, airVy, airVz));
   const flowAngle = Math.atan2(airVy, Math.max(0.01, airVx));
   const aoa = clamp(normalizeAngleRad(javelin.angleRad - flowAngle), -AOA_MAX_RAD, AOA_MAX_RAD);
+  const windRefMs = Math.max(0.1, WIND_MAX_MS);
+  const headwindFactor01 = clamp(-windMs / windRefMs, 0, 1);
+  const tailwindFactor01 = clamp(windMs / windRefMs, 0, 1);
+  // Headwind increases effective angle-of-attack and lift support, tailwind does the opposite.
+  const windAoaBiasRad = headwindFactor01 * 0.06 - tailwindFactor01 * 0.025;
+  const effectiveAoa = clamp(aoa + windAoaBiasRad, -AOA_MAX_RAD, AOA_MAX_RAD);
+  const liftWindScale = clamp(1 + headwindFactor01 * 0.4 - tailwindFactor01 * 0.18, 0.7, 1.5);
 
   const dragAcc = clamp(DRAG_COEFFICIENT * airSpeed * airSpeed, 0, MAX_LINEAR_ACCEL);
   const liftAcc = clamp(
-    LIFT_COEFFICIENT * airSpeed * airSpeed * Math.sin(2 * aoa),
+    LIFT_COEFFICIENT * airSpeed * airSpeed * Math.sin(2 * effectiveAoa) * liftWindScale,
     -MAX_LINEAR_ACCEL * 0.25,
     MAX_LINEAR_ACCEL * 0.25
   );
@@ -170,7 +180,11 @@ export const updatePhysicalJavelin = (
     -MAX_LINEAR_ACCEL,
     MAX_LINEAR_ACCEL
   );
-  const az = clamp(dragDirZ * dragAcc * 0.55, -MAX_LINEAR_ACCEL * 0.45, MAX_LINEAR_ACCEL * 0.45);
+  const az = clamp(
+    dragDirZ * dragAcc * LATERAL_DRAG_MULTIPLIER,
+    -MAX_LINEAR_ACCEL,
+    MAX_LINEAR_ACCEL
+  );
 
   const vxMs = javelin.vxMs + ax * dt;
   const vyMs = javelin.vyMs + ay * dt;

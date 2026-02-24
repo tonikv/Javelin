@@ -12,7 +12,7 @@
   --accent-strong: #0064be;
   --warning: #bc3c2a;
   --shadow: 0 18px 40px rgba(14, 43, 66, 0.16);
-  --radius: 20px;
+  --radius: 4px;
 }
 
 * {
@@ -96,7 +96,7 @@ h1 {
 
 .card {
   background: var(--bg-card);
-  border: 2px solid rgba(19, 73, 116, 0.12);
+  border: 1px solid rgba(19, 73, 116, 0.12);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   backdrop-filter: blur(2px);
@@ -123,7 +123,7 @@ h1 {
 .canvas-frame {
   border-radius: var(--radius);
   overflow: hidden;
-  border: 2px solid rgba(8, 52, 87, 0.2);
+  border: 1px solid rgba(8, 52, 87, 0.2);
 }
 
 .game-canvas {
@@ -153,7 +153,7 @@ h1 {
 
 button {
   border: 0;
-  border-radius: 12px;
+  border-radius: var(--radius);
   min-height: 44px;
   padding: 10px 16px;
   font-weight: 700;
@@ -167,7 +167,7 @@ button.ghost {
   color: #0f3b61;
 }
 
-.side-column > button.ghost,
+.side-column>button.ghost,
 .reset-scores {
   width: 100%;
   margin-top: 4px;
@@ -316,7 +316,7 @@ button.ghost {
   overflow: hidden;
 }
 
-.disclosure > summary {
+.disclosure>summary {
   list-style: none;
   cursor: pointer;
   min-height: 44px;
@@ -328,18 +328,18 @@ button.ghost {
   user-select: none;
 }
 
-.disclosure > summary::-webkit-details-marker {
+.disclosure>summary::-webkit-details-marker {
   display: none;
 }
 
-.disclosure > summary::after {
+.disclosure>summary::after {
   content: '▾';
   margin-left: auto;
   color: var(--text-soft);
   transition: transform 0.16s ease;
 }
 
-.disclosure[open] > summary::after {
+.disclosure[open]>summary::after {
   transform: rotate(180deg);
 }
 

@@ -18,6 +18,7 @@ type ComputeTrajectoryPreviewInput = {
   angleDeg: number;
   speedNorm: number;
   forceNorm: number;
+  windMs?: number;
   numPoints?: number;
   timeStepS?: number;
 };
@@ -32,6 +33,7 @@ export const computeTrajectoryPreview = ({
   angleDeg,
   speedNorm,
   forceNorm,
+  windMs = 0,
   numPoints = TRAJECTORY_PREVIEW_NUM_POINTS,
   timeStepS = TRAJECTORY_PREVIEW_TIME_STEP_S
 }: ComputeTrajectoryPreviewInput): TrajectoryPreview => {
@@ -40,6 +42,7 @@ export const computeTrajectoryPreview = ({
   const angleRad = toRad(clampedAngleDeg);
   const vxMs = Math.cos(angleRad) * launchSpeedMs;
   const vyMs = Math.sin(angleRad) * launchSpeedMs;
+  const effectiveVxMs = vxMs - windMs;
 
   const safeNumPoints = Math.max(1, Math.floor(numPoints));
   const safeTimeStepS = Math.max(0.02, timeStepS);
@@ -48,7 +51,7 @@ export const computeTrajectoryPreview = ({
 
   for (let index = 1; index <= safeNumPoints; index += 1) {
     const t = index * safeTimeStepS;
-    const xM = originXM + vxMs * t;
+    const xM = originXM + effectiveVxMs * t;
     const yM = originYM + vyMs * t - 0.5 * gravityMs2 * t * t;
     if (yM < 0) {
       break;

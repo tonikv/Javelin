@@ -134,12 +134,13 @@ export type GameState = {
   nowMs: number;
   roundId: number;
   windMs: number;
+  windZMs: number;
   aimAngleDeg: number;
   phase: GamePhase;
 };
 
 export type GameAction =
-  | { type: 'startRound'; atMs: number; windMs: number }
+  | { type: 'startRound'; atMs: number; windMs: number; windZMs?: number }
   | { type: 'rhythmTap'; atMs: number }
   | { type: 'beginChargeAim'; atMs: number }
   | { type: 'setAngle'; angleDeg: number }

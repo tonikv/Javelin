@@ -37,6 +37,8 @@ type WindTuning = {
   microGustPeriodMs: number;
   microGustAmplitudeMs: number;
   smoothingMs: number;
+  crosswindPhaseOffsetRad: number;
+  crosswindAmplitudeScale: number;
   visualCalmThresholdMs: number;
   visualMaxReferenceMs: number;
 };
@@ -117,30 +119,34 @@ export const GAMEPLAY_TUNING: GameplayTuning = {
    * and still complete run-up + charge + throw inside the same wind phase.
    */
   wind: {
-    // Full left->right->left cycle time. Larger = slower, easier to read.
-    cycleDurationMs: 34000,
-    // Main cycle strength. Larger = stronger head/tail windows.
-    cycleAmplitudeMs: 2.2,
+    // Full headwind->tailwind->headwind cycle. Larger = slower changes and longer reaction window.
+    cycleDurationMs: 28000,
+    // Main forward-wind strength. Tuned below clamp to avoid flat clipping at +/- max wind.
+    cycleAmplitudeMs: 1.85,
     // Secondary wave speed multiplier (relative to main cycle).
     cycleHarmonicMultiplier: 2,
-    // Secondary wave strength. Larger = more curvature inside one cycle.
-    cycleHarmonicAmplitudeMs: 0.35,
-    // Random trend anchor spacing. Larger = less frequent random direction shifts.
-    randomKeyframeMs: 9000,
+    // Secondary wave strength. Keep moderate so cycle shape remains readable while not robotic.
+    cycleHarmonicAmplitudeMs: 0.28,
+    // Random trend anchor spacing. Larger = slower random drift between broad wind moods.
+    randomKeyframeMs: 11000,
     // Max random contribution before blending.
-    randomAmplitudeMs: 0.4,
-    // 0..1 blend for randomness. Lower = more predictable cycle behavior.
-    randomBlend: 0.25,
+    randomAmplitudeMs: 0.28,
+    // 0..1 blend for randomness. Lower = players can time throws from visible trend.
+    randomBlend: 0.12,
     // Small high-frequency wobble period to avoid robotic motion.
-    microGustPeriodMs: 2600,
-    // Small high-frequency wobble amount. Keep low for readability.
-    microGustAmplitudeMs: 0.12,
+    microGustPeriodMs: 3200,
+    // Small high-frequency wobble amount. Keep subtle so wind remains legible.
+    microGustAmplitudeMs: 0.07,
     // State response lag. Larger = smoother/slower changes.
-    smoothingMs: 1200,
+    smoothingMs: 1500,
+    // Crosswind cycle phase shift from forward wind. Offset gives lateral drift peaks at different times.
+    crosswindPhaseOffsetRad: 1.3,
+    // Crosswind strength as fraction of forward-wind target.
+    crosswindAmplitudeScale: 0.35,
     // Below this magnitude, the flag appears mostly hanging.
-    visualCalmThresholdMs: 0.22,
+    visualCalmThresholdMs: 0.2,
     // Magnitude mapped to "full wind" flag pose.
-    visualMaxReferenceMs: 2.5,
+    visualMaxReferenceMs: 2.4,
   },
   angleControl: {
     stepDeg: 1.0,
@@ -198,6 +204,10 @@ export const WIND_MICRO_GUST_PERIOD_MS = GAMEPLAY_TUNING.wind.microGustPeriodMs;
 export const WIND_MICRO_GUST_AMPLITUDE_MS =
   GAMEPLAY_TUNING.wind.microGustAmplitudeMs;
 export const WIND_SMOOTHING_MS = GAMEPLAY_TUNING.wind.smoothingMs;
+export const WIND_CROSSWIND_PHASE_OFFSET_RAD =
+  GAMEPLAY_TUNING.wind.crosswindPhaseOffsetRad;
+export const WIND_CROSSWIND_AMPLITUDE_SCALE =
+  GAMEPLAY_TUNING.wind.crosswindAmplitudeScale;
 export const WIND_VISUAL_CALM_THRESHOLD_MS =
   GAMEPLAY_TUNING.wind.visualCalmThresholdMs;
 export const WIND_VISUAL_MAX_REFERENCE_MS =

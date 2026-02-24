@@ -6,6 +6,7 @@ const makeRunupState = (speedNorm: number): GameState => ({
   nowMs: 2000,
   roundId: 1,
   windMs: 0,
+  windZMs: 0,
   aimAngleDeg: 36,
   phase: {
     tag: 'runup',
@@ -38,6 +39,7 @@ describe('result throw specs', () => {
       nowMs: 3200,
       roundId: 2,
       windMs: 0.4,
+      windZMs: 0.1,
       aimAngleDeg: 12,
       phase: {
         tag: 'result',

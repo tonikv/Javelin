@@ -15,8 +15,9 @@ const simulateDistanceFromLine = (
   forceNorm: number,
   angleDeg: number,
   windMs: number,
-  athleteXM: number
-): { distanceM: number; tipFirst: boolean; inSector: boolean } => {
+  athleteXM: number,
+  windZMs = 0
+): { distanceM: number; tipFirst: boolean; inSector: boolean; landingZM: number } => {
   const athleteForwardMs =
     (RUNUP_SPEED_MIN_MS + (RUNUP_SPEED_MAX_MS - RUNUP_SPEED_MIN_MS) * speedNorm) * 0.34;
   let javelin = createPhysicalJavelin({
@@ -31,7 +32,7 @@ const simulateDistanceFromLine = (
   });
 
   for (let i = 0; i < 1800; i += 1) {
-    const step = updatePhysicalJavelin(javelin, 16, windMs);
+    const step = updatePhysicalJavelin(javelin, 16, windMs, windZMs);
     javelin = step.javelin;
     if (step.landed) {
       const landingTipXM = step.landingTipXM ?? javelin.xM;
@@ -45,7 +46,8 @@ const simulateDistanceFromLine = (
       return {
         distanceM: computeCompetitionDistanceM(landingTipXM, 18.2),
         tipFirst: step.tipFirst === true,
-        inSector: legality.resultKind !== 'foul_sector'
+        inSector: legality.resultKind !== 'foul_sector',
+        landingZM: landingTipZM
       };
     }
   }
@@ -53,7 +55,8 @@ const simulateDistanceFromLine = (
   return {
     distanceM: 0,
     tipFirst: false,
-    inSector: false
+    inSector: false,
+    landingZM: 0
   };
 };
 
@@ -171,11 +174,43 @@ describe('physical javelin simulation', () => {
 
     expect(fullHeadwind.distanceM).toBeGreaterThanOrEqual(90);
     expect(fullTailwind.distanceM).toBeLessThanOrEqual(105);
-    expect(fullTailwind.distanceM).toBeGreaterThan(fullHeadwind.distanceM);
+    expect(fullHeadwind.distanceM).toBeGreaterThan(fullTailwind.distanceM);
 
     expect(fullHeadwind.tipFirst).toBe(true);
     expect(fullTailwind.tipFirst).toBe(true);
     expect(fullHeadwind.inSector).toBe(true);
     expect(fullTailwind.inSector).toBe(true);
+  });
+
+  it('crosswind produces larger lateral landing offset than calm air', () => {
+    const calm = simulateDistanceFromLine(0.85, 0.86, 37, 0, 18, 0);
+    const cross = simulateDistanceFromLine(0.85, 0.86, 37, 0, 18, 0.9);
+
+    expect(Math.abs(cross.landingZM)).toBeGreaterThan(Math.abs(calm.landingZM) + 0.5);
+  });
+
+  it('damps sideways velocity aggressively under aerodynamic drag', () => {
+    let javelin = createPhysicalJavelin({
+      xM: 3,
+      yM: 1.6,
+      zM: 0,
+      launchAngleRad: (34 * Math.PI) / 180,
+      launchSpeedMs: 26,
+      athleteForwardMs: 2,
+      lateralVelMs: 1.2,
+      releasedAtMs: 0
+    });
+    const initialRatio = Math.abs(javelin.vzMs) / Math.max(0.001, Math.abs(javelin.vxMs));
+
+    for (let i = 0; i < 45; i += 1) {
+      const step = updatePhysicalJavelin(javelin, 16, 0, 0);
+      javelin = step.javelin;
+      if (step.landed) {
+        break;
+      }
+    }
+
+    const finalRatio = Math.abs(javelin.vzMs) / Math.max(0.001, Math.abs(javelin.vxMs));
+    expect(finalRatio).toBeLessThan(initialRatio * 0.9);
   });
 });
