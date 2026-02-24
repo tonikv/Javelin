@@ -116,6 +116,7 @@ export type GamePhase =
       isHighscore: boolean;
       resultKind: ResultKind;
       tipFirst: boolean | null;
+      landingTipXM: number;
       landingXM: number;
       landingYM: number;
       landingAngleRad: number;

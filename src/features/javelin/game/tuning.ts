@@ -26,6 +26,21 @@ type MovementTuning = {
   faultStumbleDistanceM: number;
 };
 
+type WindTuning = {
+  cycleDurationMs: number;
+  cycleAmplitudeMs: number;
+  cycleHarmonicMultiplier: number;
+  cycleHarmonicAmplitudeMs: number;
+  randomKeyframeMs: number;
+  randomAmplitudeMs: number;
+  randomBlend: number;
+  microGustPeriodMs: number;
+  microGustAmplitudeMs: number;
+  smoothingMs: number;
+  visualCalmThresholdMs: number;
+  visualMaxReferenceMs: number;
+};
+
 type AngleControlTuning = {
   stepDeg: number;
   holdStartDegPerSec: number;
@@ -56,6 +71,7 @@ export type GameplayTuning = {
   speedUp: SpeedUpTuning;
   throwPhase: ThrowPhaseTuning;
   movement: MovementTuning;
+  wind: WindTuning;
   angleControl: AngleControlTuning;
   trajectoryIndicator: TrajectoryIndicatorTuning;
   audio: AudioTuning;
@@ -92,6 +108,39 @@ export const GAMEPLAY_TUNING: GameplayTuning = {
     chargeAimStopSpeedNorm: 0.03,
     followThroughStepDistanceM: 0.75,
     faultStumbleDistanceM: 0.82,
+  },
+  /**
+   * Wind model tuning.
+   *
+   * These values drive both gameplay wind and flag behavior.
+   * The default profile is intentionally readable: players can spot a favorable trend
+   * and still complete run-up + charge + throw inside the same wind phase.
+   */
+  wind: {
+    // Full left->right->left cycle time. Larger = slower, easier to read.
+    cycleDurationMs: 34000,
+    // Main cycle strength. Larger = stronger head/tail windows.
+    cycleAmplitudeMs: 2.2,
+    // Secondary wave speed multiplier (relative to main cycle).
+    cycleHarmonicMultiplier: 2,
+    // Secondary wave strength. Larger = more curvature inside one cycle.
+    cycleHarmonicAmplitudeMs: 0.35,
+    // Random trend anchor spacing. Larger = less frequent random direction shifts.
+    randomKeyframeMs: 9000,
+    // Max random contribution before blending.
+    randomAmplitudeMs: 0.4,
+    // 0..1 blend for randomness. Lower = more predictable cycle behavior.
+    randomBlend: 0.25,
+    // Small high-frequency wobble period to avoid robotic motion.
+    microGustPeriodMs: 2600,
+    // Small high-frequency wobble amount. Keep low for readability.
+    microGustAmplitudeMs: 0.12,
+    // State response lag. Larger = smoother/slower changes.
+    smoothingMs: 1200,
+    // Below this magnitude, the flag appears mostly hanging.
+    visualCalmThresholdMs: 0.22,
+    // Magnitude mapped to "full wind" flag pose.
+    visualMaxReferenceMs: 2.5,
   },
   angleControl: {
     stepDeg: 1.0,
@@ -135,6 +184,24 @@ export const FOLLOW_THROUGH_STEP_DISTANCE_M =
   GAMEPLAY_TUNING.movement.followThroughStepDistanceM;
 export const FAULT_STUMBLE_DISTANCE_M =
   GAMEPLAY_TUNING.movement.faultStumbleDistanceM;
+
+export const WIND_CYCLE_DURATION_MS = GAMEPLAY_TUNING.wind.cycleDurationMs;
+export const WIND_CYCLE_AMPLITUDE_MS = GAMEPLAY_TUNING.wind.cycleAmplitudeMs;
+export const WIND_CYCLE_HARMONIC_MULTIPLIER =
+  GAMEPLAY_TUNING.wind.cycleHarmonicMultiplier;
+export const WIND_CYCLE_HARMONIC_AMPLITUDE_MS =
+  GAMEPLAY_TUNING.wind.cycleHarmonicAmplitudeMs;
+export const WIND_RANDOM_KEYFRAME_MS = GAMEPLAY_TUNING.wind.randomKeyframeMs;
+export const WIND_RANDOM_AMPLITUDE_MS = GAMEPLAY_TUNING.wind.randomAmplitudeMs;
+export const WIND_RANDOM_BLEND = GAMEPLAY_TUNING.wind.randomBlend;
+export const WIND_MICRO_GUST_PERIOD_MS = GAMEPLAY_TUNING.wind.microGustPeriodMs;
+export const WIND_MICRO_GUST_AMPLITUDE_MS =
+  GAMEPLAY_TUNING.wind.microGustAmplitudeMs;
+export const WIND_SMOOTHING_MS = GAMEPLAY_TUNING.wind.smoothingMs;
+export const WIND_VISUAL_CALM_THRESHOLD_MS =
+  GAMEPLAY_TUNING.wind.visualCalmThresholdMs;
+export const WIND_VISUAL_MAX_REFERENCE_MS =
+  GAMEPLAY_TUNING.wind.visualMaxReferenceMs;
 
 export const ANGLE_KEYBOARD_STEP_DEG = GAMEPLAY_TUNING.angleControl.stepDeg;
 export const ANGLE_KEYBOARD_HOLD_START_DEG_PER_SEC =

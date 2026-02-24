@@ -211,10 +211,11 @@ type NoiseBurstParams = {
   volume: number;
   durationS: number;
   attackS?: number;
+  startOffsetS?: number;
 };
 
 const playNoiseBurst = (audio: AudioEngine, destination: AudioNode, params: NoiseBurstParams): void => {
-  const now = audio.ctx.currentTime;
+  const now = audio.ctx.currentTime + (params.startOffsetS ?? 0);
   const durationS = Math.max(0.02, params.durationS);
   const attackS = Math.max(0.002, params.attackS ?? 0.01);
   const source = audio.ctx.createBufferSource();
@@ -310,35 +311,56 @@ export const setFlightWindIntensity = (speedNorm: number): void => {
     const gain = ensureFlightWind(audio);
     const intensity = clamp(speedNorm, 0, 1);
     const now = audio.ctx.currentTime;
+    const currentGain = Math.max(0.0001, gain.gain.value);
+    const targetGain = lerp(0.0001, 0.09, intensity);
+    const rampDurationS = targetGain < currentGain ? 0.025 : 0.08;
     gain.gain.cancelScheduledValues(now);
-    gain.gain.setValueAtTime(Math.max(0.0001, gain.gain.value), now);
-    gain.gain.linearRampToValueAtTime(lerp(0.0001, 0.09, intensity), now + 0.08);
+    gain.gain.setValueAtTime(currentGain, now);
+    gain.gain.linearRampToValueAtTime(targetGain, now + rampDurationS);
   });
 };
 
 export const playLandingImpact = (tipFirst: boolean): void => {
   runWithAudio((audio) => {
     playTone(audio, audio.channels.effects, {
-      frequencyHz: 80,
+      frequencyHz: 112,
+      endFrequencyHz: 86,
       type: 'sine',
-      volume: 0.12,
-      durationS: 0.1,
-      attackS: 0.004
+      volume: 0.135,
+      durationS: 0.12,
+      attackS: 0.003
+    });
+    playTone(audio, audio.channels.effects, {
+      frequencyHz: 220,
+      endFrequencyHz: 168,
+      type: 'triangle',
+      volume: 0.082,
+      durationS: 0.08,
+      attackS: 0.002
     });
     playNoiseBurst(audio, audio.channels.effects, {
       filterType: 'lowpass',
-      filterHz: 400,
-      volume: 0.06,
-      durationS: 0.08
+      filterHz: 560,
+      volume: 0.072,
+      durationS: 0.11,
+      attackS: 0.003
+    });
+    playNoiseBurst(audio, audio.channels.effects, {
+      filterType: 'bandpass',
+      filterHz: 1450,
+      volume: 0.09,
+      durationS: 0.06,
+      attackS: 0.002
     });
     if (tipFirst) {
       playTone(audio, audio.channels.effects, {
-        frequencyHz: 1200,
+        frequencyHz: 1500,
+        endFrequencyHz: 1280,
         type: 'triangle',
-        volume: 0.05,
-        durationS: 0.04,
+        volume: 0.07,
+        durationS: 0.05,
         attackS: 0.003,
-        startOffsetS: 0.02
+        startOffsetS: 0.018
       });
     }
   });
@@ -353,13 +375,15 @@ export const playCrowdReaction = (reaction: CrowdReaction): void => {
     crowdChannel.setValueAtTime(crowdChannel.value, now);
 
     if (reaction === 'cheer') {
-      crowdChannel.linearRampToValueAtTime(Math.min(1, base * 1.8), now + 0.2);
-      crowdChannel.linearRampToValueAtTime(base, now + 1.4);
+      crowdChannel.linearRampToValueAtTime(base * 0.92, now + 0.09);
+      crowdChannel.linearRampToValueAtTime(Math.min(1, base * 1.8), now + 0.29);
+      crowdChannel.linearRampToValueAtTime(base, now + 1.45);
       playNoiseBurst(audio, audio.channels.crowd, {
         filterType: 'bandpass',
         filterHz: 1500,
         volume: 0.07,
-        durationS: 0.28
+        durationS: 0.28,
+        startOffsetS: 0.09
       });
       return;
     }

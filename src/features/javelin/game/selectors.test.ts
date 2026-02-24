@@ -56,6 +56,7 @@ describe('result throw specs', () => {
         isHighscore: false,
         resultKind: 'valid',
         tipFirst: true,
+        landingTipXM: 84.6,
         landingXM: 83.4,
         landingYM: 0,
         landingAngleRad: -0.3

@@ -23,4 +23,8 @@ describe('audio no-op fallback', () => {
     expect(() => playCrowdReaction('groan')).not.toThrow();
     expect(() => playFaultOof()).not.toThrow();
   });
+
+  it('keeps delayed crowd transient path safe without audio engine', () => {
+    expect(() => playCrowdReaction('cheer')).not.toThrow();
+  });
 });

@@ -13,6 +13,7 @@ import {
   THROW_ANIM_DURATION_MS
 } from './tuning';
 import { createInitialGameState } from './update';
+import { advanceWindMs } from './wind';
 
 const tapRunupNTimes = (
   state: ReturnType<typeof createInitialGameState>,
@@ -56,6 +57,18 @@ describe('gameReducer', () => {
     const next = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 1.2 });
     expect(next.phase.tag).toBe('runup');
     expect(next.windMs).toBe(1.2);
+  });
+
+  it('updates wind during idle ticks', () => {
+    const state = {
+      ...createInitialGameState(),
+      nowMs: 0,
+      windMs: 0,
+      phase: { tag: 'idle' as const }
+    };
+    const next = gameReducer(state, { type: 'tick', dtMs: 1200, nowMs: 1200 });
+    expect(next.phase.tag).toBe('idle');
+    expect(next.windMs).toBe(advanceWindMs(state.windMs, 1200, 1200));
   });
 
   it('stays still before first tap and starts moving after tap input', () => {
@@ -253,6 +266,29 @@ describe('gameReducer', () => {
     }
   });
 
+  it('captures release-time wind snapshot from live wind state', () => {
+    let state = createInitialGameState();
+    state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0.2 });
+    state = gameReducer(state, { type: 'rhythmTap', atMs: 1880 });
+    state = gameReducer(state, { type: 'rhythmTap', atMs: 2760 });
+    state = gameReducer(state, { type: 'rhythmTap', atMs: 3640 });
+    state = gameReducer(state, { type: 'beginChargeAim', atMs: 3700 });
+    state = gameReducer(state, { type: 'tick', dtMs: 280, nowMs: 3980 });
+    state = gameReducer(state, { type: 'releaseCharge', atMs: 3990 });
+    expect(state.phase.tag).toBe('throwAnim');
+
+    state = gameReducer(state, {
+      type: 'tick',
+      dtMs: Math.round(THROW_ANIM_DURATION_MS * 0.72),
+      nowMs: 4610
+    });
+
+    expect(state.phase.tag).toBe('flight');
+    if (state.phase.tag === 'flight') {
+      expect(state.phase.launchedFrom.windMs).toBe(state.windMs);
+    }
+  });
+
   it('release near end of fill yields stronger force than early release', () => {
     let early = createInitialGameState();
     early = gameReducer(early, { type: 'startRound', atMs: 1000, windMs: 0 });
@@ -381,5 +417,42 @@ describe('gameReducer', () => {
     if (state.phase.tag === 'result') {
       expect(state.phase.resultKind).toBe('foul_line');
     }
+  });
+
+  it('continues wind evolution in result phase without mutating result payload', () => {
+    const phase: Extract<ReturnType<typeof createInitialGameState>['phase'], { tag: 'result' }> = {
+      tag: 'result',
+      athleteXM: 18.7,
+      launchedFrom: {
+        speedNorm: 0.74,
+        angleDeg: 36,
+        forceNorm: 0.81,
+        windMs: 0.4,
+        launchSpeedMs: 28.2,
+        athleteXM: 18.7,
+        releaseQuality: 'good',
+        lineCrossedAtRelease: false
+      },
+      distanceM: 72.8,
+      isHighscore: false,
+      resultKind: 'valid',
+      tipFirst: true,
+      landingTipXM: 92.4,
+      landingXM: 91,
+      landingYM: 0,
+      landingAngleRad: -0.32
+    };
+    const state = {
+      ...createInitialGameState(),
+      nowMs: 5000,
+      windMs: 0.4,
+      roundId: 4,
+      phase
+    };
+    const next = gameReducer(state, { type: 'tick', dtMs: 1400, nowMs: 6400 });
+
+    expect(next.phase.tag).toBe('result');
+    expect(next.phase).toBe(phase);
+    expect(next.windMs).toBe(advanceWindMs(0.4, 1400, 6400));
   });
 });

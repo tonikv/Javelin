@@ -261,6 +261,7 @@ describe('javelin visibility state', () => {
         isHighscore: false,
         resultKind: 'foul_tip_first',
         tipFirst: false,
+        landingTipXM: 3.6,
         landingXM: 3.1,
         landingYM: 0,
         landingAngleRad: -0.4

@@ -22,6 +22,7 @@ import {
   computeCompetitionDistanceM,
   evaluateThrowLegality
 } from './scoring';
+import { advanceWindMs, sampleWindTargetMs } from './wind';
 import {
   CHARGE_AIM_SPEED_DECAY_PER_SECOND,
   CHARGE_AIM_STOP_SPEED_NORM,
@@ -128,13 +129,16 @@ const createLateReleaseFaultPhase = (
   javelinLanded: false
 });
 
-export const createInitialGameState = (): GameState => ({
-  nowMs: performance.now(),
-  roundId: 0,
-  windMs: 0,
-  aimAngleDeg: ANGLE_DEFAULT_DEG,
-  phase: { tag: 'idle' }
-});
+export const createInitialGameState = (): GameState => {
+  const nowMs = performance.now();
+  return {
+    nowMs,
+    roundId: 0,
+    windMs: sampleWindTargetMs(nowMs),
+    aimAngleDeg: ANGLE_DEFAULT_DEG,
+    phase: { tag: 'idle' }
+  };
+};
 
 const tickFault = (state: GameState, dtMs: number): GameState => {
   if (state.phase.tag !== 'fault') {
@@ -382,6 +386,7 @@ const tickFlight = (state: GameState, dtMs: number): GameState => {
         isHighscore: false,
         resultKind: legality.resultKind,
         tipFirst: updated.tipFirst,
+        landingTipXM,
         landingXM: updated.javelin.xM,
         landingYM: Math.max(0, updated.javelin.yM),
         landingAngleRad: updated.javelin.angleRad
@@ -596,11 +601,15 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
       };
     }
     case 'tick': {
-      if (state.phase.tag === 'idle' || state.phase.tag === 'result') {
-        return state;
+      const nextState: GameState = {
+        ...state,
+        nowMs: action.nowMs,
+        windMs: advanceWindMs(state.windMs, action.dtMs, action.nowMs)
+      };
+      if (nextState.phase.tag === 'idle' || nextState.phase.tag === 'result') {
+        return nextState;
       }
 
-      const nextState: GameState = { ...state, nowMs: action.nowMs };
       switch (nextState.phase.tag) {
         case 'fault':
           return tickFault(nextState, action.dtMs);

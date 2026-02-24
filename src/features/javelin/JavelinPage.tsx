@@ -5,16 +5,13 @@ import { GameCanvas } from './components/GameCanvas';
 import { ScoreBoard, ScoreBoardContent } from './components/ScoreBoard';
 import { ControlHelp, ControlHelpContent } from './components/ControlHelp';
 import { gameReducer } from './game/reducer';
-import { WIND_MAX_MS, WIND_MIN_MS } from './game/constants';
+import { resumeAudioContext } from './game/audio';
 import type { FaultReason, HighscoreEntry } from './game/types';
 import { useGameLoop } from './hooks/useGameLoop';
 import { useLocalHighscores } from './hooks/useLocalHighscores';
 import { useI18n } from '../../i18n/init';
 import { useMediaQuery } from '../../app/useMediaQuery';
 import { createInitialGameState } from './game/update';
-
-const randomWind = (): number =>
-  Math.round((WIND_MIN_MS + Math.random() * (WIND_MAX_MS - WIND_MIN_MS)) * 10) / 10;
 
 const faultReasonKey = (reason: FaultReason): string => `result.fault.${reason}`;
 
@@ -188,10 +185,11 @@ export const JavelinPage = (): ReactElement => {
             <button
               type="button"
               onClick={(event) => {
+                resumeAudioContext();
                 dispatch({
                   type: 'startRound',
                   atMs: performance.now(),
-                  windMs: randomWind()
+                  windMs: state.windMs
                 });
                 event.currentTarget.blur();
               }}

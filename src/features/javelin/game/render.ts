@@ -31,6 +31,7 @@ import {
 } from './constants';
 import { drawAthlete } from './renderAthlete';
 import { drawWorldTimingMeter } from './renderMeter';
+import { drawWindIndicator } from './renderWind';
 import {
   RUNUP_START_X_M,
   RUN_TO_DRAWBACK_BLEND_MS,
@@ -95,6 +96,7 @@ export type RenderSession = {
   camera: CameraSmoothingState;
   resultMarker: ResultMarkerFadeState;
   lastRunupTapAtMs: number | null;
+  lastFaultJavelinLanded: boolean;
   lastPhaseTag: GameState['phase']['tag'];
 };
 
@@ -105,6 +107,7 @@ export const createRenderSession = (): RenderSession => ({
     shownAtMs: 0
   },
   lastRunupTapAtMs: null,
+  lastFaultJavelinLanded: false,
   lastPhaseTag: 'idle'
 });
 
@@ -267,51 +270,6 @@ const drawTrackAndField = (
   }
 
   drawThrowLine(ctx, toScreen, height, throwLineLabel, uiScale);
-};
-
-const drawWindVane = (
-  ctx: CanvasRenderingContext2D,
-  width: number,
-  windMs: number,
-  localeFormatter: Intl.NumberFormat,
-  uiScale: number
-): void => {
-  const dir = windMs >= 0 ? 1 : -1;
-  const x = width - 118 * uiScale;
-  const y = Math.max(32, 42 * uiScale);
-
-  ctx.strokeStyle = '#0f4165';
-  ctx.lineWidth = Math.max(2, 3 * uiScale);
-  ctx.beginPath();
-  ctx.moveTo(x, y + 22 * uiScale);
-  ctx.lineTo(x, y - 8 * uiScale);
-  ctx.stroke();
-
-  ctx.fillStyle = windMs >= 0 ? '#1f9d44' : '#cf3a2f';
-  ctx.beginPath();
-  if (dir >= 0) {
-    ctx.moveTo(x, y - 8 * uiScale);
-    ctx.lineTo(x + 26 * uiScale, y - uiScale);
-    ctx.lineTo(x, y + 7 * uiScale);
-  } else {
-    ctx.moveTo(x, y - 8 * uiScale);
-    ctx.lineTo(x - 26 * uiScale, y - uiScale);
-    ctx.lineTo(x, y + 7 * uiScale);
-  }
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.font = `700 ${Math.round(12 * uiScale)}px ui-sans-serif`;
-  const windText = `${windMs >= 0 ? '+' : ''}${localeFormatter.format(windMs)} m/s`;
-  drawOutlinedText(
-    ctx,
-    windText,
-    x - 16 * uiScale,
-    y + 34 * uiScale,
-    '#10314a',
-    'rgba(245, 252, 255, 0.95)',
-    Math.max(1.8, 1.6 * uiScale)
-  );
 };
 
 const drawJavelinWorld = (
@@ -653,6 +611,17 @@ export const renderGame = (
   session: RenderSession
 ): void => {
   const phaseChanged = state.phase.tag !== session.lastPhaseTag;
+  if (state.phase.tag === 'flight') {
+    const speedMs = Math.hypot(
+      state.phase.javelin.vxMs,
+      state.phase.javelin.vyMs,
+      state.phase.javelin.vzMs
+    );
+    setFlightWindIntensity(Math.min(1, speedMs / 38));
+  } else {
+    setFlightWindIntensity(0);
+  }
+
   if (phaseChanged) {
     switch (state.phase.tag) {
       case 'chargeAim':
@@ -677,17 +646,6 @@ export const renderGame = (
     }
   }
 
-  if (state.phase.tag === 'flight') {
-    const speedMs = Math.hypot(
-      state.phase.javelin.vxMs,
-      state.phase.javelin.vyMs,
-      state.phase.javelin.vzMs
-    );
-    setFlightWindIntensity(Math.min(1, speedMs / 38));
-  } else {
-    setFlightWindIntensity(0);
-  }
-
   const overlayUiScale = getOverlayUiScale(width);
   const camera = createWorldToScreen(state, width, height, dtMs, session.camera);
   const { toScreen, worldMinX, worldMaxX } = camera;
@@ -704,7 +662,7 @@ export const renderGame = (
     worldMaxX,
     overlayUiScale
   );
-  drawWindVane(ctx, width, state.windMs, numberFormat, overlayUiScale);
+  drawWindIndicator(ctx, width, state.windMs, state.nowMs, numberFormat, overlayUiScale);
 
   const pose = getPoseForState(state);
   const javelin = getVisibleJavelinRenderState(state, pose);
@@ -748,7 +706,7 @@ export const renderGame = (
     drawLandingMarker(
       ctx,
       toScreen,
-      state.phase.landingXM,
+      state.phase.landingTipXM,
       state.phase.resultKind,
       `${numberFormat.format(state.phase.distanceM)}m`,
       overlayUiScale
@@ -810,6 +768,15 @@ export const renderGame = (
     }
   } else {
     session.lastRunupTapAtMs = null;
+  }
+
+  if (state.phase.tag === 'fault') {
+    if (state.phase.javelinLanded && !session.lastFaultJavelinLanded) {
+      playLandingImpact(false);
+    }
+    session.lastFaultJavelinLanded = state.phase.javelinLanded;
+  } else {
+    session.lastFaultJavelinLanded = false;
   }
 
   session.lastPhaseTag = state.phase.tag;
