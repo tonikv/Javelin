@@ -28,6 +28,7 @@ npm run dev
 
 - React 19 + TypeScript
 - Vite 7
+- Vite PWA (service worker + installable manifest)
 - Canvas 2D rendering
 - Vitest unit tests
 - LocalStorage leaderboard
@@ -55,6 +56,21 @@ npm test
 
 ```bash
 npm run build
+```
+
+## PWA / Mobile Install
+
+- The game is installable as a Progressive Web App on supported mobile and desktop browsers.
+- First load online, then it can run offline from the app icon.
+- Install flow:
+  - Android Chrome: browser menu -> `Install app`
+  - iOS Safari: `Share` -> `Add to Home Screen`
+
+To validate production PWA behavior locally:
+
+```bash
+npm run build
+npm run preview
 ```
 
 ## GitHub Pages
