@@ -1,5 +1,7 @@
 import { clamp, lerp } from './math';
+import { getRenderPalette } from './renderTheme';
 import { WIND_VISUAL_CALM_THRESHOLD_MS, WIND_VISUAL_MAX_REFERENCE_MS } from './tuning';
+import type { ThemeMode } from '../../../theme/init';
 
 const MOBILE_WIND_BREAKPOINT_PX = 600;
 const FLAG_SEGMENT_COUNT = 6;
@@ -121,11 +123,13 @@ const drawFlag = (
   ctx: CanvasRenderingContext2D,
   polyline: FlagPolylinePoint[],
   windMs: number,
-  uiScale: number
+  uiScale: number,
+  theme: ThemeMode
 ): void => {
   if (polyline.length < 2) {
     return;
   }
+  const palette = getRenderPalette(theme);
 
   const strength01 = windStrength01(windMs);
   const thicknessPx = Math.max(2.5, (3.8 + strength01 * 1.9) * uiScale);
@@ -140,8 +144,9 @@ const drawFlag = (
       };
     });
 
-  const fill = windMs >= 0 ? '#1f9d44' : '#cf3a2f';
-  const stroke = windMs >= 0 ? '#0b6e2d' : '#8e281f';
+  const fill = windMs >= 0 ? palette.wind.headwindFlagFill : palette.wind.tailwindFlagFill;
+  const stroke =
+    windMs >= 0 ? palette.wind.headwindFlagStroke : palette.wind.tailwindFlagStroke;
 
   ctx.save();
   ctx.beginPath();
@@ -167,8 +172,10 @@ export const drawWindIndicator = (
   windMs: number,
   nowMs: number,
   localeFormatter: Intl.NumberFormat,
-  uiScale: number
+  uiScale: number,
+  theme: ThemeMode = 'light'
 ): void => {
+  const palette = getRenderPalette(theme);
   const layout = getWindIndicatorLayout(width, uiScale);
   const polyline = buildFlagPolyline({
     mastX: layout.mastX,
@@ -179,13 +186,13 @@ export const drawWindIndicator = (
   });
 
   ctx.save();
-  ctx.strokeStyle = '#0f4165';
+  ctx.strokeStyle = palette.wind.mastStroke;
   ctx.lineWidth = Math.max(2, 3 * uiScale);
   ctx.beginPath();
   ctx.moveTo(layout.mastX, layout.mastBottomY);
   ctx.lineTo(layout.mastX, layout.mastTopY);
   ctx.stroke();
-  drawFlag(ctx, polyline, windMs, uiScale);
+  drawFlag(ctx, polyline, windMs, uiScale, theme);
   ctx.restore();
 
   ctx.font = `700 ${Math.round(12 * uiScale)}px ui-sans-serif`;
@@ -195,8 +202,8 @@ export const drawWindIndicator = (
     windText,
     layout.labelX,
     layout.labelY,
-    '#10314a',
-    'rgba(245, 252, 255, 0.95)',
+    palette.wind.labelFill,
+    palette.wind.labelOutline,
     Math.max(1.8, 1.6 * uiScale)
   );
 };

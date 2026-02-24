@@ -62,6 +62,11 @@ export const resources: Record<Locale, Messages> = {
     'scoreboard.defaultName': 'Pelaaja',
     'scoreboard.empty': 'Ei vielä tuloksia.',
     'language.label': 'Kieli',
+    'theme.label': 'Teema',
+    'theme.light': 'Vaalea',
+    'theme.dark': 'Tumma',
+    'theme.toggleToLight': 'Vaihda vaaleaan teemaan',
+    'theme.toggleToDark': 'Vaihda tummaan teemaan',
     'a11y.gameCanvas': 'Keihäänheiton pelialue',
     'a11y.hudPanel': 'Tilapaneeli'
   },
@@ -124,6 +129,11 @@ export const resources: Record<Locale, Messages> = {
     'scoreboard.defaultName': 'Spelare',
     'scoreboard.empty': 'Inga resultat än.',
     'language.label': 'Språk',
+    'theme.label': 'Tema',
+    'theme.light': 'Ljus',
+    'theme.dark': 'Mörk',
+    'theme.toggleToLight': 'Byt till ljust tema',
+    'theme.toggleToDark': 'Byt till mörkt tema',
     'a11y.gameCanvas': 'Spjutkastning spelplan',
     'a11y.hudPanel': 'Statuspanel'
   },
@@ -186,6 +196,11 @@ export const resources: Record<Locale, Messages> = {
     'scoreboard.defaultName': 'PLAYER',
     'scoreboard.empty': 'No scores yet.',
     'language.label': 'Language',
+    'theme.label': 'Theme',
+    'theme.light': 'Light',
+    'theme.dark': 'Dark',
+    'theme.toggleToLight': 'Switch to light theme',
+    'theme.toggleToDark': 'Switch to dark theme',
     'a11y.gameCanvas': 'Javelin throw play area',
     'a11y.hudPanel': 'Status panel'
   }

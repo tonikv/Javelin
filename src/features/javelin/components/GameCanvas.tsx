@@ -3,6 +3,7 @@ import { createRenderSession, renderGame } from '../game/render';
 import type { GameAction, GameState } from '../game/types';
 import { usePointerControls } from '../hooks/usePointerControls';
 import { useI18n } from '../../../i18n/init';
+import { useTheme } from '../../../theme/init';
 
 type Dispatch = (action: GameAction) => void;
 
@@ -23,6 +24,7 @@ export const GameCanvas = ({ state, dispatch }: GameCanvasProps): ReactElement =
   });
   const [viewportVersion, setViewportVersion] = useState(0);
   const { locale, t } = useI18n();
+  const { theme } = useTheme();
 
   const numberFormat = useMemo(
     () => new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }),
@@ -113,9 +115,10 @@ export const GameCanvas = ({ state, dispatch }: GameCanvasProps): ReactElement =
       numberFormat,
       t('javelin.throwLine'),
       releaseFlashLabels,
+      theme,
       renderSessionRef.current
     );
-  }, [state, numberFormat, t, releaseFlashLabels, viewportVersion]);
+  }, [state, numberFormat, t, releaseFlashLabels, viewportVersion, theme]);
 
   return (
     <div className="canvas-frame">

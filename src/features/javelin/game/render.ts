@@ -31,6 +31,7 @@ import {
 } from './constants';
 import { drawAthlete } from './renderAthlete';
 import { drawWorldTimingMeter } from './renderMeter';
+import { getRenderPalette, type RenderPalette } from './renderTheme';
 import { drawWindIndicator } from './renderWind';
 import {
   RUNUP_START_X_M,
@@ -42,6 +43,7 @@ import {
 } from './tuning';
 import { computeTrajectoryPreview, type TrajectoryPoint } from './trajectory';
 import type { GameState, ResultKind, TimingQuality } from './types';
+import type { ThemeMode } from '../../../theme/init';
 
 export { getCameraTargetX } from './camera';
 export { getHeadMeterScreenAnchor } from './renderMeter';
@@ -139,16 +141,21 @@ const drawOutlinedText = (
   ctx.restore();
 };
 
-const drawBackground = (ctx: CanvasRenderingContext2D, width: number, height: number): void => {
+const drawBackground = (
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  palette: RenderPalette
+): void => {
   const sky = ctx.createLinearGradient(0, 0, 0, height);
-  sky.addColorStop(0, '#dceef8');
-  sky.addColorStop(0.56, '#c8e1ef');
-  sky.addColorStop(1, '#b8d6e3');
+  sky.addColorStop(0, palette.scene.skyTop);
+  sky.addColorStop(0.56, palette.scene.skyMid);
+  sky.addColorStop(1, palette.scene.skyBottom);
   ctx.fillStyle = sky;
   ctx.fillRect(0, 0, width, height);
 
   const haze = ctx.createRadialGradient(width * 0.25, height * 0.1, 20, width * 0.25, height * 0.1, width * 0.8);
-  haze.addColorStop(0, 'rgba(255, 255, 255, 0.24)');
+  haze.addColorStop(0, palette.scene.hazeCenter);
   haze.addColorStop(1, 'rgba(255, 255, 255, 0)');
   ctx.fillStyle = haze;
   ctx.fillRect(0, 0, width, height);
@@ -158,7 +165,8 @@ const drawClouds = (
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
-  worldMinX: number
+  worldMinX: number,
+  palette: RenderPalette
 ): void => {
   const groundY = height - CAMERA_GROUND_BOTTOM_PADDING;
 
@@ -174,7 +182,7 @@ const drawClouds = (
 
       ctx.save();
       ctx.globalAlpha = Math.min(1, cloud.opacity + 0.16);
-      ctx.fillStyle = '#f8fcff';
+      ctx.fillStyle = palette.scene.cloudFill;
       ctx.beginPath();
       const rx = cloud.widthPx / 2;
       const ry = cloud.heightPx / 2;
@@ -182,7 +190,7 @@ const drawClouds = (
       ctx.ellipse(x + rx * 0.6, y + ry * 0.15, rx * 0.7, ry * 0.8, 0, 0, Math.PI * 2);
       ctx.ellipse(x + rx * 1.4, y - ry * 0.1, rx * 0.65, ry * 0.75, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = 'rgba(142, 179, 200, 0.45)';
+      ctx.strokeStyle = palette.scene.cloudStroke;
       ctx.lineWidth = 1;
       ctx.stroke();
       ctx.restore();
@@ -195,11 +203,12 @@ const drawThrowLine = (
   toScreen: WorldToScreen,
   height: number,
   label: string,
-  uiScale: number
+  uiScale: number,
+  palette: RenderPalette
 ): void => {
   const groundY = height - CAMERA_GROUND_BOTTOM_PADDING;
   const line = toScreen({ xM: THROW_LINE_X_M, yM: 0 });
-  ctx.strokeStyle = '#ff5d4e';
+  ctx.strokeStyle = palette.scene.throwLineStroke;
   ctx.lineWidth = Math.max(2.4, 3 * uiScale);
   ctx.beginPath();
   ctx.moveTo(line.x, groundY - 24 * uiScale);
@@ -212,8 +221,8 @@ const drawThrowLine = (
     label,
     line.x - 28 * uiScale,
     groundY - 27 * uiScale,
-    '#a3211a',
-    'rgba(246, 252, 255, 0.92)',
+    palette.scene.throwLineLabelFill,
+    palette.scene.throwLineLabelOutline,
     Math.max(2, 1.8 * uiScale)
   );
 };
@@ -226,13 +235,14 @@ const drawTrackAndField = (
   throwLineLabel: string,
   worldMinX: number,
   worldMaxX: number,
-  uiScale: number
+  uiScale: number,
+  palette: RenderPalette
 ): void => {
   const groundY = height - CAMERA_GROUND_BOTTOM_PADDING;
-  ctx.fillStyle = '#88d37f';
+  ctx.fillStyle = palette.scene.fieldGrass;
   ctx.fillRect(0, groundY, width, CAMERA_GROUND_BOTTOM_PADDING);
 
-  ctx.strokeStyle = '#ffffff';
+  ctx.strokeStyle = palette.scene.runwayLine;
   ctx.lineWidth = Math.max(1.8, 2 * uiScale);
   ctx.beginPath();
   ctx.moveTo(RUNWAY_OFFSET_X, groundY);
@@ -248,7 +258,7 @@ const drawTrackAndField = (
     }
     const { x } = toScreen({ xM, yM: 0 });
     const isMajor = relativeM % 10 === 0;
-    ctx.strokeStyle = isMajor ? 'rgba(255, 255, 255, 0.85)' : 'rgba(255, 255, 255, 0.4)';
+    ctx.strokeStyle = isMajor ? palette.scene.distanceTickMajor : palette.scene.distanceTickMinor;
     ctx.lineWidth = isMajor ? Math.max(1.8, 2 * uiScale) : Math.max(1, 1.2 * uiScale);
     ctx.beginPath();
     ctx.moveTo(x, groundY);
@@ -262,14 +272,14 @@ const drawTrackAndField = (
         `${relativeM} m`,
         x - 12 * uiScale,
         groundY + 32 * uiScale,
-        '#0b2238',
-        'rgba(245, 252, 255, 0.92)',
+        palette.scene.distanceLabelFill,
+        palette.scene.distanceLabelOutline,
         Math.max(1.8, 1.5 * uiScale)
       );
     }
   }
 
-  drawThrowLine(ctx, toScreen, height, throwLineLabel, uiScale);
+  drawThrowLine(ctx, toScreen, height, throwLineLabel, uiScale, palette);
 };
 
 const drawJavelinWorld = (
@@ -278,7 +288,8 @@ const drawJavelinWorld = (
   xM: number,
   yM: number,
   angleRad: number,
-  lengthM = JAVELIN_LENGTH_M
+  lengthM = JAVELIN_LENGTH_M,
+  palette?: RenderPalette
 ): void => {
   const halfLength = lengthM / 2;
   const tail = {
@@ -292,7 +303,7 @@ const drawJavelinWorld = (
   const tailScreen = toScreen(tail);
   const tipScreen = toScreen(tip);
 
-  ctx.strokeStyle = '#111111';
+  ctx.strokeStyle = palette?.scene.javelinStroke ?? '#111111';
   ctx.lineWidth = 3;
   ctx.lineCap = 'round';
   ctx.beginPath();
@@ -309,7 +320,8 @@ const drawLandedJavelin = (
   angleRad: number,
   lengthM: number,
   tipFirst: boolean,
-  landingTipXM?: number
+  landingTipXM?: number,
+  palette?: RenderPalette
 ): void => {
   const centerFromTip = (renderAngleRad: number): number =>
     landingTipXM !== undefined
@@ -319,11 +331,11 @@ const drawLandedJavelin = (
   if (tipFirst) {
     const stuckAngle = Math.max(angleRad, -Math.PI * 0.35);
     const centerXM = centerFromTip(stuckAngle);
-    drawJavelinWorld(ctx, toScreen, centerXM, yM, stuckAngle, lengthM);
+    drawJavelinWorld(ctx, toScreen, centerXM, yM, stuckAngle, lengthM, palette);
 
     const tip = toScreen({ xM: centerXM + (Math.cos(stuckAngle) * lengthM) / 2, yM: 0 });
     ctx.save();
-    ctx.fillStyle = 'rgba(80, 50, 20, 0.3)';
+    ctx.fillStyle = palette?.scene.javelinSoilMark ?? 'rgba(80, 50, 20, 0.3)';
     ctx.beginPath();
     ctx.ellipse(tip.x, tip.y + 2, 5, 3, 0, 0, Math.PI * 2);
     ctx.fill();
@@ -334,11 +346,11 @@ const drawLandedJavelin = (
   const flatAngle = angleRad * 0.3;
   const lyingYM = Math.max(0.05, yM * 0.3);
   const centerXM = centerFromTip(flatAngle);
-  drawJavelinWorld(ctx, toScreen, centerXM, lyingYM, flatAngle, lengthM);
+  drawJavelinWorld(ctx, toScreen, centerXM, lyingYM, flatAngle, lengthM, palette);
 
   const center = toScreen({ xM: centerXM, yM: 0 });
   ctx.save();
-  ctx.strokeStyle = 'rgba(80, 50, 20, 0.2)';
+  ctx.strokeStyle = palette?.scene.javelinGroundTrace ?? 'rgba(80, 50, 20, 0.2)';
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(center.x - 8, center.y + 3);
@@ -353,19 +365,22 @@ const drawLandingMarker = (
   landingXM: number,
   resultKind: ResultKind,
   distanceLabel: string,
-  uiScale: number
+  uiScale: number,
+  palette: RenderPalette
 ): void => {
   const landing = toScreen({ xM: landingXM, yM: 0 });
   const groundY = landing.y;
 
-  ctx.strokeStyle = resultKind === 'valid' ? '#1f9d44' : '#cf3a2f';
+  ctx.strokeStyle =
+    resultKind === 'valid' ? palette.scene.landingValidStroke : palette.scene.landingFoulStroke;
   ctx.lineWidth = Math.max(1.8, 2 * uiScale);
   ctx.beginPath();
   ctx.moveTo(landing.x, groundY + 5 * uiScale);
   ctx.lineTo(landing.x, groundY - 36 * uiScale);
   ctx.stroke();
 
-  ctx.fillStyle = resultKind === 'valid' ? '#22c272' : '#e0453a';
+  ctx.fillStyle =
+    resultKind === 'valid' ? palette.scene.landingValidFlag : palette.scene.landingFoulFlag;
   ctx.beginPath();
   ctx.moveTo(landing.x, groundY - 36 * uiScale);
   ctx.lineTo(landing.x + 28 * uiScale, groundY - 30 * uiScale);
@@ -380,12 +395,12 @@ const drawLandingMarker = (
     distanceLabel,
     landing.x + 4 * uiScale,
     groundY - 28 * uiScale,
-    '#ffffff',
-    'rgba(8, 35, 56, 0.6)',
+    palette.scene.landingTextFill,
+    palette.scene.landingTextOutline,
     Math.max(1.6, 1.4 * uiScale)
   );
 
-  ctx.fillStyle = 'rgba(15, 40, 60, 0.35)';
+  ctx.fillStyle = palette.scene.landingDot;
   ctx.beginPath();
   ctx.arc(landing.x, groundY + 2 * uiScale, 3 * uiScale, 0, Math.PI * 2);
   ctx.fill();
@@ -616,6 +631,7 @@ export const renderGame = (
   numberFormat: Intl.NumberFormat,
   throwLineLabel: string,
   releaseFlashLabels: ReleaseFlashLabels,
+  theme: ThemeMode,
   session: RenderSession
 ): void => {
   const phaseChanged = state.phase.tag !== session.lastPhaseTag;
@@ -655,11 +671,12 @@ export const renderGame = (
   }
 
   const overlayUiScale = getOverlayUiScale(width);
+  const palette = getRenderPalette(theme);
   const camera = createWorldToScreen(state, width, height, dtMs, session.camera);
   const { toScreen, worldMinX, worldMaxX } = camera;
 
-  drawBackground(ctx, width, height);
-  drawClouds(ctx, width, height, worldMinX);
+  drawBackground(ctx, width, height, palette);
+  drawClouds(ctx, width, height, worldMinX, palette);
   drawTrackAndField(
     ctx,
     width,
@@ -668,9 +685,18 @@ export const renderGame = (
     throwLineLabel,
     worldMinX,
     worldMaxX,
-    overlayUiScale
+    overlayUiScale,
+    palette
   );
-  drawWindIndicator(ctx, width, state.windMs, state.nowMs, numberFormat, overlayUiScale);
+  drawWindIndicator(
+    ctx,
+    width,
+    state.windMs,
+    state.nowMs,
+    numberFormat,
+    overlayUiScale,
+    theme
+  );
 
   const pose = getPoseForState(state);
   const javelin = getVisibleJavelinRenderState(state, pose);
@@ -687,10 +713,19 @@ export const renderGame = (
       javelin.angleRad,
       javelin.lengthM,
       tipFirst,
-      landingTipXM
+      landingTipXM,
+      palette
     );
   } else if (javelin.mode !== 'none') {
-    drawJavelinWorld(ctx, toScreen, javelin.xM, javelin.yM, javelin.angleRad, javelin.lengthM);
+    drawJavelinWorld(
+      ctx,
+      toScreen,
+      javelin.xM,
+      javelin.yM,
+      javelin.angleRad,
+      javelin.lengthM,
+      palette
+    );
   }
 
   if (state.phase.tag === 'chargeAim') {
@@ -720,7 +755,8 @@ export const renderGame = (
       state.phase.landingTipXM,
       state.phase.resultKind,
       `${numberFormat.format(state.phase.distanceM)}m`,
-      overlayUiScale
+      overlayUiScale,
+      palette
     );
     ctx.restore();
   } else {
@@ -758,16 +794,16 @@ export const renderGame = (
       ctx.font = `900 ${Math.round(28 * scale * overlayUiScale)}px ui-sans-serif`;
       ctx.textAlign = 'center';
       const y = 74 + (overlayUiScale - 1) * 10 - (1 - alpha) * 8 * overlayUiScale;
-      ctx.strokeStyle = 'rgba(240, 250, 255, 0.92)';
+      ctx.strokeStyle = palette.scene.releaseFlashOutline;
       ctx.lineWidth = Math.max(2, 2 * overlayUiScale);
       ctx.strokeText(releaseFeedback.label, width / 2, y);
-      ctx.fillStyle = '#0b2238';
+      ctx.fillStyle = palette.scene.releaseFlashFill;
       ctx.fillText(releaseFeedback.label, width / 2, y);
       ctx.restore();
     }
   }
 
-  drawWorldTimingMeter(ctx, state, headScreen, overlayUiScale);
+  drawWorldTimingMeter(ctx, state, headScreen, overlayUiScale, theme);
 
   if (state.phase.tag === 'runup') {
     const currentTapAtMs = state.phase.tap.lastTapAtMs;

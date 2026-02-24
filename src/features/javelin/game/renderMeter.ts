@@ -6,9 +6,11 @@ import {
 } from './constants';
 import { clamp01, wrap01 } from './math';
 import { getForcePreviewPercent, getRunupMeterPhase01, getSpeedPercent } from './selectors';
+import { getRenderPalette } from './renderTheme';
 import { CHARGE_GOOD_WINDOW, CHARGE_PERFECT_WINDOW } from './tuning';
 import type { HeadAnchor } from './renderAthlete';
 import type { GameState, TimingQuality } from './types';
+import type { ThemeMode } from '../../../theme/init';
 
 type MeterZones = {
   perfect: { start: number; end: number };
@@ -120,12 +122,14 @@ export const drawWorldTimingMeter = (
   ctx: CanvasRenderingContext2D,
   state: GameState,
   headScreen: HeadAnchor,
-  uiScale = 1
+  uiScale = 1,
+  theme: ThemeMode = 'light'
 ): void => {
   const meterState = getWorldMeterState(state);
   if (meterState === null) {
     return;
   }
+  const palette = getRenderPalette(theme);
 
   const visualScale = normalizeUiScale(uiScale);
   const meterRadius = WORLD_METER_RADIUS_PX * visualScale;
@@ -147,7 +151,7 @@ export const drawWorldTimingMeter = (
     meterRadius,
     0,
     1,
-    'rgba(10, 46, 77, 0.34)',
+    palette.meter.trackArc,
     meterLineWidth
   );
 
@@ -158,7 +162,7 @@ export const drawWorldTimingMeter = (
     meterRadius,
     0,
     meterState.phase01,
-    meterState.zones === null ? 'rgba(18, 196, 119, 0.9)' : 'rgba(246, 210, 85, 0.72)',
+    meterState.zones === null ? palette.meter.runupFill : palette.meter.chargeFill,
     meterLineWidth
   );
 
@@ -170,7 +174,7 @@ export const drawWorldTimingMeter = (
       meterRadius,
       meterState.zones.good.start,
       meterState.zones.good.end,
-      'rgba(30, 142, 247, 0.82)',
+      palette.meter.zoneGood,
       meterLineWidth
     );
 
@@ -181,7 +185,7 @@ export const drawWorldTimingMeter = (
       meterRadius,
       meterState.zones.perfect.start,
       meterState.zones.perfect.end,
-      'rgba(18, 196, 119, 0.98)',
+      palette.meter.zonePerfect,
       meterLineWidth + 0.8 * visualScale
     );
   }
@@ -192,15 +196,15 @@ export const drawWorldTimingMeter = (
 
   const cursorFill =
     meterState.zones === null
-      ? '#22c272'
+      ? palette.meter.cursorPerfect
       : meterState.feedback === 'perfect'
-        ? '#22c272'
+        ? palette.meter.cursorPerfect
         : meterState.feedback === 'good'
-          ? '#329cf5'
-          : '#f6d255';
+          ? palette.meter.cursorGood
+          : palette.meter.cursorMiss;
 
   ctx.fillStyle = cursorFill;
-  ctx.strokeStyle = '#0f3b61';
+  ctx.strokeStyle = palette.meter.cursorStroke;
   ctx.lineWidth = Math.max(2, 2 * visualScale);
   ctx.beginPath();
   ctx.arc(cursorX, cursorY, meterCursorRadius, 0, Math.PI * 2);
@@ -210,10 +214,10 @@ export const drawWorldTimingMeter = (
   const valueLabel = `${meterState.valuePercent}%`;
   ctx.font = `700 ${Math.round(11 * visualScale)}px ui-sans-serif`;
   ctx.textAlign = 'center';
-  ctx.strokeStyle = 'rgba(235, 246, 255, 0.95)';
+  ctx.strokeStyle = palette.meter.valueTextOutline;
   ctx.lineWidth = Math.max(2, 1.7 * visualScale);
   ctx.strokeText(valueLabel, anchor.x, anchor.y + 16 * visualScale);
-  ctx.fillStyle = 'rgba(6, 32, 57, 0.9)';
+  ctx.fillStyle = palette.meter.valueTextFill;
   ctx.fillText(valueLabel, anchor.x, anchor.y + 16 * visualScale);
 
   ctx.restore();

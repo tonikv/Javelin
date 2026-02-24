@@ -1,5 +1,6 @@
 import { memo, useEffect, useMemo, useReducer, useState, type ReactElement } from 'react';
 import { LanguageSwitch } from './components/LanguageSwitch';
+import { ThemeToggle } from './components/ThemeToggle';
 import { HudPanel } from './components/HudPanel';
 import { GameCanvas } from './components/GameCanvas';
 import { ScoreBoard, ScoreBoardContent } from './components/ScoreBoard';
@@ -26,7 +27,10 @@ const TopBarComponent = ({ appTitle, gameTitle }: TopBarProps): ReactElement => 
       <p className="eyebrow">{appTitle}</p>
       <h1>{gameTitle}</h1>
     </div>
-    <LanguageSwitch />
+    <div className="topbar-controls">
+      <LanguageSwitch />
+      <ThemeToggle />
+    </div>
   </header>
 );
 
