@@ -22,16 +22,9 @@ export const useMediaQuery = (query: string): boolean => {
       setMatches(event.matches);
     };
 
-    if (typeof mediaQueryList.addEventListener === 'function') {
-      mediaQueryList.addEventListener('change', onChange);
-      return () => {
-        mediaQueryList.removeEventListener('change', onChange);
-      };
-    }
-
-    mediaQueryList.addListener(onChange);
+    mediaQueryList.addEventListener('change', onChange);
     return () => {
-      mediaQueryList.removeListener(onChange);
+      mediaQueryList.removeEventListener('change', onChange);
     };
   }, [query]);
 

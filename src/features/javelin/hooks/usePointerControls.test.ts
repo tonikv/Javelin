@@ -3,6 +3,7 @@ import type { GameAction, GameState } from '../game/types';
 import {
   createTouchLongPressHandlers,
   isInteractiveEventTarget,
+  shouldConsumeActionKeyDown,
   shouldHandleAngleAdjustKeyDown,
   shouldReleaseChargeFromEnterKeyUp
 } from './usePointerControls';
@@ -61,6 +62,15 @@ describe('usePointerControls key guards', () => {
   it('does not adjust angle from arrow keys inside interactive controls', () => {
     expect(shouldHandleAngleAdjustKeyDown('ArrowUp', 'runup', inputTarget())).toBe(false);
     expect(shouldHandleAngleAdjustKeyDown('ArrowDown', 'chargeAim', selectTarget())).toBe(false);
+  });
+
+  it('consumes Space and Enter only during active phases', () => {
+    expect(shouldConsumeActionKeyDown('Space', 'runup', plainTarget(), false)).toBe(true);
+    expect(shouldConsumeActionKeyDown('Enter', 'chargeAim', plainTarget(), false)).toBe(true);
+    expect(shouldConsumeActionKeyDown('Space', 'idle', plainTarget(), false)).toBe(false);
+    expect(shouldConsumeActionKeyDown('Enter', 'result', plainTarget(), false)).toBe(false);
+    expect(shouldConsumeActionKeyDown('Space', 'runup', inputTarget(), false)).toBe(false);
+    expect(shouldConsumeActionKeyDown('Enter', 'runup', plainTarget(), true)).toBe(false);
   });
 });
 

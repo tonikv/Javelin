@@ -2,8 +2,10 @@ import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { createRenderSession, renderGame } from '../game/render';
 import type { GameAction, GameState } from '../game/types';
 import { usePointerControls } from '../hooks/usePointerControls';
+import { useMediaQuery } from '../../../app/useMediaQuery';
 import { useI18n } from '../../../i18n/init';
 import { useTheme } from '../../../theme/init';
+import { detectTouchDevice } from './ControlHelp';
 
 type Dispatch = (action: GameAction) => void;
 
@@ -12,8 +14,34 @@ type GameCanvasProps = {
   dispatch: Dispatch;
 };
 
+const getPhaseAnnouncement = (
+  state: GameState,
+  t: (key: string) => string,
+  numberFormat: Intl.NumberFormat
+): string => {
+  switch (state.phase.tag) {
+    case 'runup':
+      return t('a11y.announce.runupStarted');
+    case 'chargeAim':
+      return t('a11y.announce.chargeAim');
+    case 'throwAnim':
+      return t('a11y.announce.throwAnim');
+    case 'flight':
+      return t('a11y.announce.flight');
+    case 'result':
+      return `${t('a11y.announce.resultPrefix')}: ${numberFormat.format(state.phase.distanceM)} m`;
+    case 'fault':
+      return t('a11y.announce.fault');
+    case 'idle':
+    default:
+      return t('a11y.announce.idle');
+  }
+};
+
 export const GameCanvas = ({ state, dispatch }: GameCanvasProps): ReactElement => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const stateRef = useRef(state);
+  const lastAnnouncedPhaseRef = useRef<GameState['phase']['tag'] | null>(null);
   const lastRenderAtMsRef = useRef<number>(performance.now());
   const contextRef = useRef<CanvasRenderingContext2D | null>(null);
   const renderSessionRef = useRef(createRenderSession());
@@ -23,13 +51,29 @@ export const GameCanvas = ({ state, dispatch }: GameCanvasProps): ReactElement =
     dpr: 1
   });
   const [viewportVersion, setViewportVersion] = useState(0);
+  const [phaseAnnouncement, setPhaseAnnouncement] = useState('');
   const { locale, t } = useI18n();
   const { theme } = useTheme();
+  const prefersReducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
 
   const numberFormat = useMemo(
     () => new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }),
     [locale]
   );
+  const isTouchDevice = useMemo(() => detectTouchDevice(), []);
+  const onboardingHint = useMemo(
+    () => (isTouchDevice ? t('onboarding.hintTouch') : t('onboarding.hint')),
+    [isTouchDevice, t]
+  );
+  const windHints = useMemo(
+    () => ({
+      headwind: t('javelin.windHintHeadwind'),
+      tailwind: t('javelin.windHintTailwind')
+    }),
+    [t]
+  );
+  const announcedResultDistance =
+    state.phase.tag === 'result' ? state.phase.distanceM : null;
   const releaseFlashLabels = useMemo(
     () => ({
       perfect: t('hud.perfect'),
@@ -39,6 +83,18 @@ export const GameCanvas = ({ state, dispatch }: GameCanvasProps): ReactElement =
     }),
     [t]
   );
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
+  useEffect(() => {
+    if (lastAnnouncedPhaseRef.current === state.phase.tag) {
+      return;
+    }
+    lastAnnouncedPhaseRef.current = state.phase.tag;
+    setPhaseAnnouncement(getPhaseAnnouncement(state, t, numberFormat));
+  }, [announcedResultDistance, numberFormat, state.phase.tag, t]);
 
   usePointerControls({ canvas: canvasRef.current, dispatch, state });
 
@@ -96,29 +152,53 @@ export const GameCanvas = ({ state, dispatch }: GameCanvasProps): ReactElement =
   }, []);
 
   useEffect(() => {
-    const context = contextRef.current;
-    const { width, height, dpr } = viewportRef.current;
-    if (!context || width <= 0 || height <= 0) {
-      return;
-    }
+    let rafId = 0;
 
-    const nowMs = performance.now();
-    const dtMs = Math.min(40, Math.max(0, nowMs - lastRenderAtMsRef.current));
-    lastRenderAtMsRef.current = nowMs;
-    context.setTransform(dpr, 0, 0, dpr, 0, 0);
-    renderGame(
-      context,
-      state,
-      width,
-      height,
-      dtMs,
-      numberFormat,
-      t('javelin.throwLine'),
-      releaseFlashLabels,
-      theme,
-      renderSessionRef.current
-    );
-  }, [state, numberFormat, t, releaseFlashLabels, viewportVersion, theme]);
+    const drawFrame = (): void => {
+      const context = contextRef.current;
+      const { width, height, dpr } = viewportRef.current;
+      if (context && width > 0 && height > 0) {
+        const nowMs = performance.now();
+        const dtMs = Math.min(40, Math.max(0, nowMs - lastRenderAtMsRef.current));
+        lastRenderAtMsRef.current = nowMs;
+        context.setTransform(dpr, 0, 0, dpr, 0, 0);
+        renderGame(
+          context,
+          stateRef.current,
+          width,
+          height,
+          dtMs,
+          numberFormat,
+          t('javelin.throwLine'),
+          releaseFlashLabels,
+          theme,
+          prefersReducedMotion,
+          {
+            onboarding: onboardingHint,
+            headwind: windHints.headwind,
+            tailwind: windHints.tailwind
+          },
+          renderSessionRef.current
+        );
+      }
+      rafId = window.requestAnimationFrame(drawFrame);
+    };
+
+    lastRenderAtMsRef.current = performance.now();
+    rafId = window.requestAnimationFrame(drawFrame);
+    return () => {
+      window.cancelAnimationFrame(rafId);
+    };
+  }, [
+    numberFormat,
+    onboardingHint,
+    prefersReducedMotion,
+    releaseFlashLabels,
+    t,
+    theme,
+    viewportVersion,
+    windHints
+  ]);
 
   return (
     <div className="canvas-frame">
@@ -126,9 +206,14 @@ export const GameCanvas = ({ state, dispatch }: GameCanvasProps): ReactElement =
         ref={canvasRef}
         className="game-canvas"
         style={{ touchAction: 'none' }}
-        role="img"
+        role="application"
+        tabIndex={0}
+        aria-roledescription={t('a11y.gameCanvas')}
         aria-label={t('a11y.gameCanvas')}
       />
+      <p className="sr-only" aria-live="assertive" aria-atomic="true">
+        {phaseAnnouncement}
+      </p>
     </div>
   );
 };

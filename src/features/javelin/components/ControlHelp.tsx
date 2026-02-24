@@ -5,7 +5,7 @@ type ControlHelpContentProps = {
   isTouchDevice?: boolean;
 };
 
-const detectTouchDevice = (): boolean => {
+export const detectTouchDevice = (): boolean => {
   if (typeof window === 'undefined') {
     return false;
   }

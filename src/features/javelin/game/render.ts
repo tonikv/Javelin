@@ -32,7 +32,7 @@ import {
 import { drawAthlete } from './renderAthlete';
 import { drawWorldTimingMeter } from './renderMeter';
 import { getRenderPalette, type RenderPalette } from './renderTheme';
-import { drawWindIndicator } from './renderWind';
+import { drawWindIndicator, getWindIndicatorLayout } from './renderWind';
 import {
   RUNUP_START_X_M,
   RUN_TO_DRAWBACK_BLEND_MS,
@@ -94,12 +94,27 @@ type ResultMarkerFadeState = {
   shownAtMs: number;
 };
 
+type PaletteCacheState = {
+  theme: ThemeMode;
+  palette: RenderPalette;
+} | null;
+
+type BackgroundGradientCacheState = {
+  width: number;
+  height: number;
+  theme: ThemeMode;
+  sky: CanvasGradient;
+  haze: CanvasGradient;
+} | null;
+
 export type RenderSession = {
   camera: CameraSmoothingState;
   resultMarker: ResultMarkerFadeState;
   lastRunupTapAtMs: number | null;
   lastFaultJavelinLanded: boolean;
   lastPhaseTag: GameState['phase']['tag'];
+  paletteCache: PaletteCacheState;
+  backgroundGradientCache: BackgroundGradientCacheState;
 };
 
 export const createRenderSession = (): RenderSession => ({
@@ -110,12 +125,22 @@ export const createRenderSession = (): RenderSession => ({
   },
   lastRunupTapAtMs: null,
   lastFaultJavelinLanded: false,
-  lastPhaseTag: 'idle'
+  lastPhaseTag: 'idle',
+  paletteCache: null,
+  backgroundGradientCache: null
 });
 
 type ReleaseFlashLabels = Record<TimingQuality, string> & {
   foulLine: string;
 };
+
+type OverlayHints = {
+  onboarding: string;
+  headwind: string;
+  tailwind: string;
+};
+
+const CANVAS_FONT_STACK = '"Trebuchet MS", "Segoe UI", sans-serif';
 
 const getOverlayUiScale = (width: number): number => {
   const safeWidth = Math.max(280, width);
@@ -141,22 +166,63 @@ const drawOutlinedText = (
   ctx.restore();
 };
 
-const drawBackground = (
+const getSessionPalette = (theme: ThemeMode, session: RenderSession): RenderPalette => {
+  if (session.paletteCache?.theme === theme) {
+    return session.paletteCache.palette;
+  }
+  const palette = getRenderPalette(theme);
+  session.paletteCache = { theme, palette };
+  return palette;
+};
+
+const getBackgroundGradients = (
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
-  palette: RenderPalette
-): void => {
+  palette: RenderPalette,
+  theme: ThemeMode,
+  session: RenderSession
+): { sky: CanvasGradient; haze: CanvasGradient } => {
+  const cache = session.backgroundGradientCache;
+  if (cache && cache.width === width && cache.height === height && cache.theme === theme) {
+    return { sky: cache.sky, haze: cache.haze };
+  }
+
   const sky = ctx.createLinearGradient(0, 0, 0, height);
   sky.addColorStop(0, palette.scene.skyTop);
   sky.addColorStop(0.56, palette.scene.skyMid);
   sky.addColorStop(1, palette.scene.skyBottom);
+
+  const haze = ctx.createRadialGradient(
+    width * 0.25,
+    height * 0.1,
+    20,
+    width * 0.25,
+    height * 0.1,
+    width * 0.8
+  );
+  haze.addColorStop(0, palette.scene.hazeCenter);
+  haze.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+  session.backgroundGradientCache = { width, height, theme, sky, haze };
+  return { sky, haze };
+};
+
+const drawBackground = (
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  palette: RenderPalette,
+  theme: ThemeMode,
+  session: RenderSession
+): void => {
+  const gradients = getBackgroundGradients(ctx, width, height, palette, theme, session);
+
+  const sky = gradients.sky;
   ctx.fillStyle = sky;
   ctx.fillRect(0, 0, width, height);
 
-  const haze = ctx.createRadialGradient(width * 0.25, height * 0.1, 20, width * 0.25, height * 0.1, width * 0.8);
-  haze.addColorStop(0, palette.scene.hazeCenter);
-  haze.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  const haze = gradients.haze;
   ctx.fillStyle = haze;
   ctx.fillRect(0, 0, width, height);
 };
@@ -215,7 +281,7 @@ const drawThrowLine = (
   ctx.lineTo(line.x, groundY + 19 * uiScale);
   ctx.stroke();
 
-  ctx.font = `700 ${Math.round(12 * uiScale)}px ui-sans-serif`;
+  ctx.font = `700 ${Math.round(12 * uiScale)}px ${CANVAS_FONT_STACK}`;
   drawOutlinedText(
     ctx,
     label,
@@ -266,7 +332,7 @@ const drawTrackAndField = (
     ctx.stroke();
 
     if (isMajor) {
-      ctx.font = `700 ${Math.round(12 * uiScale)}px ui-sans-serif`;
+      ctx.font = `700 ${Math.round(12 * uiScale)}px ${CANVAS_FONT_STACK}`;
       drawOutlinedText(
         ctx,
         `${relativeM} m`,
@@ -388,7 +454,7 @@ const drawLandingMarker = (
   ctx.closePath();
   ctx.fill();
 
-  ctx.font = `700 ${Math.round(10 * uiScale)}px ui-sans-serif`;
+  ctx.font = `700 ${Math.round(10 * uiScale)}px ${CANVAS_FONT_STACK}`;
   ctx.textAlign = 'left';
   drawOutlinedText(
     ctx,
@@ -410,7 +476,8 @@ const drawTrajectoryIndicator = (
   ctx: CanvasRenderingContext2D,
   toScreen: WorldToScreen,
   points: TrajectoryPoint[],
-  uiScale: number
+  uiScale: number,
+  reducedMotion: boolean
 ): void => {
   if (points.length === 0) {
     return;
@@ -422,7 +489,10 @@ const drawTrajectoryIndicator = (
   ctx.fillStyle = TRAJECTORY_PREVIEW_DOT_COLOR;
   for (let index = 0; index < points.length; index += 1) {
     const t = index / lastIndex;
-    const alpha = TRAJECTORY_PREVIEW_BASE_OPACITY + (TRAJECTORY_PREVIEW_END_OPACITY - TRAJECTORY_PREVIEW_BASE_OPACITY) * t;
+    const alpha = reducedMotion
+      ? TRAJECTORY_PREVIEW_BASE_OPACITY
+      : TRAJECTORY_PREVIEW_BASE_OPACITY +
+        (TRAJECTORY_PREVIEW_END_OPACITY - TRAJECTORY_PREVIEW_BASE_OPACITY) * t;
     const screen = toScreen(points[index]);
     ctx.globalAlpha = alpha;
     ctx.beginPath();
@@ -430,6 +500,59 @@ const drawTrajectoryIndicator = (
     ctx.fill();
   }
   ctx.restore();
+};
+
+const drawOnboardingHint = (
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  text: string,
+  uiScale: number,
+  palette: RenderPalette
+): void => {
+  if (!text.trim()) {
+    return;
+  }
+
+  const y = Math.max(56, height - 28 * uiScale);
+  ctx.textAlign = 'center';
+  ctx.font = `700 ${Math.round(11 * uiScale)}px ${CANVAS_FONT_STACK}`;
+  drawOutlinedText(
+    ctx,
+    text,
+    width / 2,
+    y,
+    palette.scene.throwLineLabelFill,
+    palette.scene.throwLineLabelOutline,
+    Math.max(2, 1.8 * uiScale)
+  );
+};
+
+const drawWindHint = (
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  windMs: number,
+  uiScale: number,
+  text: string,
+  palette: RenderPalette
+): void => {
+  if (!text.trim()) {
+    return;
+  }
+  const layout = getWindIndicatorLayout(width, uiScale);
+  const x = layout.labelX;
+  const y = layout.labelY + 14 * uiScale;
+  ctx.textAlign = 'left';
+  ctx.font = `700 ${Math.round(10 * uiScale)}px ${CANVAS_FONT_STACK}`;
+  drawOutlinedText(
+    ctx,
+    text,
+    x,
+    y,
+    windMs >= 0 ? palette.wind.headwindFlagFill : palette.wind.tailwindFlagFill,
+    palette.wind.labelOutline,
+    Math.max(1.6, 1.3 * uiScale)
+  );
 };
 
 type JavelinRenderState =
@@ -632,6 +755,8 @@ export const renderGame = (
   throwLineLabel: string,
   releaseFlashLabels: ReleaseFlashLabels,
   theme: ThemeMode,
+  reducedMotion: boolean,
+  hints: OverlayHints,
   session: RenderSession
 ): void => {
   const phaseChanged = state.phase.tag !== session.lastPhaseTag;
@@ -641,7 +766,8 @@ export const renderGame = (
       state.phase.javelin.vyMs,
       state.phase.javelin.vzMs
     );
-    setFlightWindIntensity(Math.min(1, speedMs / 38));
+    const motionAudioScale = reducedMotion ? 0.35 : 1;
+    setFlightWindIntensity(Math.min(1, speedMs / 38) * motionAudioScale);
   } else {
     setFlightWindIntensity(0);
   }
@@ -671,11 +797,11 @@ export const renderGame = (
   }
 
   const overlayUiScale = getOverlayUiScale(width);
-  const palette = getRenderPalette(theme);
-  const camera = createWorldToScreen(state, width, height, dtMs, session.camera);
+  const palette = getSessionPalette(theme, session);
+  const camera = createWorldToScreen(state, width, height, dtMs, session.camera, reducedMotion);
   const { toScreen, worldMinX, worldMaxX } = camera;
 
-  drawBackground(ctx, width, height, palette);
+  drawBackground(ctx, width, height, palette, theme, session);
   drawClouds(ctx, width, height, worldMinX, palette);
   drawTrackAndField(
     ctx,
@@ -695,8 +821,19 @@ export const renderGame = (
     state.nowMs,
     numberFormat,
     overlayUiScale,
-    theme
+    theme,
+    reducedMotion
   );
+  if (state.phase.tag === 'chargeAim') {
+    drawWindHint(
+      ctx,
+      width,
+      state.windMs,
+      overlayUiScale,
+      state.windMs >= 0 ? hints.headwind : hints.tailwind,
+      palette
+    );
+  }
 
   const pose = getPoseForState(state);
   const javelin = getVisibleJavelinRenderState(state, pose);
@@ -737,7 +874,11 @@ export const renderGame = (
       forceNorm: state.phase.forceNormPreview,
       windMs: state.windMs
     });
-    drawTrajectoryIndicator(ctx, toScreen, trajectoryPreview.points, overlayUiScale);
+    drawTrajectoryIndicator(ctx, toScreen, trajectoryPreview.points, overlayUiScale, reducedMotion);
+  }
+
+  if (state.phase.tag === 'idle' && state.roundId === 0) {
+    drawOnboardingHint(ctx, width, height, hints.onboarding, overlayUiScale, palette);
   }
 
   if (state.phase.tag === 'result') {
@@ -791,7 +932,7 @@ export const renderGame = (
       const scale = 1 + (1 - alpha) * 0.12;
       ctx.save();
       ctx.globalAlpha = alpha;
-      ctx.font = `900 ${Math.round(28 * scale * overlayUiScale)}px ui-sans-serif`;
+      ctx.font = `900 ${Math.round(28 * scale * overlayUiScale)}px ${CANVAS_FONT_STACK}`;
       ctx.textAlign = 'center';
       const y = 74 + (overlayUiScale - 1) * 10 - (1 - alpha) * 8 * overlayUiScale;
       ctx.strokeStyle = palette.scene.releaseFlashOutline;

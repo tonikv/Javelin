@@ -173,6 +173,7 @@ export const GAMEPLAY_TUNING: GameplayTuning = {
   },
 };
 
+// Re-exported for convenience; canonical source is GAMEPLAY_TUNING.
 export const RUNUP_TAP_GAIN_NORM = GAMEPLAY_TUNING.speedUp.tapGainNorm;
 export const RUNUP_TAP_SOFT_CAP_INTERVAL_MS =
   GAMEPLAY_TUNING.speedUp.tapSoftCapIntervalMs;

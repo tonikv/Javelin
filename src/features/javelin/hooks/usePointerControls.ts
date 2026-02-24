@@ -51,6 +51,9 @@ export const isInteractiveEventTarget = (target: EventTarget | null): boolean =>
 const allowsArrowAngleAdjust = (phaseTag: GameState['phase']['tag']): boolean =>
   phaseTag === 'idle' || phaseTag === 'runup' || phaseTag === 'chargeAim';
 
+const allowsActionKeyHandling = (phaseTag: GameState['phase']['tag']): boolean =>
+  phaseTag === 'runup' || phaseTag === 'chargeAim';
+
 export const shouldReleaseChargeFromEnterKeyUp = (
   code: string,
   phaseTag: GameState['phase']['tag'],
@@ -65,6 +68,17 @@ export const shouldHandleAngleAdjustKeyDown = (
   (code === 'ArrowUp' || code === 'ArrowDown') &&
   allowsArrowAngleAdjust(phaseTag) &&
   !isInteractiveEventTarget(target);
+
+export const shouldConsumeActionKeyDown = (
+  code: string,
+  phaseTag: GameState['phase']['tag'],
+  target: EventTarget | null,
+  repeat: boolean
+): boolean =>
+  !repeat &&
+  !isInteractiveEventTarget(target) &&
+  (code === 'Space' || code === 'Enter') &&
+  allowsActionKeyHandling(phaseTag);
 
 export const createTouchLongPressHandlers = ({
   dispatch,
@@ -217,16 +231,20 @@ export const usePointerControls = ({ canvas, dispatch, state }: UsePointerContro
         return;
       }
       const phaseTag = stateRef.current.phase.tag;
-      if (event.code === 'Space' && !event.repeat) {
+      if (event.code === 'Space' && shouldConsumeActionKeyDown(event.code, phaseTag, event.target, event.repeat)) {
         resumeAudioContext();
         event.preventDefault();
-        dispatch({ type: 'rhythmTap', atMs: now() });
+        if (phaseTag === 'runup') {
+          dispatch({ type: 'rhythmTap', atMs: now() });
+        }
         return;
       }
-      if (event.code === 'Enter' && !event.repeat && phaseTag === 'runup') {
+      if (event.code === 'Enter' && shouldConsumeActionKeyDown(event.code, phaseTag, event.target, event.repeat)) {
         resumeAudioContext();
         event.preventDefault();
-        dispatch({ type: 'beginChargeAim', atMs: now() });
+        if (phaseTag === 'runup') {
+          dispatch({ type: 'beginChargeAim', atMs: now() });
+        }
         return;
       }
       if (

@@ -81,6 +81,7 @@ type BuildFlagPolylineInput = {
   windMs: number;
   nowMs: number;
   uiScale: number;
+  reducedMotion?: boolean;
   segmentCount?: number;
 };
 
@@ -90,16 +91,18 @@ export const buildFlagPolyline = ({
   windMs,
   nowMs,
   uiScale,
+  reducedMotion = false,
   segmentCount = FLAG_SEGMENT_COUNT
 }: BuildFlagPolylineInput): FlagPolylinePoint[] => {
   const count = Math.max(3, Math.floor(segmentCount));
   const strength01 = windStrength01(windMs);
   const signedStrength = windSignedStrength(windMs);
+  const motionScale = reducedMotion ? 0.15 : 1;
   const segmentSweepPx = lerp(0.18, 8.8, strength01) * uiScale;
   const calmLeanPx = lerp(0.9, 0.2, strength01) * uiScale;
   const sagPx = lerp(5.2, 0.9, strength01) * uiScale;
-  const flapAmplitudePx = lerp(0.05, 4.9, strength01) * uiScale;
-  const flapFreqPerMs = lerp(0.0014, 0.012, strength01);
+  const flapAmplitudePx = lerp(0.05, 4.9, strength01) * uiScale * motionScale;
+  const flapFreqPerMs = lerp(0.0014, 0.012, strength01) * motionScale;
 
   const points: FlagPolylinePoint[] = [{ x: mastX + calmLeanPx, y: flagAnchorY }];
   let currentX = mastX + calmLeanPx;
@@ -173,7 +176,8 @@ export const drawWindIndicator = (
   nowMs: number,
   localeFormatter: Intl.NumberFormat,
   uiScale: number,
-  theme: ThemeMode = 'light'
+  theme: ThemeMode = 'light',
+  reducedMotion = false
 ): void => {
   const palette = getRenderPalette(theme);
   const layout = getWindIndicatorLayout(width, uiScale);
@@ -182,7 +186,8 @@ export const drawWindIndicator = (
     flagAnchorY: layout.flagAnchorY,
     windMs,
     nowMs,
-    uiScale
+    uiScale,
+    reducedMotion
   });
 
   ctx.save();

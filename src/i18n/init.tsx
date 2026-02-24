@@ -2,7 +2,9 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type PropsWithChildren,
   type ReactElement
@@ -64,11 +66,19 @@ const detectLocale = (): Locale => {
 
 export const I18nProvider = ({ children }: PropsWithChildren): ReactElement => {
   const [locale, setLocaleState] = useState<Locale>(detectLocale);
+  const numberFormatCacheRef = useRef(new Map<string, Intl.NumberFormat>());
 
   const setLocale = useCallback((next: Locale) => {
     setLocaleState(next);
     persistLocale(next);
   }, []);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+    document.documentElement.lang = locale;
+  }, [locale]);
 
   const t = useCallback(
     (key: string): string => resources[locale][key] ?? resources.en[key] ?? key,
@@ -76,8 +86,16 @@ export const I18nProvider = ({ children }: PropsWithChildren): ReactElement => {
   );
 
   const formatNumber = useCallback(
-    (value: number, maxFractionDigits = 1): string =>
-      new Intl.NumberFormat(locale, { maximumFractionDigits: maxFractionDigits }).format(value),
+    (value: number, maxFractionDigits = 1): string => {
+      const cacheKey = `${locale}-${maxFractionDigits}`;
+      const cache = numberFormatCacheRef.current;
+      let formatter = cache.get(cacheKey);
+      if (!formatter) {
+        formatter = new Intl.NumberFormat(locale, { maximumFractionDigits: maxFractionDigits });
+        cache.set(cacheKey, formatter);
+      }
+      return formatter.format(value);
+    },
     [locale]
   );
 

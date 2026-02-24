@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react';
 import { useI18n } from '../../../i18n/init';
+import { wrap01 } from '../game/math';
 import type { TimingQuality } from '../game/types';
 
 type HotZone = {
@@ -19,11 +20,6 @@ type CircularTimingMeterProps = {
 };
 
 const TAU = Math.PI * 2;
-
-const wrap01 = (value: number): number => {
-  const wrapped = value % 1;
-  return wrapped < 0 ? wrapped + 1 : wrapped;
-};
 
 const pointOnCircle = (cx: number, cy: number, r: number, phase01: number): { x: number; y: number } => {
   const angle = wrap01(phase01) * TAU - Math.PI / 2;
@@ -85,6 +81,7 @@ export const CircularTimingMeter = ({
               key={`${zone.kind}-${zone.start}-${zone.end}-${index}`}
               d={path}
               className={`timing-zone zone-${zone.kind}`}
+              strokeDasharray={zone.kind === 'good' ? '4 2' : undefined}
             />
           ))
         )}
@@ -93,7 +90,7 @@ export const CircularTimingMeter = ({
       <div className="timing-meter-meta">
         <span>{t(labelKey)}</span>
         {valueText && <strong>{valueText}</strong>}
-        {hitFeedback && <small>{t(`hud.${hitFeedback}`)}</small>}
+        {hitFeedback && <small aria-live="polite">{t(`hud.${hitFeedback}`)}</small>}
       </div>
     </div>
   );

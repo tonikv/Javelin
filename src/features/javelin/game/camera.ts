@@ -161,20 +161,14 @@ const createWorldToScreenWithCamera = (
 const updateSmoothedCamera = (
   state: GameState,
   dtMs: number,
-  cameraState: CameraSmoothingState
+  cameraState: CameraSmoothingState,
+  reducedMotion = false
 ): void => {
-  if (state.phase.tag === 'idle') {
-    resetSmoothCamera(cameraState);
-    return;
-  }
-
   const targetViewWidth = getViewWidthM(state);
   const targetYScale = getVerticalScale(state);
   const targetX = getCameraTargetX(state);
-  const phaseChanged = state.phase.tag !== cameraState.lastPhaseTag;
-  const isFlightTrackingPhase = state.phase.tag === 'flight' || state.phase.tag === 'result';
 
-  if (!isFlightTrackingPhase) {
+  if (reducedMotion) {
     Object.assign(cameraState, {
       viewWidthM: targetViewWidth,
       yScale: targetYScale,
@@ -183,6 +177,25 @@ const updateSmoothedCamera = (
     });
     return;
   }
+
+  switch (state.phase.tag) {
+    case 'idle':
+      resetSmoothCamera(cameraState);
+      return;
+    case 'flight':
+    case 'result':
+      break;
+    default:
+      Object.assign(cameraState, {
+        viewWidthM: targetViewWidth,
+        yScale: targetYScale,
+        targetX,
+        lastPhaseTag: state.phase.tag
+      });
+      return;
+  }
+
+  const phaseChanged = state.phase.tag !== cameraState.lastPhaseTag;
 
   const dt = Math.max(0, dtMs) / 1000;
   const profileLerpFactor = Math.min(
@@ -222,9 +235,10 @@ export const createWorldToScreen = (
   width: number,
   height: number,
   dtMs: number,
-  cameraState: CameraSmoothingState
+  cameraState: CameraSmoothingState,
+  reducedMotion = false
 ): { toScreen: WorldToScreen; worldMinX: number; worldMaxX: number } => {
-  updateSmoothedCamera(state, dtMs, cameraState);
+  updateSmoothedCamera(state, dtMs, cameraState, reducedMotion);
   return createWorldToScreenWithCamera(
     state,
     width,

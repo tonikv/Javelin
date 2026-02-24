@@ -187,6 +187,13 @@ const splitBodyMix = (
   javelinAngleRad: lerp(from.javelinAngleRad, to.javelinAngleRad, upperBlend)
 });
 
+/**
+ * Animation curve constants below represent body joint angles (radians)
+ * and offsets (meters) in the athlete's local coordinate system.
+ * Positive lean = forward, positive hip/shoulder = forward swing.
+ * These values were hand-tuned for visual quality and are not
+ * intended to be configurable at runtime.
+ */
 const runCurves = (t01: number, speedNorm: number, aimAngleDeg: number): MotionCurves => {
   const cycle = clamp01(t01) * Math.PI * 2;
   const stride = Math.sin(cycle);
@@ -312,40 +319,35 @@ const curvesForPose = (
 ): MotionCurves => {
   const t = clamp01(pose.animT);
 
-  if (pose.animTag === 'run') {
-    return runCurves(t, speedNorm, aimAngleDeg);
-  }
-
-  if (pose.animTag === 'aim') {
-    const targetAim = aimCurves(t, aimAngleDeg);
-    if (
-      typeof options.runBlendFromAnimT === 'number' &&
-      typeof options.runToAimBlend01 === 'number' &&
-      options.runToAimBlend01 < 1
-    ) {
-      const runSource = runCurves(options.runBlendFromAnimT, speedNorm, aimAngleDeg);
-      const upperBlend = easeInOutSine(options.runToAimBlend01);
-      const lowerBlend = easeInOutSine(
-        clamp01(options.runToAimBlend01 * (1 - Math.min(speedNorm * 6, 1)))
-      );
-      return splitBodyMix(runSource, targetAim, lowerBlend, upperBlend);
+  switch (pose.animTag) {
+    case 'run':
+      return runCurves(t, speedNorm, aimAngleDeg);
+    case 'aim': {
+      const targetAim = aimCurves(t, aimAngleDeg);
+      if (
+        typeof options.runBlendFromAnimT === 'number' &&
+        typeof options.runToAimBlend01 === 'number' &&
+        options.runToAimBlend01 < 1
+      ) {
+        const runSource = runCurves(options.runBlendFromAnimT, speedNorm, aimAngleDeg);
+        const upperBlend = easeInOutSine(options.runToAimBlend01);
+        const lowerBlend = easeInOutSine(
+          clamp01(options.runToAimBlend01 * (1 - Math.min(speedNorm * 6, 1)))
+        );
+        return splitBodyMix(runSource, targetAim, lowerBlend, upperBlend);
+      }
+      return targetAim;
     }
-    return targetAim;
+    case 'throw':
+      return throwCurves(t, aimAngleDeg);
+    case 'followThrough':
+      return followThroughCurves(t, speedNorm);
+    case 'fall':
+      return fallCurves(t);
+    case 'idle':
+    default:
+      return idleCurves(aimAngleDeg);
   }
-
-  if (pose.animTag === 'throw') {
-    return throwCurves(t, aimAngleDeg);
-  }
-
-  if (pose.animTag === 'followThrough') {
-    return followThroughCurves(t, speedNorm);
-  }
-
-  if (pose.animTag === 'fall') {
-    return fallCurves(t);
-  }
-
-  return idleCurves(aimAngleDeg);
 };
 
 export const computeAthletePoseGeometry = (
@@ -365,22 +367,20 @@ export const computeAthletePoseGeometry = (
   const shoulderCenter = add(pelvis, polar(torsoAngle, 0.58));
   const head = add(shoulderCenter, polar(Math.PI / 2 + curves.leanRad * 0.1, 0.22));
   const headTiltRad = (() => {
-    if (pose.animTag === 'idle') {
-      return 0;
+    switch (pose.animTag) {
+      case 'run':
+        return -0.1 - 0.08 * speedNorm;
+      case 'aim':
+      case 'throw':
+        return toRad(aimAngleDeg) * 0.35;
+      case 'followThrough':
+        return -0.15;
+      case 'fall':
+        return -0.5;
+      case 'idle':
+      default:
+        return 0;
     }
-    if (pose.animTag === 'run') {
-      return -0.1 - 0.08 * speedNorm;
-    }
-    if (pose.animTag === 'aim' || pose.animTag === 'throw') {
-      return toRad(aimAngleDeg) * 0.35;
-    }
-    if (pose.animTag === 'followThrough') {
-      return -0.15;
-    }
-    if (pose.animTag === 'fall') {
-      return -0.5;
-    }
-    return 0;
   })();
 
   const hipFront: PointM = { xM: pelvis.xM + 0.055, yM: pelvis.yM - 0.02 };
@@ -436,13 +436,15 @@ export const computeAthletePoseGeometry = (
       yM: shoulderFront.yM + aimDir.y * 0.48 - aimNormal.y * 0.06
     };
 
-    if (stage.stage === 'windup') {
-      return lerpPoint(hold, windupPoint, stage.windup01);
+    switch (stage.stage) {
+      case 'windup':
+        return lerpPoint(hold, windupPoint, stage.windup01);
+      case 'delivery':
+        return lerpPoint(windupPoint, releasePoint, stage.delivery01);
+      case 'follow':
+      default:
+        return lerpPoint(releasePoint, followPoint, stage.follow01);
     }
-    if (stage.stage === 'delivery') {
-      return lerpPoint(windupPoint, releasePoint, stage.delivery01);
-    }
-    return lerpPoint(releasePoint, followPoint, stage.follow01);
   })();
   const ikResult = solveArm2BoneIK(shoulderFront, ikTarget, 0.33, 0.31);
   const ikBlend =

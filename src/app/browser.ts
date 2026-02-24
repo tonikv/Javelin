@@ -39,6 +39,6 @@ export const safeLocalStorageSet = (key: string, value: string): void => {
   try {
     localStorage.setItem(key, value);
   } catch {
-    // Ignore storage write failures so gameplay and localization still work.
+    // Intentionally swallowed - localStorage may be unavailable or full.
   }
 };

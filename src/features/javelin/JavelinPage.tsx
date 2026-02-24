@@ -47,7 +47,12 @@ const SideColumnComponent = ({ highscores, clearHighscores }: SideColumnProps): 
     <aside className="side-column">
       <ControlHelp />
       <ScoreBoard highscores={highscores} />
-      <button type="button" className="ghost" onClick={clearHighscores}>
+      <button
+        type="button"
+        className="ghost"
+        onClick={clearHighscores}
+        aria-label={`${t('action.resetScores')} - ${t('scoreboard.title')}`}
+      >
         {t('action.resetScores')}
       </button>
     </aside>
@@ -91,7 +96,12 @@ const CompactSideColumnComponent = ({
           <ScoreBoardContent highscores={highscores} />
         </div>
       </details>
-      <button type="button" className="ghost reset-scores" onClick={clearHighscores}>
+      <button
+        type="button"
+        className="ghost reset-scores"
+        onClick={clearHighscores}
+        aria-label={`${t('action.resetScores')} - ${t('scoreboard.title')}`}
+      >
         {t('action.resetScores')}
       </button>
     </section>
