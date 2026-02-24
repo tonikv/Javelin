@@ -1,6 +1,10 @@
 import type { MeterWindow, TimingQuality } from './types';
 import { clamp } from './math';
 
+/**
+ * Test whether a cyclic meter phase is inside a window.
+ * Supports wrap-around windows where start > end.
+ */
 export const isInWindow = (phase01: number, window: MeterWindow): boolean => {
   const phase = clamp(phase01, 0, 1);
   if (window.start <= window.end) {
@@ -9,6 +13,9 @@ export const isInWindow = (phase01: number, window: MeterWindow): boolean => {
   return phase >= window.start || phase <= window.end;
 };
 
+/**
+ * Classify release timing as perfect, good, or miss based on configured windows.
+ */
 export const getTimingQuality = (
   phase01: number,
   perfectWindow: MeterWindow,

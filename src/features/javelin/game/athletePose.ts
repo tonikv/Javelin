@@ -8,8 +8,10 @@ import {
   toRad
 } from './math';
 import { ANGLE_MAX_DEG, ANGLE_MIN_DEG } from './constants';
-import { RUNUP_START_X_M } from './tuning';
+import { GAMEPLAY_TUNING } from './tuning';
 import type { AthletePoseState } from './types';
+
+const { runupStartXM: RUNUP_START_X_M } = GAMEPLAY_TUNING.movement;
 
 type PointM = {
   xM: number;
@@ -350,6 +352,13 @@ const curvesForPose = (
   }
 };
 
+/**
+ * Compute full-body joint geometry for the athlete in world meters.
+ * Coordinate system: +X downfield and +Y upward from ground level.
+ *
+ * Uses forward kinematics for body chains and two-bone IK for the throwing arm
+ * so the hand remains aligned with the javelin grip target.
+ */
 export const computeAthletePoseGeometry = (
   pose: AthletePoseState,
   speedNorm: number,

@@ -1,13 +1,15 @@
 import { ANGLE_MAX_DEG, ANGLE_MIN_DEG } from './constants';
 import { clamp, clamp01, easeOutQuad, lerp } from './math';
-import {
-  ANGLE_KEYBOARD_HOLD_MAX_DEG_PER_SEC,
-  ANGLE_KEYBOARD_HOLD_START_DEG_PER_SEC,
-  ANGLE_KEYBOARD_RAMP_MS,
-  ANGLE_POINTER_SMOOTHING,
-  ANGLE_KEYBOARD_STEP_DEG,
-  ANGLE_POINTER_DEADZONE_PX
-} from './tuning';
+import { GAMEPLAY_TUNING } from './tuning';
+
+const {
+  holdMaxDegPerSec: ANGLE_KEYBOARD_HOLD_MAX_DEG_PER_SEC,
+  holdStartDegPerSec: ANGLE_KEYBOARD_HOLD_START_DEG_PER_SEC,
+  rampMs: ANGLE_KEYBOARD_RAMP_MS,
+  pointerSmoothing: ANGLE_POINTER_SMOOTHING,
+  stepDeg: ANGLE_KEYBOARD_STEP_DEG,
+  pointerDeadzonePx: ANGLE_POINTER_DEADZONE_PX
+} = GAMEPLAY_TUNING.angleControl;
 
 const directionSign = (direction: 'up' | 'down'): number => (direction === 'up' ? 1 : -1);
 

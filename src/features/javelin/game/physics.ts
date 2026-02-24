@@ -43,6 +43,13 @@ const isFiniteState = (javelin: PhysicalJavelinState): boolean =>
   Number.isFinite(javelin.angleRad) &&
   Number.isFinite(javelin.angularVelRad);
 
+/**
+ * Compute launch speed from normalized run-up speed and charge force.
+ *
+ * @param speedNorm - Run-up speed from 0 (stationary) to 1 (max sprint).
+ * @param forceNorm - Charge force from 0 (weak) to 1 (perfect release).
+ * @returns Launch speed in meters per second.
+ */
 export const computeLaunchSpeedMs = (speedNorm: number, forceNorm: number): number => {
   const combinedPowerNorm = clamp(
     LAUNCH_RUNUP_WEIGHT * speedNorm + LAUNCH_FORCE_WEIGHT * forceNorm,
@@ -66,6 +73,11 @@ type CreatePhysicalJavelinInput = {
   releasedAtMs: number;
 };
 
+/**
+ * Create a javelin physics state at release time.
+ * Coordinate system: +X downfield, +Y upward, +Z lateral from throw centerline.
+ * Positions are meters and velocities are meters/second.
+ */
 export const createPhysicalJavelin = ({
   xM,
   yM,
@@ -110,6 +122,14 @@ const isTipFirstLanding = (javelin: PhysicalJavelinState): boolean => {
   return tip.tipYM <= tip.tailYM - 0.02 && javelin.vyMs < -0.25;
 };
 
+/**
+ * Step javelin physics by one frame.
+ * Applies gravity, aerodynamic drag/lift, angle alignment torque, and wind drift.
+ *
+ * @param dtMs - Time step in milliseconds, clamped internally to 1..50 ms.
+ * @param windMs - Head/tail wind component in m/s.
+ * @param windZMs - Crosswind component in m/s.
+ */
 export const updatePhysicalJavelin = (
   javelin: PhysicalJavelinState,
   dtMs: number,

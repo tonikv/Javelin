@@ -1,20 +1,21 @@
-import { memo, useEffect, useMemo, useReducer, useState, type ReactElement } from 'react';
+import { memo, useEffect, useReducer, useState, type ReactElement } from 'react';
 import { LanguageSwitch } from './components/LanguageSwitch';
 import { ThemeToggle } from './components/ThemeToggle';
 import { HudPanel } from './components/HudPanel';
 import { GameCanvas } from './components/GameCanvas';
+import { GameActions } from './components/GameActions';
+import { ResultDisplay } from './components/ResultDisplay';
+import { SaveScoreForm } from './components/SaveScoreForm';
 import { ScoreBoard, ScoreBoardContent } from './components/ScoreBoard';
 import { ControlHelp, ControlHelpContent } from './components/ControlHelp';
 import { gameReducer } from './game/reducer';
-import { resumeAudioContext } from './game/audio';
-import type { FaultReason, HighscoreEntry } from './game/types';
+import type { HighscoreEntry } from './game/types';
 import { useGameLoop } from './hooks/useGameLoop';
 import { useLocalHighscores } from './hooks/useLocalHighscores';
+import { useResultMessage } from './hooks/useResultMessage';
 import { useI18n } from '../../i18n/init';
 import { useMediaQuery } from '../../app/useMediaQuery';
 import { createInitialGameState } from './game/update';
-
-const faultReasonKey = (reason: FaultReason): string => `result.fault.${reason}`;
 
 type TopBarProps = {
   appTitle: string;
@@ -111,9 +112,8 @@ const CompactSideColumnComponent = ({
 const CompactSideColumn = memo(CompactSideColumnComponent);
 
 export const JavelinPage = (): ReactElement => {
-  const { t, formatNumber, locale } = useI18n();
+  const { t, locale } = useI18n();
   const [state, dispatch] = useReducer(gameReducer, undefined, createInitialGameState);
-  const [nameInput, setNameInput] = useState('AAA');
   const [savedRoundId, setSavedRoundId] = useState<number>(-1);
   const { highscores, addHighscore, clearHighscores, isHighscore } = useLocalHighscores();
   const isCompactLayout = useMediaQuery('(max-width: 1023px)');
@@ -134,58 +134,13 @@ export const JavelinPage = (): ReactElement => {
     });
   }, [state.phase, isHighscore]);
 
-  const resultMessage = useMemo(() => {
-    if (state.phase.tag === 'flight' && state.phase.launchedFrom.lineCrossedAtRelease) {
-      return t('javelin.result.foul_line');
-    }
-    if (state.phase.tag === 'result') {
-      const landingMessage =
-        state.phase.tipFirst === null
-          ? ''
-          : state.phase.tipFirst
-            ? ` · ${t('javelin.landingTipFirst')}`
-            : ` · ${t('javelin.landingFlat')}`;
-      if (state.phase.resultKind !== 'valid') {
-        return `${t(`javelin.result.${state.phase.resultKind}`)} · ${formatNumber(state.phase.distanceM)} m`;
-      }
-      return `${t('result.distance')} ${formatNumber(state.phase.distanceM)} m${landingMessage}`;
-    }
-    if (state.phase.tag === 'fault') {
-      return t(faultReasonKey(state.phase.reason));
-    }
-    return '';
-  }, [state.phase, t, formatNumber]);
-  const resultStatusMessage = useMemo(() => {
-    if (state.phase.tag === 'flight' && state.phase.launchedFrom.lineCrossedAtRelease) {
-      return t('result.notSavedInvalid');
-    }
-    if (state.phase.tag === 'fault') {
-      return t('result.notSavedInvalid');
-    }
-    if (state.phase.tag !== 'result') {
-      return '';
-    }
-    if (state.phase.resultKind !== 'valid') {
-      return t('result.notSavedInvalid');
-    }
-    if (!state.phase.isHighscore) {
-      return t('result.notHighscore');
-    }
-    return '';
-  }, [state.phase, t]);
+  const { resultMessage, resultStatusMessage, isFoulMessage, resultThrowSpecs } = useResultMessage(state);
 
   const canSaveScore =
     state.phase.tag === 'result' &&
     state.phase.resultKind === 'valid' &&
     state.phase.isHighscore &&
     savedRoundId !== state.roundId;
-  const resultDistanceM = state.phase.tag === 'result' ? state.phase.distanceM : null;
-  const resultThrowSpecs = state.phase.tag === 'result' ? state.phase.launchedFrom : null;
-
-  const isFoulMessage =
-    state.phase.tag === 'fault' ||
-    (state.phase.tag === 'flight' && state.phase.launchedFrom.lineCrossedAtRelease) ||
-    (state.phase.tag === 'result' && state.phase.resultKind !== 'valid');
 
   return (
     <main className="page">
@@ -195,71 +150,24 @@ export const JavelinPage = (): ReactElement => {
         <div className="main-column">
           <HudPanel state={state} />
           <GameCanvas state={state} dispatch={dispatch} />
-          <div className="actions">
-            <button
-              type="button"
-              onClick={(event) => {
-                resumeAudioContext();
-                dispatch({
-                  type: 'startRound',
-                  atMs: performance.now(),
-                  windMs: state.windMs,
-                  windZMs: state.windZMs
-                });
-                event.currentTarget.blur();
-              }}
-            >
-              {state.phase.tag === 'idle' ? t('action.start') : t('action.playAgain')}
-            </button>
-            <button
-              type="button"
-              className="ghost"
-              onClick={(event) => {
-                dispatch({ type: 'resetToIdle' });
-                event.currentTarget.blur();
-              }}
-            >
-              {t('phase.idle')}
-            </button>
-          </div>
-
-          <p
-            className={`result-live ${isFoulMessage ? 'is-foul' : ''}`}
-            aria-live="polite"
-          >
-            {resultMessage}
-          </p>
-          {resultStatusMessage && (
-            <p className={`result-note ${isFoulMessage ? 'is-foul' : ''}`}>{resultStatusMessage}</p>
-          )}
-          {resultThrowSpecs !== null && (
-            <div className="result-specs">
-              <span className="score-chip">
-                {t('spec.wind')}:{' '}
-                {resultThrowSpecs.windMs >= 0 ? '+' : ''}
-                {formatNumber(resultThrowSpecs.windMs)} m/s
-              </span>
-              <span className="score-chip">
-                {t('spec.angle')}: {formatNumber(resultThrowSpecs.angleDeg, 0)}°
-              </span>
-              <span className="score-chip">
-                {t('spec.launchSpeed')}: {formatNumber(resultThrowSpecs.launchSpeedMs)} m/s
-              </span>
-            </div>
-          )}
+          <GameActions state={state} dispatch={dispatch} />
+          <ResultDisplay
+            resultMessage={resultMessage}
+            resultStatusMessage={resultStatusMessage}
+            isFoulMessage={isFoulMessage}
+            resultThrowSpecs={resultThrowSpecs}
+          />
 
           {canSaveScore && state.phase.tag === 'result' && (
-            <form
-              className="save-form"
-              onSubmit={(event) => {
-                event.preventDefault();
+            <SaveScoreForm
+              onSave={(name) => {
                 if (state.phase.tag !== 'result') {
                   return;
                 }
                 addHighscore({
                   id: crypto.randomUUID(),
-                  name: nameInput.trim().slice(0, 10) || t('scoreboard.defaultName'),
-                  distanceM: resultDistanceM ?? 0,
+                  name,
+                  distanceM: state.phase.distanceM,
                   playedAtIso: new Date().toISOString(),
                   locale,
                   windMs: state.phase.launchedFrom.windMs,
@@ -268,18 +176,8 @@ export const JavelinPage = (): ReactElement => {
                 });
                 setSavedRoundId(state.roundId);
               }}
-            >
-              <label>
-                {t('scoreboard.name')}
-                <input
-                  minLength={3}
-                  maxLength={10}
-                  value={nameInput}
-                  onChange={(event) => setNameInput(event.target.value.toUpperCase())}
-                />
-              </label>
-              <button type="submit">{t('action.saveScore')}</button>
-            </form>
+              defaultName={t('scoreboard.defaultName')}
+            />
           )}
           {state.phase.tag === 'result' && state.phase.resultKind === 'valid' && state.phase.isHighscore && (
             <div className="badge">{t('result.highscore')}</div>

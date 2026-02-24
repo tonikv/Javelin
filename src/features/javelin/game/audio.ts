@@ -1,11 +1,14 @@
 import { clamp, lerp } from './math';
-import {
-  AUDIO_CROWD_AMBIENT_GAIN,
-  AUDIO_CROWD_VOLUME,
-  AUDIO_EFFECTS_VOLUME,
-  AUDIO_MASTER_VOLUME,
-  AUDIO_RUNUP_TAP_VOLUME
-} from './tuning';
+import { GAMEPLAY_TUNING } from './tuning';
+
+const {
+  masterVolume: AUDIO_MASTER_VOLUME,
+  runupTapVolume: AUDIO_RUNUP_TAP_VOLUME,
+  crowdVolume: AUDIO_CROWD_VOLUME,
+  effectsVolume: AUDIO_EFFECTS_VOLUME,
+  crowdAmbientGain: AUDIO_CROWD_AMBIENT_GAIN
+} = GAMEPLAY_TUNING.audio;
+
 type CrowdReaction = 'cheer' | 'groan';
 
 type AudioEngine = {

@@ -11,7 +11,9 @@ import {
   sampleCrosswindTargetMs,
   sampleWindTargetMs
 } from './wind';
-import { WIND_CYCLE_DURATION_MS } from './tuning';
+import { GAMEPLAY_TUNING } from './tuning';
+
+const { cycleDurationMs: WIND_CYCLE_DURATION_MS } = GAMEPLAY_TUNING.wind;
 
 describe('wind model', () => {
   it('keeps target samples within configured wind bounds', () => {

@@ -1,7 +1,13 @@
 import { clamp, lerp } from './math';
 import { getRenderPalette } from './renderTheme';
-import { WIND_VISUAL_CALM_THRESHOLD_MS, WIND_VISUAL_MAX_REFERENCE_MS } from './tuning';
+import { GAMEPLAY_TUNING } from './tuning';
+import { CANVAS_FONT_STACK } from './constants';
 import type { ThemeMode } from '../../../theme/init';
+
+const {
+  visualCalmThresholdMs: WIND_VISUAL_CALM_THRESHOLD_MS,
+  visualMaxReferenceMs: WIND_VISUAL_MAX_REFERENCE_MS
+} = GAMEPLAY_TUNING.wind;
 
 const MOBILE_WIND_BREAKPOINT_PX = 600;
 const FLAG_SEGMENT_COUNT = 6;
@@ -200,7 +206,7 @@ export const drawWindIndicator = (
   drawFlag(ctx, polyline, windMs, uiScale, theme);
   ctx.restore();
 
-  ctx.font = `700 ${Math.round(12 * uiScale)}px ui-sans-serif`;
+  ctx.font = `700 ${Math.round(12 * uiScale)}px ${CANVAS_FONT_STACK}`;
   const windText = `${windMs >= 0 ? '+' : ''}${localeFormatter.format(windMs)} m/s`;
   drawOutlinedText(
     ctx,

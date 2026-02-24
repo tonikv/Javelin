@@ -5,20 +5,22 @@ import {
   WIND_MIN_MS
 } from './constants';
 import { clamp, lerp } from './math';
-import {
-  WIND_CROSSWIND_AMPLITUDE_SCALE,
-  WIND_CROSSWIND_PHASE_OFFSET_RAD,
-  WIND_CYCLE_AMPLITUDE_MS,
-  WIND_CYCLE_DURATION_MS,
-  WIND_CYCLE_HARMONIC_AMPLITUDE_MS,
-  WIND_CYCLE_HARMONIC_MULTIPLIER,
-  WIND_MICRO_GUST_AMPLITUDE_MS,
-  WIND_MICRO_GUST_PERIOD_MS,
-  WIND_RANDOM_AMPLITUDE_MS,
-  WIND_RANDOM_BLEND,
-  WIND_RANDOM_KEYFRAME_MS,
-  WIND_SMOOTHING_MS
-} from './tuning';
+import { GAMEPLAY_TUNING } from './tuning';
+
+const {
+  crosswindAmplitudeScale: WIND_CROSSWIND_AMPLITUDE_SCALE,
+  crosswindPhaseOffsetRad: WIND_CROSSWIND_PHASE_OFFSET_RAD,
+  cycleAmplitudeMs: WIND_CYCLE_AMPLITUDE_MS,
+  cycleDurationMs: WIND_CYCLE_DURATION_MS,
+  cycleHarmonicAmplitudeMs: WIND_CYCLE_HARMONIC_AMPLITUDE_MS,
+  cycleHarmonicMultiplier: WIND_CYCLE_HARMONIC_MULTIPLIER,
+  microGustAmplitudeMs: WIND_MICRO_GUST_AMPLITUDE_MS,
+  microGustPeriodMs: WIND_MICRO_GUST_PERIOD_MS,
+  randomAmplitudeMs: WIND_RANDOM_AMPLITUDE_MS,
+  randomBlend: WIND_RANDOM_BLEND,
+  randomKeyframeMs: WIND_RANDOM_KEYFRAME_MS,
+  smoothingMs: WIND_SMOOTHING_MS
+} = GAMEPLAY_TUNING.wind;
 
 const TAU = Math.PI * 2;
 
@@ -101,6 +103,14 @@ export const sampleCrosswindTargetMs = (nowMs: number): number => {
   return clampCrosswind(target);
 };
 
+/**
+ * Advance headwind with deterministic target sampling and exponential smoothing.
+ *
+ * @param currentWindMs - Current smoothed wind in m/s.
+ * @param dtMs - Frame step in milliseconds.
+ * @param nowMs - Absolute timeline position in milliseconds.
+ * @returns Next wind value in m/s clamped to configured headwind range.
+ */
 export const advanceWindMs = (currentWindMs: number, dtMs: number, nowMs: number): number => {
   const dtS = clamp(dtMs / 1000, 0, 0.25);
   const safeCurrent = Number.isFinite(currentWindMs) ? currentWindMs : 0;

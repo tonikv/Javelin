@@ -14,8 +14,10 @@ import {
   FIELD_MAX_DISTANCE_M
 } from './constants';
 import { clamp } from './math';
-import { RUNUP_START_X_M } from './tuning';
+import { GAMEPLAY_TUNING } from './tuning';
 import type { GamePhase, GameState } from './types';
+
+const { runupStartXM: RUNUP_START_X_M } = GAMEPLAY_TUNING.movement;
 
 export type WorldToScreenInput = {
   xM: number;
@@ -100,6 +102,10 @@ const resetSmoothCamera = (cameraState: CameraSmoothingState): void => {
   Object.assign(cameraState, createInitialCameraState());
 };
 
+/**
+ * Compute world-space X target for the camera focus.
+ * Leads athlete during approach phases and tracks javelin progress in flight.
+ */
 export const getCameraTargetX = (state: GameState): number => {
   switch (state.phase.tag) {
     case 'runup':
@@ -215,6 +221,10 @@ const updateSmoothedCamera = (
   });
 };
 
+/**
+ * Create an unsmoothed world-to-screen transform for the given frame.
+ * Maps world meters into canvas pixels using the active phase camera profile.
+ */
 export const createWorldToScreenRaw = (
   state: GameState,
   width: number,

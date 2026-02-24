@@ -1,4 +1,5 @@
 import {
+  CANVAS_FONT_STACK,
   WORLD_METER_CURSOR_RADIUS_PX,
   WORLD_METER_LINE_WIDTH_PX,
   WORLD_METER_OFFSET_Y_PX,
@@ -7,10 +8,15 @@ import {
 import { clamp01, wrap01 } from './math';
 import { getForcePreviewPercent, getRunupMeterPhase01, getSpeedPercent } from './selectors';
 import { getRenderPalette } from './renderTheme';
-import { CHARGE_GOOD_WINDOW, CHARGE_PERFECT_WINDOW } from './tuning';
+import { GAMEPLAY_TUNING } from './tuning';
 import type { HeadAnchor } from './renderAthlete';
 import type { GameState, TimingQuality } from './types';
 import type { ThemeMode } from '../../../theme/init';
+
+const {
+  chargeGoodWindow: CHARGE_GOOD_WINDOW,
+  chargePerfectWindow: CHARGE_PERFECT_WINDOW
+} = GAMEPLAY_TUNING.throwPhase;
 
 type MeterZones = {
   perfect: { start: number; end: number };
@@ -212,7 +218,7 @@ export const drawWorldTimingMeter = (
   ctx.stroke();
 
   const valueLabel = `${meterState.valuePercent}%`;
-  ctx.font = `700 ${Math.round(11 * visualScale)}px ui-sans-serif`;
+  ctx.font = `700 ${Math.round(11 * visualScale)}px ${CANVAS_FONT_STACK}`;
   ctx.textAlign = 'center';
   ctx.strokeStyle = palette.meter.valueTextOutline;
   ctx.lineWidth = Math.max(2, 1.7 * visualScale);

@@ -1,5 +1,6 @@
 import type { AthletePoseGeometry } from './athletePose';
 import type { WorldToScreen } from './camera';
+import type { RenderPalette } from './renderTheme';
 
 export type HeadAnchor = {
   x: number;
@@ -28,17 +29,19 @@ const drawFrontArm = (
     shoulderCenter: { x: number; y: number };
     elbowFront: { x: number; y: number };
     handFront: { x: number; y: number };
-  }
+  },
+  palette: RenderPalette
 ): void => {
-  drawLimb(ctx, points.shoulderCenter, points.elbowFront, 5, '#0a2f4d');
-  drawLimb(ctx, points.elbowFront, points.handFront, 4, '#103c5e');
+  drawLimb(ctx, points.shoulderCenter, points.elbowFront, 5, palette.athlete.limbStroke);
+  drawLimb(ctx, points.elbowFront, points.handFront, 4, palette.athlete.limbFill);
 };
 
 export const drawAthlete = (
   ctx: CanvasRenderingContext2D,
   toScreen: WorldToScreen,
   pose: AthletePoseGeometry,
-  drawFrontArmOverHead: boolean
+  drawFrontArmOverHead: boolean,
+  palette: RenderPalette
 ): HeadAnchor => {
   const shadowCenter = toScreen({ xM: pose.pelvis.xM + 0.06, yM: 0.02 });
   ctx.fillStyle = 'rgba(5, 28, 42, 0.18)';
@@ -62,26 +65,26 @@ export const drawAthlete = (
     handBack: toScreen(pose.handBack)
   };
 
-  drawLimb(ctx, p.hipBack, p.kneeBack, 6, '#0a2f4d');
-  drawLimb(ctx, p.kneeBack, p.footBack, 5, '#124468');
-  drawLimb(ctx, p.hipFront, p.kneeFront, 6, '#0d3658');
-  drawLimb(ctx, p.kneeFront, p.footFront, 5, '#1b5b83');
+  drawLimb(ctx, p.hipBack, p.kneeBack, 6, palette.athlete.limbStroke);
+  drawLimb(ctx, p.kneeBack, p.footBack, 5, palette.athlete.limbFill);
+  drawLimb(ctx, p.hipFront, p.kneeFront, 6, palette.athlete.limbStroke);
+  drawLimb(ctx, p.kneeFront, p.footFront, 5, palette.athlete.limbFill);
 
-  drawLimb(ctx, p.pelvis, p.shoulderCenter, 9, '#0f3d62');
+  drawLimb(ctx, p.pelvis, p.shoulderCenter, 9, palette.athlete.limbStroke);
 
-  drawLimb(ctx, p.shoulderCenter, p.elbowBack, 5, '#124468');
-  drawLimb(ctx, p.elbowBack, p.handBack, 4, '#1b5b83');
+  drawLimb(ctx, p.shoulderCenter, p.elbowBack, 5, palette.athlete.limbFill);
+  drawLimb(ctx, p.elbowBack, p.handBack, 4, palette.athlete.limbFill);
 
   if (!drawFrontArmOverHead) {
-    drawFrontArm(ctx, p);
+    drawFrontArm(ctx, p, palette);
   }
 
-  ctx.fillStyle = '#ffe3bc';
+  ctx.fillStyle = palette.athlete.skin;
   ctx.beginPath();
   ctx.arc(p.head.x, p.head.y, 7.6, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.strokeStyle = '#073257';
+  ctx.strokeStyle = palette.athlete.outline;
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.arc(p.head.x, p.head.y, 7.6, 0, Math.PI * 2);
@@ -89,13 +92,13 @@ export const drawAthlete = (
 
   const eyeOffsetX = Math.cos(pose.headTiltRad) * 3.5 + Math.sin(pose.headTiltRad) * 0.5;
   const eyeOffsetY = -Math.sin(pose.headTiltRad) * 3.5 + Math.cos(pose.headTiltRad) * 0.5;
-  ctx.fillStyle = '#0b2c49';
+  ctx.fillStyle = palette.athlete.eye;
   ctx.beginPath();
   ctx.arc(p.head.x + eyeOffsetX, p.head.y - eyeOffsetY, 1.2, 0, Math.PI * 2);
   ctx.fill();
 
   if (drawFrontArmOverHead) {
-    drawFrontArm(ctx, p);
+    drawFrontArm(ctx, p, palette);
   }
 
   return p.head;

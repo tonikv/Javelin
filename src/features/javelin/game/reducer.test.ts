@@ -6,14 +6,22 @@ import {
 } from './constants';
 import { gameReducer } from './reducer';
 import {
-  CHARGE_FILL_DURATION_MS,
-  CHARGE_MAX_CYCLES,
-  RUNUP_START_X_M,
-  RUNUP_TAP_SOFT_CAP_INTERVAL_MS,
-  THROW_ANIM_DURATION_MS
+  GAMEPLAY_TUNING
 } from './tuning';
 import { createInitialGameState } from './update';
 import { advanceCrosswindMs, advanceWindMs } from './wind';
+
+const {
+  chargeFillDurationMs: CHARGE_FILL_DURATION_MS,
+  chargeMaxCycles: CHARGE_MAX_CYCLES,
+  throwAnimDurationMs: THROW_ANIM_DURATION_MS
+} = GAMEPLAY_TUNING.throwPhase;
+const {
+  runupStartXM: RUNUP_START_X_M
+} = GAMEPLAY_TUNING.movement;
+const {
+  tapSoftCapIntervalMs: RUNUP_TAP_SOFT_CAP_INTERVAL_MS
+} = GAMEPLAY_TUNING.speedUp;
 
 const tapRunupNTimes = (
   state: ReturnType<typeof createInitialGameState>,

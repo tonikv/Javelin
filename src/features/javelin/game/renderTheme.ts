@@ -52,6 +52,13 @@ export type RenderPalette = {
     tailwindFlagFill: string;
     tailwindFlagStroke: string;
   };
+  athlete: {
+    skin: string;
+    outline: string;
+    eye: string;
+    limbStroke: string;
+    limbFill: string;
+  };
 };
 
 const LIGHT_PALETTE: RenderPalette = {
@@ -106,6 +113,13 @@ const LIGHT_PALETTE: RenderPalette = {
     tailwindFlagFill: '#cf3a2f',
     tailwindFlagStroke: '#8e281f',
   },
+  athlete: {
+    skin: '#ffe3bc',
+    outline: '#073257',
+    eye: '#0b2c49',
+    limbStroke: '#073257',
+    limbFill: '#073257',
+  },
 };
 
 const DARK_PALETTE: RenderPalette = {
@@ -159,6 +173,13 @@ const DARK_PALETTE: RenderPalette = {
     headwindFlagStroke: '#2aa463',
     tailwindFlagFill: '#ff6b61',
     tailwindFlagStroke: '#d84f47',
+  },
+  athlete: {
+    skin: '#f5d6a8',
+    outline: '#a0c4e8',
+    eye: '#c0d8ef',
+    limbStroke: '#a0c4e8',
+    limbFill: '#a0c4e8',
   },
 };
 

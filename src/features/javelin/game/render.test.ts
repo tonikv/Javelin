@@ -7,8 +7,10 @@ import {
   getPlayerAngleAnchorScreen,
   getVisibleJavelinRenderState
 } from './render';
-import { RUNUP_START_X_M } from './tuning';
+import { GAMEPLAY_TUNING } from './tuning';
 import type { GameState } from './types';
+
+const { runupStartXM: RUNUP_START_X_M } = GAMEPLAY_TUNING.movement;
 
 const baseState: Pick<GameState, 'nowMs' | 'roundId' | 'windMs' | 'windZMs' | 'aimAngleDeg'> = {
   nowMs: 2000,

@@ -1,7 +1,12 @@
 import { ANGLE_MAX_DEG, ANGLE_MIN_DEG } from './constants';
 import { clamp, toRad } from './math';
 import { computeLaunchSpeedMs } from './physics';
-import { TRAJECTORY_PREVIEW_NUM_POINTS, TRAJECTORY_PREVIEW_TIME_STEP_S } from './tuning';
+import { GAMEPLAY_TUNING } from './tuning';
+
+const {
+  numPoints: TRAJECTORY_PREVIEW_NUM_POINTS,
+  timeStepS: TRAJECTORY_PREVIEW_TIME_STEP_S
+} = GAMEPLAY_TUNING.trajectoryIndicator;
 
 export type TrajectoryPoint = {
   xM: number;

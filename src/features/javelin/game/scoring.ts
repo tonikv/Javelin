@@ -3,13 +3,32 @@ import { clamp, roundTo1 } from './math';
 import type { ResultKind, ThrowInput } from './types';
 
 export const DISTANCE_MEASURE_MODE = 'throwLineArc' as const;
-export const FOUL_ON_LINE_CROSS = true as const;
-export const REQUIRE_TIP_FIRST = true as const;
-export const REQUIRE_SECTOR = true as const;
 
+/** @deprecated Prefer COMPETITION_RULES.sectorAngleDeg. */
 export const SECTOR_ANGLE_DEG = 28.96;
+/** @deprecated Prefer runtime sectorHalfAngleRad derived from ScoringRules. */
 export const SECTOR_HALF_ANGLE_RAD = (SECTOR_ANGLE_DEG / 2) * (Math.PI / 180);
 
+/** Configurable competition rules for throw legality evaluation. */
+export type ScoringRules = {
+  foulOnLineCross: boolean;
+  requireTipFirst: boolean;
+  requireSector: boolean;
+  sectorAngleDeg: number;
+};
+
+/** Standard competition rule set used by gameplay. */
+export const COMPETITION_RULES: ScoringRules = {
+  foulOnLineCross: true,
+  requireTipFirst: true,
+  requireSector: true,
+  sectorAngleDeg: 28.96
+};
+
+/**
+ * Score throw angle against the 36-degree optimum.
+ * Returns 1.0 at optimum and tapers down with larger deviations.
+ */
 export const angleEfficiency = (angleDeg: number): number => {
   const optimum = 36;
   const diff = Math.abs(angleDeg - optimum);
@@ -48,13 +67,14 @@ export const computeCompetitionDistanceM = (
 export const isLandingInSector = (
   landingTipXM: number,
   landingTipZM: number,
-  throwLineXM = THROW_LINE_X_M
+  throwLineXM = THROW_LINE_X_M,
+  sectorHalfAngleRad = SECTOR_HALF_ANGLE_RAD
 ): boolean => {
   const forward = landingTipXM - throwLineXM;
   if (forward <= 0) {
     return false;
   }
-  const maxAbsLateral = Math.tan(SECTOR_HALF_ANGLE_RAD) * forward;
+  const maxAbsLateral = Math.tan(sectorHalfAngleRad) * forward;
   return Math.abs(landingTipZM) <= maxAbsLateral;
 };
 
@@ -64,22 +84,32 @@ type LegalityInput = {
   landingTipZM: number;
   tipFirst: boolean;
   throwLineXM?: number;
+  rules?: ScoringRules;
 };
 
+/**
+ * Evaluate throw legality with foul line, sector, and tip-first rules.
+ */
 export const evaluateThrowLegality = ({
   lineCrossedAtRelease,
   landingTipXM,
   landingTipZM,
   tipFirst,
-  throwLineXM = THROW_LINE_X_M
+  throwLineXM = THROW_LINE_X_M,
+  rules = COMPETITION_RULES
 }: LegalityInput): { valid: boolean; resultKind: ResultKind } => {
-  if (FOUL_ON_LINE_CROSS && lineCrossedAtRelease) {
+  const sectorHalfAngleRad = (rules.sectorAngleDeg / 2) * (Math.PI / 180);
+
+  if (rules.foulOnLineCross && lineCrossedAtRelease) {
     return { valid: false, resultKind: 'foul_line' };
   }
-  if (REQUIRE_SECTOR && !isLandingInSector(landingTipXM, landingTipZM, throwLineXM)) {
+  if (
+    rules.requireSector &&
+    !isLandingInSector(landingTipXM, landingTipZM, throwLineXM, sectorHalfAngleRad)
+  ) {
     return { valid: false, resultKind: 'foul_sector' };
   }
-  if (REQUIRE_TIP_FIRST && !tipFirst) {
+  if (rules.requireTipFirst && !tipFirst) {
     return { valid: false, resultKind: 'foul_tip_first' };
   }
   return { valid: true, resultKind: 'valid' };

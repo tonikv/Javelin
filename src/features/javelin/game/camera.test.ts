@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { CAMERA_GROUND_BOTTOM_PADDING } from './constants';
 import { createWorldToScreenRaw, getCameraTargetX, getViewWidthM, RUNWAY_OFFSET_X } from './camera';
-import { RUNUP_START_X_M } from './tuning';
+import { GAMEPLAY_TUNING } from './tuning';
 import type { GameState } from './types';
+
+const { runupStartXM: RUNUP_START_X_M } = GAMEPLAY_TUNING.movement;
 
 const baseState: Pick<GameState, 'nowMs' | 'roundId' | 'windMs' | 'windZMs' | 'aimAngleDeg'> = {
   nowMs: 2200,

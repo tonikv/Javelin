@@ -1,7 +1,16 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
-import { createRenderSession, renderGame } from '../game/render';
+import { createRenderSession, renderGame, type GameAudioCallbacks } from '../game/render';
+import {
+  playChargeStart,
+  playCrowdReaction,
+  playFaultOof,
+  playLandingImpact,
+  playRunupTap,
+  playThrowWhoosh,
+  setFlightWindIntensity
+} from '../game/audio';
 import type { GameAction, GameState } from '../game/types';
-import { usePointerControls } from '../hooks/usePointerControls';
+import { usePointerControls } from '../hooks/controls';
 import { useMediaQuery } from '../../../app/useMediaQuery';
 import { useI18n } from '../../../i18n/init';
 import { useTheme } from '../../../theme/init';
@@ -83,6 +92,19 @@ export const GameCanvas = ({ state, dispatch }: GameCanvasProps): ReactElement =
     }),
     [t]
   );
+  const audioCallbacks = useMemo<GameAudioCallbacks>(
+    () => ({
+      onRunupTap: (tapGainNorm) => playRunupTap(tapGainNorm),
+      onChargeStart: () => playChargeStart(),
+      onThrowRelease: (speedNorm) => playThrowWhoosh(speedNorm),
+      onFlightWindUpdate: (intensity) => setFlightWindIntensity(intensity),
+      onFlightWindStop: () => setFlightWindIntensity(0),
+      onLandingImpact: (tipFirst) => playLandingImpact(tipFirst),
+      onCrowdReaction: (reaction) => playCrowdReaction(reaction),
+      onFault: () => playFaultOof()
+    }),
+    []
+  );
 
   useEffect(() => {
     stateRef.current = state;
@@ -162,24 +184,25 @@ export const GameCanvas = ({ state, dispatch }: GameCanvasProps): ReactElement =
         const dtMs = Math.min(40, Math.max(0, nowMs - lastRenderAtMsRef.current));
         lastRenderAtMsRef.current = nowMs;
         context.setTransform(dpr, 0, 0, dpr, 0, 0);
-        renderGame(
-          context,
-          stateRef.current,
+        renderGame({
+          ctx: context,
+          state: stateRef.current,
           width,
           height,
           dtMs,
           numberFormat,
-          t('javelin.throwLine'),
-          releaseFlashLabels,
-          theme,
-          prefersReducedMotion,
-          {
+          labels: {
+            throwLine: t('javelin.throwLine'),
+            releaseFlash: releaseFlashLabels,
             onboarding: onboardingHint,
             headwind: windHints.headwind,
             tailwind: windHints.tailwind
           },
-          renderSessionRef.current
-        );
+          theme,
+          prefersReducedMotion,
+          session: renderSessionRef.current,
+          audio: audioCallbacks
+        });
       }
       rafId = window.requestAnimationFrame(drawFrame);
     };
@@ -192,6 +215,7 @@ export const GameCanvas = ({ state, dispatch }: GameCanvasProps): ReactElement =
   }, [
     numberFormat,
     onboardingHint,
+    audioCallbacks,
     prefersReducedMotion,
     releaseFlashLabels,
     t,

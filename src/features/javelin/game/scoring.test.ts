@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   angleEfficiency,
+  COMPETITION_RULES,
   computeCompetitionDistanceM,
   computeThrowDistance,
   evaluateThrowLegality,
@@ -80,5 +81,31 @@ describe('scoring helpers', () => {
         tipFirst: false
       }).resultKind
     ).toBe('foul_tip_first');
+  });
+
+  it('allows line cross when foulOnLineCross is false', () => {
+    const result = evaluateThrowLegality({
+      lineCrossedAtRelease: true,
+      landingTipXM: 80,
+      landingTipZM: 0,
+      tipFirst: true,
+      rules: { ...COMPETITION_RULES, foulOnLineCross: false }
+    });
+
+    expect(result.valid).toBe(true);
+    expect(result.resultKind).toBe('valid');
+  });
+
+  it('allows flat landing when requireTipFirst is false', () => {
+    const result = evaluateThrowLegality({
+      lineCrossedAtRelease: false,
+      landingTipXM: 70,
+      landingTipZM: 0,
+      tipFirst: false,
+      rules: { ...COMPETITION_RULES, requireTipFirst: false }
+    });
+
+    expect(result.valid).toBe(true);
+    expect(result.resultKind).toBe('valid');
   });
 });

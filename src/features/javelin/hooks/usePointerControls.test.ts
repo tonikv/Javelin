@@ -6,7 +6,7 @@ import {
   shouldConsumeActionKeyDown,
   shouldHandleAngleAdjustKeyDown,
   shouldReleaseChargeFromEnterKeyUp
-} from './usePointerControls';
+} from './controls';
 
 const inputTarget = (): EventTarget => ({
   tagName: 'INPUT',

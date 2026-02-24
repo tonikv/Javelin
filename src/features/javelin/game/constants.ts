@@ -30,6 +30,8 @@ export const WORLD_METER_RADIUS_PX = 30;
 export const WORLD_METER_LINE_WIDTH_PX = 6;
 export const WORLD_METER_CURSOR_RADIUS_PX = 5;
 export const WORLD_METER_OFFSET_Y_PX = 44;
+/** Font stack for all canvas text rendering. */
+export const CANVAS_FONT_STACK = '"Trebuchet MS", "Segoe UI", sans-serif';
 
 export const JAVELIN_GRIP_OFFSET_M = 0.12;
 export const JAVELIN_GRIP_OFFSET_Y_M = 0.03;
