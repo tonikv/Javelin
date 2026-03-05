@@ -12,7 +12,7 @@ import {
   THROW_LINE_X_M
 } from '../constants';
 import { clamp } from '../math';
-import { GAMEPLAY_TUNING } from '../tuning';
+import { GAMEPLAY_TUNING, getDifficultyGameplayTuning } from '../tuning';
 import type { GameAction, GameState } from '../types';
 import { advanceCrosswindMs, advanceWindMs } from '../wind';
 import { createLateReleaseFaultPhase, isRunning, runupTapGainMultiplier } from './helpers';
@@ -23,17 +23,25 @@ import { tickRunup } from './tickRunup';
 import { tickThrowAnim } from './tickThrowAnim';
 
 const {
-  chargeFillDurationMs: CHARGE_FILL_DURATION_MS,
-  chargeGoodWindow: CHARGE_GOOD_WINDOW,
   chargeMaxCycles: CHARGE_MAX_CYCLES,
-  chargePerfectWindow: CHARGE_PERFECT_WINDOW,
   throwReleaseProgress01: THROW_RELEASE_PROGRESS
 } = GAMEPLAY_TUNING.throwPhase;
-const { tapGainNorm: RUNUP_TAP_GAIN_NORM } = GAMEPLAY_TUNING.speedUp;
 const { runupStartXM: RUNUP_START_X_M } = GAMEPLAY_TUNING.movement;
 
 export const reduceGameState = (state: GameState, action: GameAction): GameState => {
   switch (action.type) {
+    case 'setDifficulty': {
+      if (state.phase.tag !== 'idle' && state.phase.tag !== 'result') {
+        return state;
+      }
+      if (state.difficulty === action.difficulty) {
+        return state;
+      }
+      return {
+        ...state,
+        difficulty: action.difficulty
+      };
+    }
     case 'startRound': {
       return {
         ...state,
@@ -62,12 +70,14 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
       if (state.phase.tag !== 'runup') {
         return state;
       }
+      const difficultyTuning = getDifficultyGameplayTuning(state.difficulty);
       const phase = state.phase;
       const lastTapAtMs = phase.tap.lastTapAtMs;
       const tapIntervalMs =
         lastTapAtMs === null ? Number.POSITIVE_INFINITY : Math.max(0, action.atMs - lastTapAtMs);
-      const tapGainMultiplier = lastTapAtMs === null ? 1 : runupTapGainMultiplier(tapIntervalMs);
-      const tapGainNorm = RUNUP_TAP_GAIN_NORM * tapGainMultiplier;
+      const tapGainMultiplier =
+        lastTapAtMs === null ? 1 : runupTapGainMultiplier(tapIntervalMs, state.difficulty);
+      const tapGainNorm = difficultyTuning.speedUp.tapGainNorm * tapGainMultiplier;
       const speedNorm = clamp(phase.speedNorm + tapGainNorm, 0, 1);
 
       return {
@@ -96,6 +106,7 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
       if (state.phase.tag !== 'runup') {
         return state;
       }
+      const difficultyTuning = getDifficultyGameplayTuning(state.difficulty);
       return {
         ...state,
         nowMs: action.atMs,
@@ -109,8 +120,8 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
           chargeStartedAtMs: action.atMs,
           chargeMeter: {
             phase01: 0,
-            perfectWindow: CHARGE_PERFECT_WINDOW,
-            goodWindow: CHARGE_GOOD_WINDOW,
+            perfectWindow: difficultyTuning.throwPhase.chargePerfectWindow,
+            goodWindow: difficultyTuning.throwPhase.chargeGoodWindow,
             lastQuality: null,
             lastSampleAtMs: action.atMs
           },
@@ -170,8 +181,9 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
       if (state.phase.tag !== 'chargeAim') {
         return state;
       }
+      const difficultyTuning = getDifficultyGameplayTuning(state.difficulty);
       const elapsedMs = Math.max(0, action.atMs - state.phase.chargeStartedAtMs);
-      const rawFill01 = elapsedMs / CHARGE_FILL_DURATION_MS;
+      const rawFill01 = elapsedMs / difficultyTuning.throwPhase.chargeFillDurationMs;
       const fullCycles = Math.floor(rawFill01);
       if (fullCycles >= CHARGE_MAX_CYCLES) {
         return {

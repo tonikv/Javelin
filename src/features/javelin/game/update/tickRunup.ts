@@ -4,22 +4,20 @@
  */
 import { RUNUP_MAX_X_M } from '../constants';
 import { clamp } from '../math';
-import { GAMEPLAY_TUNING } from '../tuning';
+import { GAMEPLAY_TUNING, getDifficultyGameplayTuning } from '../tuning';
 import type { GameState } from '../types';
 import { advanceRunAnimT, isRunning, runSpeedMsFromNorm } from './helpers';
 
-const {
-  runupSpeedDecayPerSecond: RUNUP_SPEED_DECAY_PER_SECOND,
-  runupStartXM: RUNUP_START_X_M
-} = GAMEPLAY_TUNING.movement;
+const { runupStartXM: RUNUP_START_X_M } = GAMEPLAY_TUNING.movement;
 
 export const tickRunup = (state: GameState, dtMs: number): GameState => {
   if (state.phase.tag !== 'runup') {
     return state;
   }
+  const { runupSpeedDecayPerSecond } = getDifficultyGameplayTuning(state.difficulty).movement;
 
   const speedAfterDecay = clamp(
-    state.phase.speedNorm - (dtMs / 1000) * RUNUP_SPEED_DECAY_PER_SECOND,
+    state.phase.speedNorm - (dtMs / 1000) * runupSpeedDecayPerSecond,
     0,
     1
   );

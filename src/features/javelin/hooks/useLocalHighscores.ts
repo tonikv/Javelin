@@ -1,7 +1,13 @@
 import { useCallback, useMemo, useState } from 'react';
 import { safeLocalStorageGet, safeLocalStorageSet } from '../../../app/browser';
-import { HIGHSCORE_STORAGE_KEY, MAX_HIGHSCORES } from '../game/constants';
-import type { HighscoreEntry, Locale } from '../game/types';
+import {
+  HIGHSCORE_STORAGE_KEY,
+  HIGHSCORE_STORAGE_KEY_LEGACY,
+  MAX_HIGHSCORES
+} from '../game/constants';
+import { difficultyLevels, type DifficultyLevel, type HighscoreEntry, type Locale } from '../game/types';
+
+type HighscoresByDifficulty = Record<DifficultyLevel, HighscoreEntry[]>;
 
 const compareHighscores = (a: HighscoreEntry, b: HighscoreEntry): number => {
   if (b.distanceM !== a.distanceM) {
@@ -20,9 +26,21 @@ export const insertHighscoreSorted = (
   entry: HighscoreEntry
 ): HighscoreEntry[] => [...entries, entry].sort(compareHighscores);
 
-const supportedLocales = new Set<Locale>(['fi', 'sv', 'en']);
+export const isHighscoreForEntries = (entries: HighscoreEntry[], distanceM: number): boolean => {
+  const threshold = entries.length >= MAX_HIGHSCORES ? entries[MAX_HIGHSCORES - 1].distanceM : null;
+  return threshold === null || distanceM > threshold;
+};
 
-const parseEntry = (value: unknown): HighscoreEntry | null => {
+const supportedLocales = new Set<Locale>(['fi', 'sv', 'en']);
+const difficultySet = new Set<DifficultyLevel>(difficultyLevels);
+
+const createEmptyHighscoreBuckets = (): HighscoresByDifficulty => ({
+  rookie: [],
+  pro: [],
+  elite: []
+});
+
+const parseEntry = (value: unknown, fallbackDifficulty?: DifficultyLevel): HighscoreEntry | null => {
   if (typeof value !== 'object' || value === null) {
     return null;
   }
@@ -37,7 +55,26 @@ const parseEntry = (value: unknown): HighscoreEntry | null => {
     return null;
   }
 
-  if (raw.locale !== undefined && (typeof raw.locale !== 'string' || !supportedLocales.has(raw.locale as Locale))) {
+  let difficulty: DifficultyLevel | undefined;
+  if (raw.difficulty !== undefined) {
+    if (typeof raw.difficulty !== 'string' || !difficultySet.has(raw.difficulty as DifficultyLevel)) {
+      return null;
+    }
+    difficulty = raw.difficulty as DifficultyLevel;
+    if (fallbackDifficulty !== undefined && difficulty !== fallbackDifficulty) {
+      return null;
+    }
+  } else {
+    difficulty = fallbackDifficulty;
+  }
+  if (!difficulty) {
+    return null;
+  }
+
+  if (
+    raw.locale !== undefined &&
+    (typeof raw.locale !== 'string' || !supportedLocales.has(raw.locale as Locale))
+  ) {
     return null;
   }
   const locale: Locale = raw.locale === undefined ? 'en' : (raw.locale as Locale);
@@ -63,6 +100,7 @@ const parseEntry = (value: unknown): HighscoreEntry | null => {
   return {
     id: raw.id,
     name: raw.name,
+    difficulty,
     distanceM: raw.distanceM,
     playedAtIso: raw.playedAtIso,
     locale,
@@ -74,28 +112,78 @@ const parseEntry = (value: unknown): HighscoreEntry | null => {
 
 const isDefined = <T>(value: T | null): value is T => value !== null;
 
-export const loadHighscores = (): HighscoreEntry[] => {
-  const raw = safeLocalStorageGet(HIGHSCORE_STORAGE_KEY);
-  if (!raw) {
-    return [];
+const parseHighscoresByDifficulty = (value: unknown): HighscoresByDifficulty | null => {
+  if (typeof value !== 'object' || value === null) {
+    return null;
   }
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) {
-      return [];
+  const raw = value as Record<string, unknown>;
+  const parsed = createEmptyHighscoreBuckets();
+
+  for (const difficulty of difficultyLevels) {
+    const listValue = raw[difficulty];
+    if (!Array.isArray(listValue)) {
+      return null;
     }
-    return parsed
-      .map(parseEntry)
+    parsed[difficulty] = listValue
+      .map((entry) => parseEntry(entry, difficulty))
       .filter(isDefined)
       .sort(compareHighscores)
       .slice(0, MAX_HIGHSCORES);
-  } catch {
+  }
+
+  return parsed;
+};
+
+const parseLegacyHighscores = (value: unknown): HighscoreEntry[] => {
+  if (!Array.isArray(value)) {
     return [];
+  }
+  return value
+    .map((entry) => parseEntry(entry, 'rookie'))
+    .filter(isDefined)
+    .sort(compareHighscores)
+    .slice(0, MAX_HIGHSCORES)
+    .map((entry) => ({
+      ...entry,
+      difficulty: 'rookie' as const
+    }));
+};
+
+export const saveHighscoresByDifficulty = (entries: HighscoresByDifficulty): void => {
+  safeLocalStorageSet(HIGHSCORE_STORAGE_KEY, JSON.stringify(entries));
+};
+
+export const loadHighscoresByDifficulty = (): HighscoresByDifficulty => {
+  const rawV2 = safeLocalStorageGet(HIGHSCORE_STORAGE_KEY);
+  if (rawV2) {
+    try {
+      const parsed = parseHighscoresByDifficulty(JSON.parse(rawV2) as unknown);
+      if (parsed) {
+        return parsed;
+      }
+    } catch {
+      // Continue to legacy migration below.
+    }
+  }
+
+  const legacyRaw = safeLocalStorageGet(HIGHSCORE_STORAGE_KEY_LEGACY);
+  if (!legacyRaw) {
+    return createEmptyHighscoreBuckets();
+  }
+
+  try {
+    const legacyEntries = parseLegacyHighscores(JSON.parse(legacyRaw) as unknown);
+    const migrated = createEmptyHighscoreBuckets();
+    migrated.rookie = legacyEntries;
+    saveHighscoresByDifficulty(migrated);
+    return migrated;
+  } catch {
+    return createEmptyHighscoreBuckets();
   }
 };
 
-export const saveHighscores = (entries: HighscoreEntry[]): void => {
-  safeLocalStorageSet(HIGHSCORE_STORAGE_KEY, JSON.stringify(entries));
+type UseLocalHighscoresOptions = {
+  difficulty: DifficultyLevel;
 };
 
 type UseLocalHighscoresResult = {
@@ -103,38 +191,59 @@ type UseLocalHighscoresResult = {
   addHighscore: (entry: HighscoreEntry) => void;
   clearHighscores: () => void;
   isHighscore: (distanceM: number) => boolean;
+  isHighscoreForDifficulty: (distanceM: number, difficulty: DifficultyLevel) => boolean;
 };
 
-export const useLocalHighscores = (): UseLocalHighscoresResult => {
-  const [highscores, setHighscores] = useState<HighscoreEntry[]>(loadHighscores);
+export const useLocalHighscores = ({ difficulty }: UseLocalHighscoresOptions): UseLocalHighscoresResult => {
+  const [highscoresByDifficulty, setHighscoresByDifficulty] = useState<HighscoresByDifficulty>(
+    loadHighscoresByDifficulty
+  );
+
+  const highscores = useMemo(() => highscoresByDifficulty[difficulty], [difficulty, highscoresByDifficulty]);
 
   const addHighscore = useCallback((entry: HighscoreEntry) => {
-    setHighscores((previous) => {
-      const next = pruneHighscores(insertHighscoreSorted(previous, entry));
-      saveHighscores(next);
+    setHighscoresByDifficulty((previous) => {
+      const nextForDifficulty = pruneHighscores(
+        insertHighscoreSorted(previous[entry.difficulty], entry)
+      );
+      const next = {
+        ...previous,
+        [entry.difficulty]: nextForDifficulty
+      };
+      saveHighscoresByDifficulty(next);
       return next;
     });
   }, []);
 
   const clearHighscores = useCallback(() => {
-    setHighscores([]);
-    saveHighscores([]);
-  }, []);
+    setHighscoresByDifficulty((previous) => {
+      const next = {
+        ...previous,
+        [difficulty]: []
+      };
+      saveHighscoresByDifficulty(next);
+      return next;
+    });
+  }, [difficulty]);
 
-  const threshold = useMemo<number | null>(
-    () => (highscores.length >= MAX_HIGHSCORES ? highscores[MAX_HIGHSCORES - 1].distanceM : null),
-    [highscores]
+  const isHighscoreForDifficulty = useCallback(
+    (distanceM: number, forDifficulty: DifficultyLevel): boolean => {
+      const board = highscoresByDifficulty[forDifficulty];
+      return isHighscoreForEntries(board, distanceM);
+    },
+    [highscoresByDifficulty]
   );
 
   const isHighscore = useCallback(
-    (distanceM: number) => threshold === null || distanceM > threshold,
-    [threshold]
+    (distanceM: number): boolean => isHighscoreForDifficulty(distanceM, difficulty),
+    [difficulty, isHighscoreForDifficulty]
   );
 
   return {
     highscores,
     addHighscore,
     clearHighscores,
-    isHighscore
+    isHighscore,
+    isHighscoreForDifficulty
   };
 };

@@ -60,6 +60,7 @@ export const tickThrowAnim = (state: GameState, dtMs: number, nowMs: number): Ga
           releasedAtMs: nowMs
         }),
         launchedFrom: {
+          difficulty: state.difficulty,
           speedNorm: state.phase.speedNorm,
           athleteXM: state.phase.athleteXM,
           angleDeg: state.phase.angleDeg,

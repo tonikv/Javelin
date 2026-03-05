@@ -36,7 +36,7 @@ export const HudPanel = ({ state }: HudPanelProps): ReactElement => {
     state.phase.tag === 'runup'
       ? `${t('javelin.runupHint')} ${throwLineRemainingM !== null ? `${formatNumber(throwLineRemainingM)} m` : ''}`
       : state.phase.tag === 'chargeAim'
-        ? t('javelin.speedPassiveHint')
+        ? t(`javelin.speedPassiveHint.${state.difficulty}`)
         : '';
 
   return (

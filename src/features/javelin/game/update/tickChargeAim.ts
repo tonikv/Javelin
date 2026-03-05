@@ -5,28 +5,24 @@
 import { RUNUP_MAX_X_M } from '../constants';
 import { computeForcePreview, getTimingQuality } from '../chargeMeter';
 import { clamp } from '../math';
-import { GAMEPLAY_TUNING } from '../tuning';
+import { GAMEPLAY_TUNING, getDifficultyGameplayTuning } from '../tuning';
 import type { GameState } from '../types';
 import { advanceRunAnimT, createLateReleaseFaultPhase, runSpeedMsFromNorm } from './helpers';
 
 const {
-  chargeAimSpeedDecayPerSecond: CHARGE_AIM_SPEED_DECAY_PER_SECOND,
-  chargeAimStopSpeedNorm: CHARGE_AIM_STOP_SPEED_NORM,
-  runupStartXM: RUNUP_START_X_M
-} = GAMEPLAY_TUNING.movement;
-const {
-  chargeFillDurationMs: CHARGE_FILL_DURATION_MS,
   chargeMaxCycles: CHARGE_MAX_CYCLES,
   runToDrawbackBlendMs: RUN_TO_DRAWBACK_BLEND_MS
 } = GAMEPLAY_TUNING.throwPhase;
+const { runupStartXM: RUNUP_START_X_M } = GAMEPLAY_TUNING.movement;
 
 export const tickChargeAim = (state: GameState, dtMs: number, nowMs: number): GameState => {
   if (state.phase.tag !== 'chargeAim') {
     return state;
   }
+  const tuning = getDifficultyGameplayTuning(state.difficulty);
 
   const elapsedMs = Math.max(0, nowMs - state.phase.chargeStartedAtMs);
-  const rawFill01 = elapsedMs / CHARGE_FILL_DURATION_MS;
+  const rawFill01 = elapsedMs / tuning.throwPhase.chargeFillDurationMs;
   const fullCycles = Math.floor(rawFill01);
   if (fullCycles >= CHARGE_MAX_CYCLES) {
     return {
@@ -37,12 +33,12 @@ export const tickChargeAim = (state: GameState, dtMs: number, nowMs: number): Ga
 
   const phase01 = clamp(rawFill01 % 1, 0, 1);
   const speedAfterDecay = clamp(
-    state.phase.speedNorm - (dtMs / 1000) * CHARGE_AIM_SPEED_DECAY_PER_SECOND,
+    state.phase.speedNorm - (dtMs / 1000) * tuning.movement.chargeAimSpeedDecayPerSecond,
     0,
     1
   );
   const speedNorm = Math.max(speedAfterDecay, 0);
-  const stillRunning = speedNorm > CHARGE_AIM_STOP_SPEED_NORM;
+  const stillRunning = speedNorm > tuning.movement.chargeAimStopSpeedNorm;
   const runSpeedMs = stillRunning ? runSpeedMsFromNorm(speedNorm) : 0;
   const runupDistanceM = clamp(
     state.phase.runupDistanceM + runSpeedMs * (dtMs / 1000),

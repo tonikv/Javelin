@@ -1,15 +1,16 @@
 import type { APIGatewayProxyEventQueryStringParameters } from 'aws-lambda';
 import { difficulties, type Difficulty, type NewScoreInput, type ScoreItem } from './model';
+import { isBlockedPlayerName } from './nameModeration';
 
 const difficultySet = new Set<Difficulty>(difficulties);
 
 const DEFAULT_LIMIT = 10;
 const MAX_LIMIT = 50;
 
-const PLAYER_NAME_MAX_LENGTH = 24;
 const CLIENT_VERSION_MAX_LENGTH = 32;
 const COUNTRY_MAX_LENGTH = 8;
 const LOCALE_MAX_LENGTH = 12;
+const PLAYER_NAME_PATTERN = /^[A-Z]{3}$/;
 
 const DISTANCE_MIN_MM = 0;
 const DISTANCE_MAX_MM = 130000;
@@ -45,16 +46,16 @@ const parseRequiredDifficulty = (value: unknown): Difficulty => {
   return value as Difficulty;
 };
 
-const parseRequiredString = (value: unknown, field: string, maxLength: number): string => {
+const parsePlayerName = (value: unknown): string => {
   if (typeof value !== 'string') {
-    throw toValidationError(field, 'must be a string');
+    throw toValidationError('playerName', 'must be a string');
   }
-  const cleaned = cleanText(value).replace(/\s+/g, ' ');
-  if (cleaned.length === 0) {
-    throw toValidationError(field, 'must not be empty');
+  const cleaned = cleanText(value);
+  if (!PLAYER_NAME_PATTERN.test(cleaned)) {
+    throw toValidationError('playerName', 'must match ^[A-Z]{3}$');
   }
-  if (cleaned.length > maxLength) {
-    throw toValidationError(field, `must be at most ${maxLength} characters`);
+  if (isBlockedPlayerName(cleaned)) {
+    throw toValidationError('playerName', 'is not allowed');
   }
   return cleaned;
 };
@@ -171,7 +172,7 @@ export const parsePostScoreInput = (rawBody: string): NewScoreInput => {
   }
 
   const difficulty = parseRequiredDifficulty(payload.difficulty);
-  const playerName = parseRequiredString(payload.playerName, 'playerName', PLAYER_NAME_MAX_LENGTH);
+  const playerName = parsePlayerName(payload.playerName);
   const distanceMm = parseRequiredInteger(payload.distanceMm, 'distanceMm', DISTANCE_MIN_MM, DISTANCE_MAX_MM);
   const playedAt = parsePlayedAt(payload.playedAt);
 

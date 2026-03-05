@@ -4,6 +4,10 @@ export type FaultReason = 'lateRelease' | 'invalidRelease' | 'lowAngle';
 
 export type TimingQuality = 'perfect' | 'good' | 'miss';
 
+export const difficultyLevels = ['rookie', 'pro', 'elite'] as const;
+
+export type DifficultyLevel = (typeof difficultyLevels)[number];
+
 export type MeterWindow = {
   start: number;
   end: number;
@@ -40,6 +44,7 @@ export type ThrowInput = {
 };
 
 export type LaunchSnapshot = {
+  difficulty: DifficultyLevel;
   speedNorm: number;
   angleDeg: number;
   forceNorm: number;
@@ -133,6 +138,7 @@ export type GamePhase =
 export type GameState = {
   nowMs: number;
   roundId: number;
+  difficulty: DifficultyLevel;
   windMs: number;
   windZMs: number;
   aimAngleDeg: number;
@@ -142,6 +148,7 @@ export type GameState = {
 export type GameAction =
   | { type: 'startRound'; atMs: number; windMs: number; windZMs?: number }
   | { type: 'rhythmTap'; atMs: number }
+  | { type: 'setDifficulty'; difficulty: DifficultyLevel }
   | { type: 'beginChargeAim'; atMs: number }
   | { type: 'setAngle'; angleDeg: number }
   | { type: 'adjustAngle'; deltaDeg: number }
@@ -153,6 +160,7 @@ export type GameAction =
 export type HighscoreEntry = {
   id: string;
   name: string;
+  difficulty: DifficultyLevel;
   distanceM: number;
   playedAtIso: string;
   locale: Locale;

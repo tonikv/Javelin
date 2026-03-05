@@ -11,10 +11,10 @@ import { ControlHelp, ControlHelpContent } from './components/ControlHelp';
 import { gameReducer } from './game/reducer';
 import type { HighscoreEntry } from './game/types';
 import { useGameLoop } from './hooks/useGameLoop';
+import { useDifficultyUnlocks } from './hooks/useDifficultyUnlocks';
 import { useGlobalLeaderboard } from './hooks/useGlobalLeaderboard';
 import { useLocalHighscores } from './hooks/useLocalHighscores';
 import { useResultMessage } from './hooks/useResultMessage';
-import { DEFAULT_LEADERBOARD_DIFFICULTY } from './highscores/globalLeaderboardApi';
 import { useI18n } from '../../i18n/init';
 import { useMediaQuery } from '../../app/useMediaQuery';
 import { createInitialGameState } from './game/update';
@@ -244,8 +244,12 @@ export const JavelinPage = (): ReactElement => {
   const { t, locale } = useI18n();
   const [state, dispatch] = useReducer(gameReducer, undefined, createInitialGameState);
   const [savedRoundId, setSavedRoundId] = useState<number>(-1);
+  const [processedUnlockRoundId, setProcessedUnlockRoundId] = useState<number>(-1);
   const [leaderboardMode, setLeaderboardMode] = useState<LeaderboardMode>('local');
-  const { highscores, addHighscore, clearHighscores, isHighscore } = useLocalHighscores();
+  const { unlocks: difficultyUnlocks, registerThrowResult } = useDifficultyUnlocks();
+  const { highscores, addHighscore, clearHighscores, isHighscoreForDifficulty } = useLocalHighscores({
+    difficulty: state.difficulty
+  });
   const {
     available: isGlobalLeaderboardAvailable,
     highscores: globalHighscores,
@@ -254,7 +258,7 @@ export const JavelinPage = (): ReactElement => {
     refresh: refreshGlobalLeaderboard,
     submitScore: submitGlobalScore
   } = useGlobalLeaderboard({
-    difficulty: DEFAULT_LEADERBOARD_DIFFICULTY
+    difficulty: state.difficulty
   });
   const isCompactLayout = useMediaQuery('(max-width: 1023px)');
 
@@ -268,10 +272,35 @@ export const JavelinPage = (): ReactElement => {
   }, [leaderboardMode, refreshGlobalLeaderboard]);
 
   useEffect(() => {
+    if (difficultyUnlocks[state.difficulty]) {
+      return;
+    }
+    dispatch({
+      type: 'setDifficulty',
+      difficulty: 'rookie'
+    });
+  }, [difficultyUnlocks, state.difficulty]);
+
+  useEffect(() => {
+    if (state.phase.tag !== 'result' || processedUnlockRoundId === state.roundId) {
+      return;
+    }
+    registerThrowResult({
+      difficulty: state.phase.launchedFrom.difficulty,
+      distanceM: state.phase.distanceM,
+      isValidThrow: state.phase.resultKind === 'valid'
+    });
+    setProcessedUnlockRoundId(state.roundId);
+  }, [processedUnlockRoundId, registerThrowResult, state.phase, state.roundId]);
+
+  useEffect(() => {
     if (state.phase.tag !== 'result' || state.phase.resultKind !== 'valid') {
       return;
     }
-    const shouldBeHighscore = isHighscore(state.phase.distanceM);
+    const shouldBeHighscore = isHighscoreForDifficulty(
+      state.phase.distanceM,
+      state.phase.launchedFrom.difficulty
+    );
     if (state.phase.isHighscore === shouldBeHighscore) {
       return;
     }
@@ -279,7 +308,7 @@ export const JavelinPage = (): ReactElement => {
       type: 'setResultHighscoreFlag',
       isHighscore: shouldBeHighscore
     });
-  }, [state.phase, isHighscore]);
+  }, [state.phase, isHighscoreForDifficulty]);
 
   const { resultMessage, resultStatusMessage, isFoulMessage, resultThrowSpecs } = useResultMessage(state);
 
@@ -290,7 +319,10 @@ export const JavelinPage = (): ReactElement => {
     savedRoundId !== state.roundId;
 
   const displayedHighscores = leaderboardMode === 'local' ? highscores : globalHighscores;
-  const scoreboardTitle = leaderboardMode === 'local' ? t('scoreboard.titleLocal') : t('scoreboard.titleGlobal');
+  const difficultyLabel = t(`difficulty.${state.difficulty}`);
+  const scoreboardTitle = `${
+    leaderboardMode === 'local' ? t('scoreboard.titleLocal') : t('scoreboard.titleGlobal')
+  } (${difficultyLabel})`;
   const scoreboardEmptyMessage =
     leaderboardMode === 'local'
       ? t('scoreboard.empty')
@@ -306,7 +338,7 @@ export const JavelinPage = (): ReactElement => {
         <div className="main-column">
           <HudPanel state={state} />
           <GameCanvas state={state} dispatch={dispatch} />
-          <GameActions state={state} dispatch={dispatch} />
+          <GameActions state={state} dispatch={dispatch} difficultyUnlocks={difficultyUnlocks} />
           <ResultDisplay
             resultMessage={resultMessage}
             resultStatusMessage={resultStatusMessage}
@@ -324,6 +356,7 @@ export const JavelinPage = (): ReactElement => {
                 addHighscore({
                   id: crypto.randomUUID(),
                   name,
+                  difficulty: state.phase.launchedFrom.difficulty,
                   distanceM: state.phase.distanceM,
                   playedAtIso,
                   locale,
@@ -332,6 +365,7 @@ export const JavelinPage = (): ReactElement => {
                   angleDeg: state.phase.launchedFrom.angleDeg
                 });
                 void submitGlobalScore({
+                  difficulty: state.phase.launchedFrom.difficulty,
                   playerName: name,
                   distanceM: state.phase.distanceM,
                   playedAtIso,

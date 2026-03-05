@@ -12,9 +12,10 @@ import type { GameState } from './types';
 
 const { runupStartXM: RUNUP_START_X_M } = GAMEPLAY_TUNING.movement;
 
-const baseState: Pick<GameState, 'nowMs' | 'roundId' | 'windMs' | 'windZMs' | 'aimAngleDeg'> = {
+const baseState: Pick<GameState, 'nowMs' | 'roundId' | 'difficulty' | 'windMs' | 'windZMs' | 'aimAngleDeg'> = {
   nowMs: 2000,
   roundId: 1,
+  difficulty: 'rookie',
   windMs: 0.2,
   windZMs: 0.05,
   aimAngleDeg: 18
@@ -134,6 +135,7 @@ describe('javelin visibility state', () => {
           lengthM: 2.6
         },
         launchedFrom: {
+          difficulty: 'rookie',
           speedNorm: 0.83,
           angleDeg: 35,
           forceNorm: 0.9,
@@ -251,6 +253,7 @@ describe('javelin visibility state', () => {
         tag: 'result',
         athleteXM: RUNUP_START_X_M,
         launchedFrom: {
+          difficulty: 'rookie',
           speedNorm: 0.78,
           angleDeg: 38,
           forceNorm: 0.82,
@@ -306,6 +309,7 @@ describe('javelin visibility state', () => {
           lengthM: 2.6
         },
         launchedFrom: {
+          difficulty: 'rookie',
           speedNorm: 0.8,
           angleDeg: 34,
           forceNorm: 0.85,
@@ -341,6 +345,7 @@ describe('javelin visibility state', () => {
           lengthM: 2.6
         },
         launchedFrom: {
+          difficulty: 'rookie',
           speedNorm: 0.8,
           angleDeg: 34,
           forceNorm: 0.85,

@@ -251,6 +251,45 @@ h1 {
   gap: 10px;
 }
 
+.difficulty-controls {
+  padding: 12px 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.difficulty-title {
+  margin: 0;
+  font-weight: 800;
+}
+
+.difficulty-switch {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.difficulty-switch > button {
+  width: 100%;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+.difficulty-switch > button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.difficulty-hint,
+.difficulty-unlock-hint {
+  margin: 0;
+  font-size: 0.84rem;
+  color: var(--text-soft);
+}
+
+.difficulty-unlock-hint {
+  font-weight: 700;
+}
+
 .attempt-counter,
 .session-best {
   display: inline-flex;
@@ -360,6 +399,13 @@ button.ghost {
   text-transform: uppercase;
   background: var(--input-bg);
   color: var(--text-main);
+}
+
+.save-form-error {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--warning);
+  font-weight: 700;
 }
 
 .badge {

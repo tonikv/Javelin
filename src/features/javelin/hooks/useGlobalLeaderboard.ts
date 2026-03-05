@@ -14,6 +14,7 @@ type UseGlobalLeaderboardOptions = {
 };
 
 type SubmitGlobalScoreInput = {
+  difficulty?: LeaderboardDifficulty;
   playerName: string;
   distanceM: number;
   playedAtIso: string;
@@ -73,7 +74,7 @@ export const useGlobalLeaderboard = ({
 
       try {
         await postGlobalScore({
-          difficulty,
+          difficulty: input.difficulty ?? difficulty,
           ...input
         });
         return true;

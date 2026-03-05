@@ -4,6 +4,7 @@
  */
 import { useState, type FormEvent, type ReactElement } from 'react';
 import { useI18n } from '../../../i18n/init';
+import { normalizePlayerNameInput, validatePlayerName } from '../highscores/nameModeration';
 
 type SaveScoreFormProps = {
   onSave: (name: string) => void;
@@ -12,12 +13,19 @@ type SaveScoreFormProps = {
 
 export const SaveScoreForm = ({ onSave, defaultName }: SaveScoreFormProps): ReactElement => {
   const { t } = useI18n();
-  const [nameInput, setNameInput] = useState('AAA');
+  const initialName = normalizePlayerNameInput(defaultName).padEnd(3, 'A').slice(0, 3);
+  const [nameInput, setNameInput] = useState(initialName);
+  const [validationError, setValidationError] = useState<'length' | 'blocked' | null>(null);
 
   const onSubmit = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
-    const normalizedName = nameInput.trim().slice(0, 10) || defaultName;
-    onSave(normalizedName);
+    const error = validatePlayerName(nameInput);
+    if (error !== null) {
+      setValidationError(error);
+      return;
+    }
+    setValidationError(null);
+    onSave(nameInput);
   };
 
   return (
@@ -26,11 +34,25 @@ export const SaveScoreForm = ({ onSave, defaultName }: SaveScoreFormProps): Reac
         {t('scoreboard.name')}
         <input
           minLength={3}
-          maxLength={10}
+          maxLength={3}
+          inputMode="text"
+          autoCapitalize="characters"
+          autoCorrect="off"
+          spellCheck={false}
           value={nameInput}
-          onChange={(event) => setNameInput(event.target.value.toUpperCase())}
+          onChange={(event) => {
+            setNameInput(normalizePlayerNameInput(event.target.value));
+            if (validationError !== null) {
+              setValidationError(validatePlayerName(normalizePlayerNameInput(event.target.value)));
+            }
+          }}
         />
       </label>
+      {validationError && (
+        <p className="save-form-error" role="alert">
+          {validationError === 'blocked' ? t('scoreboard.nameErrorBlocked') : t('scoreboard.nameErrorLength')}
+        </p>
+      )}
       <button type="submit">{t('action.saveScore')}</button>
     </form>
   );

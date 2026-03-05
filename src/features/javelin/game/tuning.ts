@@ -1,4 +1,4 @@
-import type { MeterWindow } from "./types";
+import type { DifficultyLevel, MeterWindow } from './types';
 
 type SpeedUpTuning = {
   tapGainNorm: number;
@@ -79,74 +79,78 @@ export type GameplayTuning = {
   audio: AudioTuning;
 };
 
+export type EliteRhythmTuning = {
+  targetTapIntervalMs: number;
+  perfectToleranceMs: number;
+  goodToleranceMs: number;
+  offBeatMultiplier: number;
+};
+
+type DifficultySpeedUpTuning = SpeedUpTuning & {
+  rhythm?: EliteRhythmTuning;
+};
+
+type DifficultyThrowPhaseTuning = Pick<
+  ThrowPhaseTuning,
+  'chargeFillDurationMs' | 'chargePerfectWindow' | 'chargeGoodWindow'
+>;
+
+type DifficultyMovementTuning = Pick<
+  MovementTuning,
+  'runupSpeedDecayPerSecond' | 'chargeAimSpeedDecayPerSecond' | 'chargeAimStopSpeedNorm'
+>;
+
+export type DifficultyGameplayTuning = {
+  speedUp: DifficultySpeedUpTuning;
+  throwPhase: DifficultyThrowPhaseTuning;
+  movement: DifficultyMovementTuning;
+};
+
 /**
  * Central gameplay tuning values.
  *
- * Difficulty guidance:
- * - Easier run-up: increase tapGainNorm and/or reduce runupSpeedDecayPerSecond.
- * - Stronger anti-mash curve: increase tapSoftCapIntervalMs or reduce tapSoftCapMinMultiplier.
- * - Easier throw timing: wider charge windows and/or slower chargeFillDurationMs.
+ * Shared values that are not difficulty-sensitive live here.
+ * Difficulty-sensitive speed and charge behavior is defined in DIFFICULTY_GAMEPLAY_TUNING.
  */
 export const GAMEPLAY_TUNING: GameplayTuning = {
   speedUp: {
-    tapGainNorm: 0.085,
-    tapSoftCapIntervalMs: 105,
-    tapSoftCapMinMultiplier: 0.2,
+    tapGainNorm: 0.082,
+    tapSoftCapIntervalMs: 115,
+    tapSoftCapMinMultiplier: 0.18
   },
   throwPhase: {
-    chargeFillDurationMs: 800,
+    chargeFillDurationMs: 760,
     chargeMaxCycles: 3,
     faultJavelinLaunchSpeedMs: 8.4,
-    chargePerfectWindow: { start: 0.78, end: 0.98 },
-    chargeGoodWindow: { start: 0.56, end: 0.98 },
+    chargePerfectWindow: { start: 0.8, end: 0.94 },
+    chargeGoodWindow: { start: 0.62, end: 0.96 },
     runToDrawbackBlendMs: 420,
     throwAnimDurationMs: 320,
-    throwReleaseProgress01: 0.56,
+    throwReleaseProgress01: 0.56
   },
   movement: {
     runupStartXM: -7.6,
-    runupSpeedDecayPerSecond: 0.18,
-    chargeAimSpeedDecayPerSecond: 0.2,
+    runupSpeedDecayPerSecond: 0.2,
+    chargeAimSpeedDecayPerSecond: 0.24,
     chargeAimStopSpeedNorm: 0.03,
     followThroughStepDistanceM: 0.75,
-    faultStumbleDistanceM: 0.82,
+    faultStumbleDistanceM: 0.82
   },
-  /**
-   * Wind model tuning.
-   *
-   * These values drive both gameplay wind and flag behavior.
-   * The default profile is intentionally readable: players can spot a favorable trend
-   * and still complete run-up + charge + throw inside the same wind phase.
-   */
   wind: {
-    // Full headwind->tailwind->headwind cycle. Larger = slower changes and longer reaction window.
     cycleDurationMs: 28000,
-    // Main forward-wind strength. Tuned below clamp to avoid flat clipping at +/- max wind.
     cycleAmplitudeMs: 1.85,
-    // Secondary wave speed multiplier (relative to main cycle).
     cycleHarmonicMultiplier: 2,
-    // Secondary wave strength. Keep moderate so cycle shape remains readable while not robotic.
     cycleHarmonicAmplitudeMs: 0.28,
-    // Random trend anchor spacing. Larger = slower random drift between broad wind moods.
     randomKeyframeMs: 11000,
-    // Max random contribution before blending.
     randomAmplitudeMs: 0.28,
-    // 0..1 blend for randomness. Lower = players can time throws from visible trend.
     randomBlend: 0.12,
-    // Small high-frequency wobble period to avoid robotic motion.
     microGustPeriodMs: 3200,
-    // Small high-frequency wobble amount. Keep subtle so wind remains legible.
     microGustAmplitudeMs: 0.07,
-    // State response lag. Larger = smoother/slower changes.
     smoothingMs: 1500,
-    // Crosswind cycle phase shift from forward wind. Offset gives lateral drift peaks at different times.
     crosswindPhaseOffsetRad: 1.3,
-    // Crosswind strength as fraction of forward-wind target.
     crosswindAmplitudeScale: 0.35,
-    // Below this magnitude, the flag appears mostly hanging.
     visualCalmThresholdMs: 0.2,
-    // Magnitude mapped to "full wind" flag pose.
-    visualMaxReferenceMs: 2.4,
+    visualMaxReferenceMs: 2.4
   },
   angleControl: {
     stepDeg: 1.0,
@@ -154,7 +158,7 @@ export const GAMEPLAY_TUNING: GameplayTuning = {
     holdMaxDegPerSec: 120,
     rampMs: 600,
     pointerDeadzonePx: 12,
-    pointerSmoothing: 0.4,
+    pointerSmoothing: 0.4
   },
   trajectoryIndicator: {
     numPoints: 20,
@@ -162,13 +166,76 @@ export const GAMEPLAY_TUNING: GameplayTuning = {
     dotRadiusPx: 3,
     baseOpacity: 0.55,
     endOpacity: 0.1,
-    dotColor: "#1a6b9a",
+    dotColor: '#1a6b9a'
   },
   audio: {
     masterVolume: 0.5,
     runupTapVolume: 0.8,
     crowdVolume: 0.4,
     effectsVolume: 0.7,
-    crowdAmbientGain: 0.018,
-  },
+    crowdAmbientGain: 0.018
+  }
 };
+
+export const DIFFICULTY_GAMEPLAY_TUNING: Record<DifficultyLevel, DifficultyGameplayTuning> = {
+  rookie: {
+    speedUp: {
+      tapGainNorm: 0.082,
+      tapSoftCapIntervalMs: 115,
+      tapSoftCapMinMultiplier: 0.18
+    },
+    movement: {
+      runupSpeedDecayPerSecond: 0.2,
+      chargeAimSpeedDecayPerSecond: 0.24,
+      chargeAimStopSpeedNorm: 0.03
+    },
+    throwPhase: {
+      chargeFillDurationMs: 760,
+      chargePerfectWindow: { start: 0.8, end: 0.94 },
+      chargeGoodWindow: { start: 0.62, end: 0.96 }
+    }
+  },
+  pro: {
+    speedUp: {
+      tapGainNorm: 0.074,
+      tapSoftCapIntervalMs: 130,
+      tapSoftCapMinMultiplier: 0.12
+    },
+    movement: {
+      runupSpeedDecayPerSecond: 0.23,
+      chargeAimSpeedDecayPerSecond: 0.28,
+      chargeAimStopSpeedNorm: 0.05
+    },
+    throwPhase: {
+      chargeFillDurationMs: 700,
+      chargePerfectWindow: { start: 0.84, end: 0.92 },
+      chargeGoodWindow: { start: 0.7, end: 0.94 }
+    }
+  },
+  elite: {
+    speedUp: {
+      tapGainNorm: 0.068,
+      tapSoftCapIntervalMs: 140,
+      tapSoftCapMinMultiplier: 0.08,
+      rhythm: {
+        targetTapIntervalMs: 125,
+        perfectToleranceMs: 18,
+        goodToleranceMs: 36,
+        offBeatMultiplier: 0.2
+      }
+    },
+    movement: {
+      runupSpeedDecayPerSecond: 0.26,
+      chargeAimSpeedDecayPerSecond: 0.32,
+      chargeAimStopSpeedNorm: 0.06
+    },
+    throwPhase: {
+      chargeFillDurationMs: 650,
+      chargePerfectWindow: { start: 0.87, end: 0.91 },
+      chargeGoodWindow: { start: 0.76, end: 0.92 }
+    }
+  }
+};
+
+export const getDifficultyGameplayTuning = (difficulty: DifficultyLevel): DifficultyGameplayTuning =>
+  DIFFICULTY_GAMEPLAY_TUNING[difficulty];

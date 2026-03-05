@@ -30,7 +30,7 @@ describe('parsePostScoreInput', () => {
     const parsed = parsePostScoreInput(
       JSON.stringify({
         difficulty: 'elite',
-        playerName: 'Ada',
+        playerName: 'ADA',
         distanceMm: 82345,
         playedAt: '2026-03-04T12:00:00.000Z',
         clientVersion: '1.2.0',
@@ -45,7 +45,7 @@ describe('parsePostScoreInput', () => {
 
     expect(parsed).toEqual({
       difficulty: 'elite',
-      playerName: 'Ada',
+      playerName: 'ADA',
       distanceMm: 82345,
       playedAt: '2026-03-04T12:00:00.000Z',
       clientVersion: '1.2.0',
@@ -58,17 +58,30 @@ describe('parsePostScoreInput', () => {
     });
   });
 
-  it('normalizes whitespace in player name', () => {
-    const parsed = parsePostScoreInput(
-      JSON.stringify({
-        difficulty: 'pro',
-        playerName: '   Ada    Lovelace  ',
-        distanceMm: 51234,
-        playedAt: '2026-03-05T09:00:00.000Z'
-      })
-    );
+  it('rejects non-matching playerName pattern', () => {
+    expect(() =>
+      parsePostScoreInput(
+        JSON.stringify({
+          difficulty: 'pro',
+          playerName: 'Ada',
+          distanceMm: 51234,
+          playedAt: '2026-03-05T09:00:00.000Z'
+        })
+      )
+    ).toThrowError(ValidationError);
+  });
 
-    expect(parsed.playerName).toBe('Ada Lovelace');
+  it('rejects blocked player names', () => {
+    expect(() =>
+      parsePostScoreInput(
+        JSON.stringify({
+          difficulty: 'pro',
+          playerName: 'ASS',
+          distanceMm: 51234,
+          playedAt: '2026-03-05T09:00:00.000Z'
+        })
+      )
+    ).toThrowError(ValidationError);
   });
 
   it('rejects out-of-range distance', () => {
@@ -76,7 +89,7 @@ describe('parsePostScoreInput', () => {
       parsePostScoreInput(
         JSON.stringify({
           difficulty: 'rookie',
-          playerName: 'Player',
+          playerName: 'AAA',
           distanceMm: 999999,
           playedAt: '2026-03-04T12:00:00.000Z'
         })
