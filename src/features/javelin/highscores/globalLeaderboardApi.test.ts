@@ -20,6 +20,7 @@ describe('resolveGlobalLeaderboardApiBase', () => {
 describe('parseGlobalLeaderboardEntries', () => {
   it('maps valid items into local highscore entries', () => {
     const parsed = parseGlobalLeaderboardEntries({
+      difficulty: 'pro',
       items: [
         {
           scoreId: 'score-a',
@@ -39,6 +40,7 @@ describe('parseGlobalLeaderboardEntries', () => {
     expect(parsed[0]).toEqual({
       id: 'score-a',
       name: 'Ada',
+      difficulty: 'pro',
       distanceM: 82.345,
       playedAtIso: '2026-03-05T19:40:00.000Z',
       locale: 'fi',
@@ -50,11 +52,13 @@ describe('parseGlobalLeaderboardEntries', () => {
 
   it('filters malformed rows', () => {
     const parsed = parseGlobalLeaderboardEntries({
+      difficulty: 'rookie',
       items: [
         { scoreId: 'missing-fields' },
         {
           scoreId: 'ok',
           playerName: 'Player',
+          difficulty: 'rookie',
           distanceMm: 70000,
           playedAt: '2026-03-05T19:40:00.000Z'
         }

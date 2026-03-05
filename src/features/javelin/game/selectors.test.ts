@@ -5,6 +5,7 @@ import type { GameState } from './types';
 const makeRunupState = (speedNorm: number): GameState => ({
   nowMs: 2000,
   roundId: 1,
+  difficulty: 'rookie',
   windMs: 0,
   windZMs: 0,
   aimAngleDeg: 36,
@@ -38,6 +39,7 @@ describe('result throw specs', () => {
     const state: GameState = {
       nowMs: 3200,
       roundId: 2,
+      difficulty: 'rookie',
       windMs: 0.4,
       windZMs: 0.1,
       aimAngleDeg: 12,
@@ -45,6 +47,7 @@ describe('result throw specs', () => {
         tag: 'result',
         athleteXM: 18.6,
         launchedFrom: {
+          difficulty: 'rookie',
           speedNorm: 0.83,
           angleDeg: 41,
           forceNorm: 0.77,

@@ -1,11 +1,10 @@
 import { MAX_HIGHSCORES } from '../game/constants';
-import type { HighscoreEntry, Locale } from '../game/types';
+import type { DifficultyLevel, HighscoreEntry, Locale } from '../game/types';
+import { normalizePlayerNameInput, validatePlayerName } from './nameModeration';
 
-export const leaderboardDifficulties = ['rookie', 'pro', 'elite'] as const;
+export const leaderboardDifficulties = ['rookie', 'pro', 'elite'] as const satisfies readonly DifficultyLevel[];
 
-export type LeaderboardDifficulty = (typeof leaderboardDifficulties)[number];
-
-export const DEFAULT_LEADERBOARD_DIFFICULTY: LeaderboardDifficulty = 'pro';
+export type LeaderboardDifficulty = DifficultyLevel;
 
 export type FetchGlobalLeaderboardInput = {
   difficulty: LeaderboardDifficulty;
@@ -26,6 +25,7 @@ export type PostGlobalScoreInput = {
 };
 
 type GlobalLeaderboardApiPayload = {
+  difficulty?: unknown;
   items: unknown;
 };
 
@@ -40,6 +40,15 @@ const compareHighscores = (a: HighscoreEntry, b: HighscoreEntry): number => {
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
+
+const difficultySet = new Set<LeaderboardDifficulty>(leaderboardDifficulties);
+
+const toDifficultyOrNull = (value: unknown): LeaderboardDifficulty | null => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  return difficultySet.has(value as LeaderboardDifficulty) ? (value as LeaderboardDifficulty) : null;
+};
 
 const toFiniteNumberOrNull = (value: unknown): number | null =>
   typeof value === 'number' && Number.isFinite(value) ? value : null;
@@ -68,7 +77,10 @@ const toLocale = (value: unknown): Locale => {
   return 'en';
 };
 
-const parseGlobalLeaderboardItem = (value: unknown): HighscoreEntry | null => {
+const parseGlobalLeaderboardItem = (
+  value: unknown,
+  fallbackDifficulty: LeaderboardDifficulty | null
+): HighscoreEntry | null => {
   if (!isRecord(value)) {
     return null;
   }
@@ -91,10 +103,15 @@ const parseGlobalLeaderboardItem = (value: unknown): HighscoreEntry | null => {
   const launchSpeedCms = toOptionalFiniteNumber(raw.launchSpeedCms);
   const angleCdeg = toOptionalFiniteNumber(raw.angleCdeg);
   const windMs = toOptionalFiniteNumber(raw.windMs) ?? 0;
+  const difficulty = toDifficultyOrNull(raw.difficulty) ?? fallbackDifficulty;
+  if (difficulty === null) {
+    return null;
+  }
 
   return {
     id: raw.scoreId,
     name: raw.playerName,
+    difficulty,
     distanceM: distanceMm / 1000,
     playedAtIso: new Date(parsedPlayedAt).toISOString(),
     locale: toLocale(raw.locale),
@@ -113,9 +130,10 @@ export const parseGlobalLeaderboardEntries = (payload: unknown): HighscoreEntry[
   if (!Array.isArray(castPayload.items)) {
     throw new Error('Global leaderboard response items must be an array');
   }
+  const payloadDifficulty = toDifficultyOrNull(castPayload.difficulty);
 
   return castPayload.items
-    .map(parseGlobalLeaderboardItem)
+    .map((item) => parseGlobalLeaderboardItem(item, payloadDifficulty))
     .filter((entry): entry is HighscoreEntry => entry !== null)
     .sort(compareHighscores)
     .slice(0, MAX_HIGHSCORES);
@@ -137,18 +155,26 @@ export const getGlobalLeaderboardApiBase = (): string | null =>
 
 const createHttpError = (status: number): Error => new Error(`Global leaderboard API request failed with ${status}`);
 
-export const createPostGlobalScorePayload = (input: PostGlobalScoreInput): Record<string, unknown> => ({
-  difficulty: input.difficulty,
-  playerName: input.playerName.trim().slice(0, 24),
-  distanceMm: Math.max(0, Math.round(input.distanceM * 1000)),
-  playedAt: new Date(input.playedAtIso).toISOString(),
-  windMs: input.windMs,
-  windZMs: input.windZMs,
-  launchSpeedCms: input.launchSpeedMs === undefined ? undefined : Math.round(input.launchSpeedMs * 100),
-  angleCdeg: input.angleDeg === undefined ? undefined : Math.round(input.angleDeg * 100),
-  locale: input.locale,
-  clientVersion: input.clientVersion
-});
+export const createPostGlobalScorePayload = (input: PostGlobalScoreInput): Record<string, unknown> => {
+  const normalizedPlayerName = normalizePlayerNameInput(input.playerName);
+  const nameValidationError = validatePlayerName(normalizedPlayerName);
+  if (nameValidationError !== null) {
+    throw new Error(`Invalid player name: ${nameValidationError}`);
+  }
+
+  return {
+    difficulty: input.difficulty,
+    playerName: normalizedPlayerName,
+    distanceMm: Math.max(0, Math.round(input.distanceM * 1000)),
+    playedAt: new Date(input.playedAtIso).toISOString(),
+    windMs: input.windMs,
+    windZMs: input.windZMs,
+    launchSpeedCms: input.launchSpeedMs === undefined ? undefined : Math.round(input.launchSpeedMs * 100),
+    angleCdeg: input.angleDeg === undefined ? undefined : Math.round(input.angleDeg * 100),
+    locale: input.locale,
+    clientVersion: input.clientVersion
+  };
+};
 
 export const fetchGlobalLeaderboard = async (input: FetchGlobalLeaderboardInput): Promise<HighscoreEntry[]> => {
   const apiBase = getGlobalLeaderboardApiBase();

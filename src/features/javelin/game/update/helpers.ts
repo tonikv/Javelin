@@ -12,8 +12,8 @@ import {
 } from '../constants';
 import { clamp, easeOutQuad, toRad, wrap01 } from '../math';
 import { createPhysicalJavelin } from '../physics';
-import { GAMEPLAY_TUNING } from '../tuning';
-import type { GameState, TimingQuality } from '../types';
+import { GAMEPLAY_TUNING, getDifficultyGameplayTuning } from '../tuning';
+import type { DifficultyLevel, GameState, TimingQuality } from '../types';
 
 const {
   faultJavelinLaunchSpeedMs: FAULT_JAVELIN_LAUNCH_SPEED_MS
@@ -22,14 +22,29 @@ const {
   faultStumbleDistanceM: FAULT_STUMBLE_DISTANCE_M,
   followThroughStepDistanceM: FOLLOW_THROUGH_STEP_DISTANCE_M
 } = GAMEPLAY_TUNING.movement;
-const {
-  tapSoftCapIntervalMs: RUNUP_TAP_SOFT_CAP_INTERVAL_MS,
-  tapSoftCapMinMultiplier: RUNUP_TAP_SOFT_CAP_MIN_MULTIPLIER
-} = GAMEPLAY_TUNING.speedUp;
 
-export const runupTapGainMultiplier = (deltaMs: number): number => {
-  const ratio = clamp(deltaMs / RUNUP_TAP_SOFT_CAP_INTERVAL_MS, 0, 1);
-  return Math.max(RUNUP_TAP_SOFT_CAP_MIN_MULTIPLIER, ratio * ratio);
+export const eliteRhythmGainMultiplier = (deltaMs: number, difficulty: DifficultyLevel): number => {
+  const rhythm = getDifficultyGameplayTuning(difficulty).speedUp.rhythm;
+  if (!rhythm) {
+    return 1;
+  }
+  const delta = Math.abs(deltaMs - rhythm.targetTapIntervalMs);
+  if (delta <= rhythm.perfectToleranceMs) {
+    return 1;
+  }
+  if (delta > rhythm.goodToleranceMs) {
+    return rhythm.offBeatMultiplier;
+  }
+  const span = Math.max(1, rhythm.goodToleranceMs - rhythm.perfectToleranceMs);
+  const normalized = clamp((delta - rhythm.perfectToleranceMs) / span, 0, 1);
+  return 1 - normalized * 0.45;
+};
+
+export const runupTapGainMultiplier = (deltaMs: number, difficulty: DifficultyLevel): number => {
+  const profile = getDifficultyGameplayTuning(difficulty);
+  const ratio = clamp(deltaMs / profile.speedUp.tapSoftCapIntervalMs, 0, 1);
+  const antiMashMultiplier = Math.max(profile.speedUp.tapSoftCapMinMultiplier, ratio * ratio);
+  return antiMashMultiplier * eliteRhythmGainMultiplier(deltaMs, difficulty);
 };
 
 export const runStrideHz = (speedNorm: number): number => 1 + speedNorm * 2.2;

@@ -29,4 +29,15 @@ describe('render theme palettes', () => {
     expect(dark.meter.valueTextFill).not.toBe(light.meter.valueTextFill);
     expect(dark.wind.labelFill).not.toBe(light.wind.labelFill);
   });
+
+  it('keeps athlete palette identical across light and dark mode', () => {
+    const light = getRenderPalette('light');
+    const dark = getRenderPalette('dark');
+
+    expect(dark.athlete.skin).toBe(light.athlete.skin);
+    expect(dark.athlete.outline).toBe(light.athlete.outline);
+    expect(dark.athlete.eye).toBe(light.athlete.eye);
+    expect(dark.athlete.limbStroke).toBe(light.athlete.limbStroke);
+    expect(dark.athlete.limbFill).toBe(light.athlete.limbFill);
+  });
 });

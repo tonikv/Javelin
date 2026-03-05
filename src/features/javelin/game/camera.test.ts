@@ -6,9 +6,10 @@ import type { GameState } from './types';
 
 const { runupStartXM: RUNUP_START_X_M } = GAMEPLAY_TUNING.movement;
 
-const baseState: Pick<GameState, 'nowMs' | 'roundId' | 'windMs' | 'windZMs' | 'aimAngleDeg'> = {
+const baseState: Pick<GameState, 'nowMs' | 'roundId' | 'difficulty' | 'windMs' | 'windZMs' | 'aimAngleDeg'> = {
   nowMs: 2200,
   roundId: 2,
+  difficulty: 'rookie',
   windMs: 0.2,
   windZMs: -0.1,
   aimAngleDeg: 34
@@ -86,6 +87,7 @@ describe('camera', () => {
           lengthM: 2.6
         },
         launchedFrom: {
+          difficulty: 'rookie',
           speedNorm: 0.68,
           angleDeg: 33,
           forceNorm: 0.76,
@@ -104,6 +106,7 @@ describe('camera', () => {
         tag: 'result',
         athleteXM: 19.2,
         launchedFrom: {
+          difficulty: 'rookie',
           speedNorm: 0.68,
           angleDeg: 33,
           forceNorm: 0.76,
@@ -229,6 +232,7 @@ describe('camera', () => {
           lengthM: 2.6
         },
         launchedFrom: {
+          difficulty: 'rookie',
           speedNorm: 0.72,
           angleDeg: 34,
           forceNorm: 0.8,

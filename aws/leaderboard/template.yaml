@@ -7,6 +7,11 @@ Parameters:
     Type: CommaDelimitedList
     Default: https://example.com
     Description: Comma-separated browser origins allowed to call leaderboard API (CORS).
+  IpHashSalt:
+    Type: String
+    NoEcho: true
+    Default: change-me
+    Description: Salt used for hashing source IPs in score submit cooldown guard.
 
 Globals:
   Function:
@@ -43,6 +48,9 @@ Resources:
   HttpApi:
     Type: AWS::Serverless::HttpApi
     Properties:
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 20
+        ThrottlingRateLimit: 5
       CorsConfiguration:
         AllowOrigins: !Ref AllowedOrigins
         AllowMethods:
@@ -51,6 +59,21 @@ Resources:
           - OPTIONS
         AllowHeaders:
           - content-type
+
+  SubmitGuardTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: JavelinScoreSubmitGuard
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: clientKey
+          AttributeType: S
+      KeySchema:
+        - AttributeName: clientKey
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: expiresAtEpoch
+        Enabled: true
 
   GetLeaderboardFn:
     Type: AWS::Serverless::Function
@@ -80,9 +103,14 @@ Resources:
       Environment:
         Variables:
           TABLE_NAME: !Ref ScoresTable
+          GUARD_TABLE_NAME: !Ref SubmitGuardTable
+          IP_HASH_SALT: !Ref IpHashSalt
+          SUBMIT_COOLDOWN_SECONDS: 10
       Policies:
         - DynamoDBWritePolicy:
             TableName: !Ref ScoresTable
+        - DynamoDBWritePolicy:
+            TableName: !Ref SubmitGuardTable
       Events:
         PostLeaderboard:
           Type: HttpApi

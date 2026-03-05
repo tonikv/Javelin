@@ -63,4 +63,6 @@ export const CROSSWIND_MAX_MS = 1.0;
 export const FIELD_MAX_DISTANCE_M = 132;
 
 export const MAX_HIGHSCORES = 10;
-export const HIGHSCORE_STORAGE_KEY = 'sg2026-javelin-highscores-v1';
+export const HIGHSCORE_STORAGE_KEY = 'sg2026-javelin-highscores-v2';
+export const HIGHSCORE_STORAGE_KEY_LEGACY = 'sg2026-javelin-highscores-v1';
+export const DIFFICULTY_UNLOCK_STORAGE_KEY = 'sg2026-javelin-difficulty-unlocks-v1';

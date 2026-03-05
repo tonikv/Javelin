@@ -6,7 +6,8 @@ import {
 } from './constants';
 import { gameReducer } from './reducer';
 import {
-  GAMEPLAY_TUNING
+  GAMEPLAY_TUNING,
+  getDifficultyGameplayTuning
 } from './tuning';
 import { createInitialGameState } from './update';
 import { advanceCrosswindMs, advanceWindMs } from './wind';
@@ -60,6 +61,95 @@ const tickForDuration = (
 };
 
 describe('gameReducer', () => {
+  it('defaults difficulty to rookie', () => {
+    const state = createInitialGameState();
+    expect(state.difficulty).toBe('rookie');
+  });
+
+  it('allows setDifficulty only in idle and result phases', () => {
+    let state = createInitialGameState();
+    state = gameReducer(state, { type: 'setDifficulty', difficulty: 'pro' });
+    expect(state.difficulty).toBe('pro');
+
+    state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0 });
+    state = gameReducer(state, { type: 'setDifficulty', difficulty: 'elite' });
+    expect(state.difficulty).toBe('pro');
+
+    const resultState = {
+      ...state,
+      phase: {
+        tag: 'result' as const,
+        athleteXM: 18.7,
+        launchedFrom: {
+          difficulty: 'pro' as const,
+          speedNorm: 0.74,
+          angleDeg: 36,
+          forceNorm: 0.81,
+          windMs: 0.4,
+          launchSpeedMs: 28.2,
+          athleteXM: 18.7,
+          releaseQuality: 'good' as const,
+          lineCrossedAtRelease: false
+        },
+        distanceM: 72.8,
+        isHighscore: false,
+        resultKind: 'valid' as const,
+        tipFirst: true,
+        landingTipXM: 92.4,
+        landingXM: 91,
+        landingYM: 0,
+        landingAngleRad: -0.32
+      }
+    };
+    const changed = gameReducer(resultState, { type: 'setDifficulty', difficulty: 'elite' });
+    expect(changed.difficulty).toBe('elite');
+  });
+
+  it('applies stricter timing and speed decay in pro and elite compared with rookie', () => {
+    const rookie = getDifficultyGameplayTuning('rookie');
+    const pro = getDifficultyGameplayTuning('pro');
+    const elite = getDifficultyGameplayTuning('elite');
+
+    const windowWidth = (start: number, end: number): number => end - start;
+    expect(windowWidth(pro.throwPhase.chargePerfectWindow.start, pro.throwPhase.chargePerfectWindow.end)).toBeLessThan(
+      windowWidth(
+        rookie.throwPhase.chargePerfectWindow.start,
+        rookie.throwPhase.chargePerfectWindow.end
+      )
+    );
+    expect(
+      windowWidth(elite.throwPhase.chargePerfectWindow.start, elite.throwPhase.chargePerfectWindow.end)
+    ).toBeLessThan(
+      windowWidth(pro.throwPhase.chargePerfectWindow.start, pro.throwPhase.chargePerfectWindow.end)
+    );
+    expect(pro.movement.runupSpeedDecayPerSecond).toBeGreaterThan(rookie.movement.runupSpeedDecayPerSecond);
+    expect(elite.movement.runupSpeedDecayPerSecond).toBeGreaterThan(pro.movement.runupSpeedDecayPerSecond);
+    expect(pro.throwPhase.chargeFillDurationMs).toBeLessThan(rookie.throwPhase.chargeFillDurationMs);
+    expect(elite.throwPhase.chargeFillDurationMs).toBeLessThan(pro.throwPhase.chargeFillDurationMs);
+  });
+
+  it('elite rhythm rewards on-beat taps and penalizes off-beat taps', () => {
+    let onBeat = createInitialGameState();
+    onBeat = gameReducer(onBeat, { type: 'setDifficulty', difficulty: 'elite' });
+    onBeat = gameReducer(onBeat, { type: 'startRound', atMs: 1000, windMs: 0 });
+    onBeat = gameReducer(onBeat, { type: 'rhythmTap', atMs: 1000 });
+    const onBeatSpeedAfterFirst = onBeat.phase.tag === 'runup' ? onBeat.phase.speedNorm : 0;
+    onBeat = gameReducer(onBeat, { type: 'rhythmTap', atMs: 1125 });
+    const onBeatGain =
+      onBeat.phase.tag === 'runup' ? onBeat.phase.speedNorm - onBeatSpeedAfterFirst : 0;
+
+    let offBeat = createInitialGameState();
+    offBeat = gameReducer(offBeat, { type: 'setDifficulty', difficulty: 'elite' });
+    offBeat = gameReducer(offBeat, { type: 'startRound', atMs: 1000, windMs: 0 });
+    offBeat = gameReducer(offBeat, { type: 'rhythmTap', atMs: 1000 });
+    const offBeatSpeedAfterFirst = offBeat.phase.tag === 'runup' ? offBeat.phase.speedNorm : 0;
+    offBeat = gameReducer(offBeat, { type: 'rhythmTap', atMs: 1010 });
+    const offBeatGain =
+      offBeat.phase.tag === 'runup' ? offBeat.phase.speedNorm - offBeatSpeedAfterFirst : 0;
+
+    expect(onBeatGain).toBeGreaterThan(offBeatGain);
+  });
+
   it('starts a round into runup', () => {
     const state = createInitialGameState();
     const next = gameReducer(state, {
@@ -440,6 +530,7 @@ describe('gameReducer', () => {
       tag: 'result',
       athleteXM: 18.7,
       launchedFrom: {
+        difficulty: 'rookie',
         speedNorm: 0.74,
         angleDeg: 36,
         forceNorm: 0.81,

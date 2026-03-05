@@ -175,12 +175,12 @@ const DARK_PALETTE: RenderPalette = {
     tailwindFlagStroke: '#d84f47',
   },
   athlete: {
-    skin: '#f5d6a8',
-    outline: '#a0c4e8',
-    eye: '#c0d8ef',
-    limbStroke: '#a0c4e8',
-    limbFill: '#a0c4e8',
-  },
+    skin: '#ffe3bc',
+    outline: '#073257',
+    eye: '#0b2c49',
+    limbStroke: '#073257',
+    limbFill: '#073257',
+  }
 };
 
 export const getRenderPalette = (theme: ThemeMode): RenderPalette =>
