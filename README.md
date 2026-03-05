@@ -9,8 +9,13 @@ Goal: show product-minded frontend quality with functional game logic (reducer +
 
 ```bash
 npm install
+cp .env.example .env.local
 npm run dev
 ```
+
+`VITE_LEADERBOARD_API_BASE` enables the global leaderboard API.
+If omitted, the game automatically falls back to local-only highscores.
+Current frontend integration posts/fetches global scores under difficulty `pro` (until in-game difficulty selection is added).
 
 ## Controls
 
@@ -32,6 +37,7 @@ npm run dev
 - Canvas 2D rendering
 - Vitest unit tests
 - LocalStorage leaderboard
+- Optional AWS-backed global leaderboard (HTTP API + Lambda + DynamoDB)
 - Built-in FI/SV/EN localization layer
 
 ## Architecture
@@ -80,5 +86,5 @@ Workflow is included in `.github/workflows/deploy.yml`.
 
 ## Scope Notes
 
-- Leaderboard local-only in this demo.
-- Next logical phase: backend leaderboard API + anti-cheat.
+- Global leaderboard backend lives in `aws/leaderboard` (SAM template + Lambda handlers).
+- Local leaderboard remains the offline fallback when API config is missing/unavailable.

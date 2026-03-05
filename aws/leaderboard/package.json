@@ -1,0 +1,22 @@
+{
+  "name": "@selain-games/javelin-leaderboard-backend",
+  "private": true,
+  "version": "0.1.0",
+  "description": "AWS SAM backend for Javelin global persistent highscores",
+  "scripts": {
+    "build": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.940.0",
+    "@aws-sdk/lib-dynamodb": "^3.940.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.152",
+    "@types/node": "^24.7.2",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

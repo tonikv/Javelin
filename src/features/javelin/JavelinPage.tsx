@@ -11,8 +11,10 @@ import { ControlHelp, ControlHelpContent } from './components/ControlHelp';
 import { gameReducer } from './game/reducer';
 import type { HighscoreEntry } from './game/types';
 import { useGameLoop } from './hooks/useGameLoop';
+import { useGlobalLeaderboard } from './hooks/useGlobalLeaderboard';
 import { useLocalHighscores } from './hooks/useLocalHighscores';
 import { useResultMessage } from './hooks/useResultMessage';
+import { DEFAULT_LEADERBOARD_DIFFICULTY } from './highscores/globalLeaderboardApi';
 import { useI18n } from '../../i18n/init';
 import { useMediaQuery } from '../../app/useMediaQuery';
 import { createInitialGameState } from './game/update';
@@ -37,25 +39,134 @@ const TopBarComponent = ({ appTitle, gameTitle }: TopBarProps): ReactElement => 
 
 const TopBar = memo(TopBarComponent);
 
-type SideColumnProps = {
-  highscores: HighscoreEntry[];
-  clearHighscores: () => void;
+type LeaderboardMode = 'local' | 'global';
+
+type LeaderboardControlsProps = {
+  mode: LeaderboardMode;
+  onModeChange: (mode: LeaderboardMode) => void;
+  onResetLocalScores: () => void;
+  onRefreshGlobalScores: () => void;
+  isGlobalLoading: boolean;
+  isGlobalAvailable: boolean;
+  globalHasError: boolean;
+  scoreboardTitle: string;
 };
 
-const SideColumnComponent = ({ highscores, clearHighscores }: SideColumnProps): ReactElement => {
+const LeaderboardControlsComponent = ({
+  mode,
+  onModeChange,
+  onResetLocalScores,
+  onRefreshGlobalScores,
+  isGlobalLoading,
+  isGlobalAvailable,
+  globalHasError,
+  scoreboardTitle
+}: LeaderboardControlsProps): ReactElement => {
   const { t } = useI18n();
+
+  const statusMessage =
+    mode !== 'global'
+      ? null
+      : !isGlobalAvailable
+        ? t('scoreboard.globalUnavailable')
+        : isGlobalLoading
+          ? t('scoreboard.globalLoading')
+          : globalHasError
+            ? t('scoreboard.globalLoadError')
+            : null;
+
+  return (
+    <div className="leaderboard-controls">
+      <div className="leaderboard-mode-switch" role="group" aria-label={t('scoreboard.modeLabel')}>
+        <button
+          type="button"
+          className={mode === 'local' ? '' : 'ghost'}
+          onClick={() => onModeChange('local')}
+          aria-pressed={mode === 'local'}
+        >
+          {t('scoreboard.modeLocal')}
+        </button>
+        <button
+          type="button"
+          className={mode === 'global' ? '' : 'ghost'}
+          onClick={() => onModeChange('global')}
+          aria-pressed={mode === 'global'}
+        >
+          {t('scoreboard.modeGlobal')}
+        </button>
+      </div>
+
+      {mode === 'local' ? (
+        <button
+          type="button"
+          className="ghost"
+          onClick={onResetLocalScores}
+          aria-label={`${t('action.resetScores')} - ${scoreboardTitle}`}
+        >
+          {t('action.resetScores')}
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="ghost"
+          onClick={onRefreshGlobalScores}
+          disabled={isGlobalLoading || !isGlobalAvailable}
+          aria-label={`${t('action.refreshScores')} - ${scoreboardTitle}`}
+        >
+          {t('action.refreshScores')}
+        </button>
+      )}
+
+      {statusMessage && (
+        <p className="scoreboard-status" role="status">
+          {statusMessage}
+        </p>
+      )}
+    </div>
+  );
+};
+
+const LeaderboardControls = memo(LeaderboardControlsComponent);
+
+type SideColumnProps = {
+  highscores: HighscoreEntry[];
+  mode: LeaderboardMode;
+  onModeChange: (mode: LeaderboardMode) => void;
+  clearLocalHighscores: () => void;
+  refreshGlobalHighscores: () => void;
+  isGlobalLoading: boolean;
+  isGlobalAvailable: boolean;
+  globalHasError: boolean;
+  scoreboardTitle: string;
+  scoreboardEmptyMessage: string;
+};
+
+const SideColumnComponent = ({
+  highscores,
+  mode,
+  onModeChange,
+  clearLocalHighscores,
+  refreshGlobalHighscores,
+  isGlobalLoading,
+  isGlobalAvailable,
+  globalHasError,
+  scoreboardTitle,
+  scoreboardEmptyMessage
+}: SideColumnProps): ReactElement => {
   return (
     <aside className="side-column">
       <ControlHelp />
-      <ScoreBoard highscores={highscores} />
-      <button
-        type="button"
-        className="ghost"
-        onClick={clearHighscores}
-        aria-label={`${t('action.resetScores')} - ${t('scoreboard.title')}`}
-      >
-        {t('action.resetScores')}
-      </button>
+      <LeaderboardControls
+        mode={mode}
+        onModeChange={onModeChange}
+        onResetLocalScores={clearLocalHighscores}
+        onRefreshGlobalScores={refreshGlobalHighscores}
+        isGlobalLoading={isGlobalLoading}
+        isGlobalAvailable={isGlobalAvailable}
+        globalHasError={globalHasError}
+        scoreboardTitle={scoreboardTitle}
+      />
+      <ScoreBoard highscores={highscores} title={scoreboardTitle} emptyMessage={scoreboardEmptyMessage} />
     </aside>
   );
 };
@@ -64,20 +175,36 @@ const SideColumn = memo(SideColumnComponent);
 
 type CompactSideColumnProps = {
   highscores: HighscoreEntry[];
-  clearHighscores: () => void;
+  mode: LeaderboardMode;
+  onModeChange: (mode: LeaderboardMode) => void;
+  clearLocalHighscores: () => void;
+  refreshGlobalHighscores: () => void;
+  isGlobalLoading: boolean;
+  isGlobalAvailable: boolean;
+  globalHasError: boolean;
+  scoreboardTitle: string;
+  scoreboardEmptyMessage: string;
 };
 
 const CompactSideColumnComponent = ({
   highscores,
-  clearHighscores
+  mode,
+  onModeChange,
+  clearLocalHighscores,
+  refreshGlobalHighscores,
+  isGlobalLoading,
+  isGlobalAvailable,
+  globalHasError,
+  scoreboardTitle,
+  scoreboardEmptyMessage
 }: CompactSideColumnProps): ReactElement => {
   const { t } = useI18n();
-  const hasScores = highscores.length > 0;
-  const [isScoreboardOpen, setIsScoreboardOpen] = useState<boolean>(hasScores);
+  const hasVisibleScoreboardContent = highscores.length > 0 || mode === 'global';
+  const [isScoreboardOpen, setIsScoreboardOpen] = useState<boolean>(hasVisibleScoreboardContent);
 
   useEffect(() => {
-    setIsScoreboardOpen(hasScores);
-  }, [hasScores]);
+    setIsScoreboardOpen(hasVisibleScoreboardContent);
+  }, [hasVisibleScoreboardContent]);
 
   return (
     <section className="compact-side-column">
@@ -87,24 +214,26 @@ const CompactSideColumnComponent = ({
           <ControlHelpContent />
         </div>
       </details>
+      <LeaderboardControls
+        mode={mode}
+        onModeChange={onModeChange}
+        onResetLocalScores={clearLocalHighscores}
+        onRefreshGlobalScores={refreshGlobalHighscores}
+        isGlobalLoading={isGlobalLoading}
+        isGlobalAvailable={isGlobalAvailable}
+        globalHasError={globalHasError}
+        scoreboardTitle={scoreboardTitle}
+      />
       <details
         className="card disclosure disclosure-scoreboard"
         open={isScoreboardOpen}
         onToggle={(event) => setIsScoreboardOpen(event.currentTarget.open)}
       >
-        <summary>{t('scoreboard.title')}</summary>
+        <summary>{scoreboardTitle}</summary>
         <div className="disclosure-body">
-          <ScoreBoardContent highscores={highscores} />
+          <ScoreBoardContent highscores={highscores} emptyMessage={scoreboardEmptyMessage} />
         </div>
       </details>
-      <button
-        type="button"
-        className="ghost reset-scores"
-        onClick={clearHighscores}
-        aria-label={`${t('action.resetScores')} - ${t('scoreboard.title')}`}
-      >
-        {t('action.resetScores')}
-      </button>
     </section>
   );
 };
@@ -115,10 +244,28 @@ export const JavelinPage = (): ReactElement => {
   const { t, locale } = useI18n();
   const [state, dispatch] = useReducer(gameReducer, undefined, createInitialGameState);
   const [savedRoundId, setSavedRoundId] = useState<number>(-1);
+  const [leaderboardMode, setLeaderboardMode] = useState<LeaderboardMode>('local');
   const { highscores, addHighscore, clearHighscores, isHighscore } = useLocalHighscores();
+  const {
+    available: isGlobalLeaderboardAvailable,
+    highscores: globalHighscores,
+    isLoading: isGlobalLeaderboardLoading,
+    hasError: hasGlobalLeaderboardError,
+    refresh: refreshGlobalLeaderboard,
+    submitScore: submitGlobalScore
+  } = useGlobalLeaderboard({
+    difficulty: DEFAULT_LEADERBOARD_DIFFICULTY
+  });
   const isCompactLayout = useMediaQuery('(max-width: 1023px)');
 
   useGameLoop(dispatch);
+
+  useEffect(() => {
+    if (leaderboardMode !== 'global') {
+      return;
+    }
+    void refreshGlobalLeaderboard();
+  }, [leaderboardMode, refreshGlobalLeaderboard]);
 
   useEffect(() => {
     if (state.phase.tag !== 'result' || state.phase.resultKind !== 'valid') {
@@ -142,6 +289,15 @@ export const JavelinPage = (): ReactElement => {
     state.phase.isHighscore &&
     savedRoundId !== state.roundId;
 
+  const displayedHighscores = leaderboardMode === 'local' ? highscores : globalHighscores;
+  const scoreboardTitle = leaderboardMode === 'local' ? t('scoreboard.titleLocal') : t('scoreboard.titleGlobal');
+  const scoreboardEmptyMessage =
+    leaderboardMode === 'local'
+      ? t('scoreboard.empty')
+      : isGlobalLeaderboardAvailable
+        ? t('scoreboard.emptyGlobal')
+        : t('scoreboard.globalUnavailable');
+
   return (
     <main className="page">
       <TopBar appTitle={t('app.title')} gameTitle={t('javelin.title')} />
@@ -164,15 +320,31 @@ export const JavelinPage = (): ReactElement => {
                 if (state.phase.tag !== 'result') {
                   return;
                 }
+                const playedAtIso = new Date().toISOString();
                 addHighscore({
                   id: crypto.randomUUID(),
                   name,
                   distanceM: state.phase.distanceM,
-                  playedAtIso: new Date().toISOString(),
+                  playedAtIso,
                   locale,
                   windMs: state.phase.launchedFrom.windMs,
                   launchSpeedMs: state.phase.launchedFrom.launchSpeedMs,
                   angleDeg: state.phase.launchedFrom.angleDeg
+                });
+                void submitGlobalScore({
+                  playerName: name,
+                  distanceM: state.phase.distanceM,
+                  playedAtIso,
+                  locale,
+                  windMs: state.phase.launchedFrom.windMs,
+                  windZMs: state.windZMs,
+                  launchSpeedMs: state.phase.launchedFrom.launchSpeedMs,
+                  angleDeg: state.phase.launchedFrom.angleDeg,
+                  clientVersion: import.meta.env.VITE_APP_VERSION
+                }).then((submitted) => {
+                  if (submitted && leaderboardMode === 'global') {
+                    void refreshGlobalLeaderboard();
+                  }
                 });
                 setSavedRoundId(state.roundId);
               }}
@@ -185,9 +357,35 @@ export const JavelinPage = (): ReactElement => {
         </div>
 
         {isCompactLayout ? (
-          <CompactSideColumn highscores={highscores} clearHighscores={clearHighscores} />
+          <CompactSideColumn
+            highscores={displayedHighscores}
+            mode={leaderboardMode}
+            onModeChange={setLeaderboardMode}
+            clearLocalHighscores={clearHighscores}
+            refreshGlobalHighscores={() => {
+              void refreshGlobalLeaderboard();
+            }}
+            isGlobalLoading={isGlobalLeaderboardLoading}
+            isGlobalAvailable={isGlobalLeaderboardAvailable}
+            globalHasError={hasGlobalLeaderboardError}
+            scoreboardTitle={scoreboardTitle}
+            scoreboardEmptyMessage={scoreboardEmptyMessage}
+          />
         ) : (
-          <SideColumn highscores={highscores} clearHighscores={clearHighscores} />
+          <SideColumn
+            highscores={displayedHighscores}
+            mode={leaderboardMode}
+            onModeChange={setLeaderboardMode}
+            clearLocalHighscores={clearHighscores}
+            refreshGlobalHighscores={() => {
+              void refreshGlobalLeaderboard();
+            }}
+            isGlobalLoading={isGlobalLeaderboardLoading}
+            isGlobalAvailable={isGlobalLeaderboardAvailable}
+            globalHasError={hasGlobalLeaderboardError}
+            scoreboardTitle={scoreboardTitle}
+            scoreboardEmptyMessage={scoreboardEmptyMessage}
+          />
         )}
       </section>
     </main>

@@ -1,0 +1,97 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Javelin global leaderboard (HTTP API + Lambda + DynamoDB)
+
+Parameters:
+  AllowedOrigins:
+    Type: CommaDelimitedList
+    Default: https://example.com
+    Description: Comma-separated browser origins allowed to call leaderboard API (CORS).
+
+Globals:
+  Function:
+    Runtime: nodejs20.x
+    Timeout: 5
+    MemorySize: 256
+
+Resources:
+  ScoresTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: JavelinScores
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: scoreId
+          AttributeType: S
+        - AttributeName: difficulty
+          AttributeType: S
+        - AttributeName: distanceMm
+          AttributeType: N
+      KeySchema:
+        - AttributeName: scoreId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: byDifficultyDistance
+          KeySchema:
+            - AttributeName: difficulty
+              KeyType: HASH
+            - AttributeName: distanceMm
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      CorsConfiguration:
+        AllowOrigins: !Ref AllowedOrigins
+        AllowMethods:
+          - GET
+          - POST
+          - OPTIONS
+        AllowHeaders:
+          - content-type
+
+  GetLeaderboardFn:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: dist/getLeaderboard.handler
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref ScoresTable
+          INDEX_NAME: byDifficultyDistance
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ScoresTable
+      Events:
+        GetLeaderboard:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /leaderboard
+            Method: GET
+
+  PostLeaderboardFn:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: dist/postLeaderboard.handler
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref ScoresTable
+      Policies:
+        - DynamoDBWritePolicy:
+            TableName: !Ref ScoresTable
+      Events:
+        PostLeaderboard:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /leaderboard
+            Method: POST
+
+Outputs:
+  ApiUrl:
+    Description: Base URL for leaderboard API.
+    Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com"

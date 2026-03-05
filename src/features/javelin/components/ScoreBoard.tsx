@@ -4,13 +4,16 @@ import { useI18n } from '../../../i18n/init';
 
 type ScoreBoardProps = {
   highscores: HighscoreEntry[];
+  title: string;
+  emptyMessage: string;
 };
 
 type ScoreBoardContentProps = {
   highscores: HighscoreEntry[];
+  emptyMessage: string;
 };
 
-const ScoreBoardContentComponent = ({ highscores }: ScoreBoardContentProps): ReactElement => {
+const ScoreBoardContentComponent = ({ highscores, emptyMessage }: ScoreBoardContentProps): ReactElement => {
   const { t, formatNumber, locale } = useI18n();
   const dateFormatter = useMemo(
     () =>
@@ -23,7 +26,7 @@ const ScoreBoardContentComponent = ({ highscores }: ScoreBoardContentProps): Rea
   );
 
   if (highscores.length === 0) {
-    return <p className="scoreboard-empty">{t('scoreboard.empty')}</p>;
+    return <p className="scoreboard-empty">{emptyMessage}</p>;
   }
 
   const formatSignedWind = (windMs: number): string =>
@@ -61,13 +64,11 @@ const ScoreBoardContentComponent = ({ highscores }: ScoreBoardContentProps): Rea
 
 export const ScoreBoardContent = memo(ScoreBoardContentComponent);
 
-const ScoreBoardComponent = ({ highscores }: ScoreBoardProps): ReactElement => {
-  const { t } = useI18n();
-
+const ScoreBoardComponent = ({ highscores, title, emptyMessage }: ScoreBoardProps): ReactElement => {
   return (
-    <section className="card scoreboard" aria-label={t('scoreboard.title')}>
-      <h3>{t('scoreboard.title')}</h3>
-      <ScoreBoardContent highscores={highscores} />
+    <section className="card scoreboard" aria-label={title}>
+      <h3>{title}</h3>
+      <ScoreBoardContent highscores={highscores} emptyMessage={emptyMessage} />
     </section>
   );
 };
