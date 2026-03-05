@@ -4,6 +4,7 @@ import { ThemeToggle } from './components/ThemeToggle';
 import { HudPanel } from './components/HudPanel';
 import { GameCanvas } from './components/GameCanvas';
 import { GameActions } from './components/GameActions';
+import { DevAdminPanel } from './components/DevAdminPanel';
 import { ResultDisplay } from './components/ResultDisplay';
 import { SaveScoreForm } from './components/SaveScoreForm';
 import { ScoreBoard, ScoreBoardContent } from './components/ScoreBoard';
@@ -12,6 +13,11 @@ import { gameReducer } from './game/reducer';
 import type { HighscoreEntry } from './game/types';
 import { useGameLoop } from './hooks/useGameLoop';
 import { useDifficultyUnlocks } from './hooks/useDifficultyUnlocks';
+import {
+  resolveEffectiveDifficultyUnlocks,
+  shouldBlockGlobalSubmitInDevAdmin,
+  useDevAdminSettings
+} from './hooks/useDevAdminSettings';
 import { useGlobalLeaderboard } from './hooks/useGlobalLeaderboard';
 import { useLocalHighscores } from './hooks/useLocalHighscores';
 import { useResultMessage } from './hooks/useResultMessage';
@@ -246,7 +252,25 @@ export const JavelinPage = (): ReactElement => {
   const [savedRoundId, setSavedRoundId] = useState<number>(-1);
   const [processedUnlockRoundId, setProcessedUnlockRoundId] = useState<number>(-1);
   const [leaderboardMode, setLeaderboardMode] = useState<LeaderboardMode>('local');
-  const { unlocks: difficultyUnlocks, registerThrowResult } = useDifficultyUnlocks();
+  const {
+    unlocks: canonicalDifficultyUnlocks,
+    registerThrowResult,
+    resetUnlocks
+  } = useDifficultyUnlocks();
+  const {
+    enabled: devAdminEnabled,
+    settings: devAdminSettings,
+    setUnlockAllDifficulties,
+    applyTuningOverrides,
+    resetTuningOverrides,
+    resetAll: resetDevAdminAll
+  } = useDevAdminSettings();
+  const difficultyUnlocks = resolveEffectiveDifficultyUnlocks(
+    canonicalDifficultyUnlocks,
+    devAdminSettings,
+    devAdminEnabled
+  );
+  const isGlobalSubmitBlockedInDevAdmin = shouldBlockGlobalSubmitInDevAdmin(devAdminEnabled);
   const { highscores, addHighscore, clearHighscores, isHighscoreForDifficulty } = useLocalHighscores({
     difficulty: state.difficulty
   });
@@ -263,6 +287,19 @@ export const JavelinPage = (): ReactElement => {
   const isCompactLayout = useMediaQuery('(max-width: 1023px)');
 
   useGameLoop(dispatch);
+
+  useEffect(() => {
+    if (!devAdminEnabled) {
+      return;
+    }
+    if (state.phase.tag !== 'idle' && state.phase.tag !== 'result') {
+      return;
+    }
+    dispatch({
+      type: 'setDevTuningOverrides',
+      overrides: devAdminSettings.tuningOverrides
+    });
+  }, [devAdminEnabled, devAdminSettings.tuningOverrides, state.phase.tag]);
 
   useEffect(() => {
     if (leaderboardMode !== 'global') {
@@ -317,6 +354,7 @@ export const JavelinPage = (): ReactElement => {
     state.phase.resultKind === 'valid' &&
     state.phase.isHighscore &&
     savedRoundId !== state.roundId;
+  const canApplyDevTuning = state.phase.tag === 'idle' || state.phase.tag === 'result';
 
   const displayedHighscores = leaderboardMode === 'local' ? highscores : globalHighscores;
   const difficultyLabel = t(`difficulty.${state.difficulty}`);
@@ -339,6 +377,30 @@ export const JavelinPage = (): ReactElement => {
           <HudPanel state={state} />
           <GameCanvas state={state} dispatch={dispatch} />
           <GameActions state={state} dispatch={dispatch} difficultyUnlocks={difficultyUnlocks} />
+          {devAdminEnabled && (
+            <DevAdminPanel
+              settings={devAdminSettings}
+              canApplyTuning={canApplyDevTuning}
+              onSetUnlockAllDifficulties={setUnlockAllDifficulties}
+              onResetUnlockProgression={resetUnlocks}
+              onApplyTuningOverrides={(overrides) => {
+                applyTuningOverrides(overrides);
+                dispatch({
+                  type: 'setDevTuningOverrides',
+                  overrides
+                });
+              }}
+              onResetTuningOverrides={() => {
+                resetTuningOverrides();
+                dispatch({ type: 'resetDevTuningOverrides' });
+              }}
+              onResetAll={() => {
+                resetDevAdminAll();
+                resetUnlocks();
+                dispatch({ type: 'resetDevTuningOverrides' });
+              }}
+            />
+          )}
           <ResultDisplay
             resultMessage={resultMessage}
             resultStatusMessage={resultStatusMessage}
@@ -364,6 +426,10 @@ export const JavelinPage = (): ReactElement => {
                   launchSpeedMs: state.phase.launchedFrom.launchSpeedMs,
                   angleDeg: state.phase.launchedFrom.angleDeg
                 });
+                if (isGlobalSubmitBlockedInDevAdmin) {
+                  setSavedRoundId(state.roundId);
+                  return;
+                }
                 void submitGlobalScore({
                   difficulty: state.phase.launchedFrom.difficulty,
                   playerName: name,
@@ -384,6 +450,9 @@ export const JavelinPage = (): ReactElement => {
               }}
               defaultName={t('scoreboard.defaultName')}
             />
+          )}
+          {canSaveScore && isGlobalSubmitBlockedInDevAdmin && (
+            <p className="save-form-note">{t('scoreboard.globalSubmitDisabledDev')}</p>
           )}
           {state.phase.tag === 'result' && state.phase.resultKind === 'valid' && state.phase.isHighscore && (
             <div className="badge">{t('result.highscore')}</div>

@@ -6,10 +6,14 @@ import type { GameState } from './types';
 
 const { runupStartXM: RUNUP_START_X_M } = GAMEPLAY_TUNING.movement;
 
-const baseState: Pick<GameState, 'nowMs' | 'roundId' | 'difficulty' | 'windMs' | 'windZMs' | 'aimAngleDeg'> = {
+const baseState: Pick<
+  GameState,
+  'nowMs' | 'roundId' | 'difficulty' | 'devTuningOverrides' | 'windMs' | 'windZMs' | 'aimAngleDeg'
+> = {
   nowMs: 2200,
   roundId: 2,
   difficulty: 'rookie',
+  devTuningOverrides: {},
   windMs: 0.2,
   windZMs: -0.1,
   aimAngleDeg: 34

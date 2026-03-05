@@ -1,4 +1,5 @@
 import type { DifficultyLevel, MeterWindow } from './types';
+import { clamp } from './math';
 
 type SpeedUpTuning = {
   tapGainNorm: number;
@@ -105,6 +106,25 @@ export type DifficultyGameplayTuning = {
   throwPhase: DifficultyThrowPhaseTuning;
   movement: DifficultyMovementTuning;
 };
+
+export type DifficultyGameplayTuningOverride = {
+  tapGainNorm?: number;
+  tapSoftCapIntervalMs?: number;
+  tapSoftCapMinMultiplier?: number;
+  runupSpeedDecayPerSecond?: number;
+  chargeAimSpeedDecayPerSecond?: number;
+  chargeAimStopSpeedNorm?: number;
+  chargeFillDurationMs?: number;
+  chargePerfectWindow?: Partial<MeterWindow>;
+  chargeGoodWindow?: Partial<MeterWindow>;
+  rhythm?: Partial<EliteRhythmTuning>;
+};
+
+export type DifficultyGameplayTuningOverrides = Partial<
+  Record<DifficultyLevel, DifficultyGameplayTuningOverride>
+>;
+
+export const EMPTY_DIFFICULTY_GAMEPLAY_TUNING_OVERRIDES: DifficultyGameplayTuningOverrides = {};
 
 /**
  * Central gameplay tuning values.
@@ -237,5 +257,122 @@ export const DIFFICULTY_GAMEPLAY_TUNING: Record<DifficultyLevel, DifficultyGamep
   }
 };
 
-export const getDifficultyGameplayTuning = (difficulty: DifficultyLevel): DifficultyGameplayTuning =>
-  DIFFICULTY_GAMEPLAY_TUNING[difficulty];
+const sanitizeMeterWindow = (window: MeterWindow): MeterWindow => {
+  const start = clamp(window.start, 0, 1);
+  const end = clamp(window.end, 0, 1);
+  if (start <= end) {
+    return { start, end };
+  }
+  return { start: end, end: start };
+};
+
+const mergeMeterWindow = (base: MeterWindow, override: Partial<MeterWindow> | undefined): MeterWindow =>
+  sanitizeMeterWindow({
+    start: override?.start ?? base.start,
+    end: override?.end ?? base.end
+  });
+
+const sanitizeEliteRhythmTuning = (
+  base: EliteRhythmTuning,
+  override: Partial<EliteRhythmTuning> | undefined
+): EliteRhythmTuning => {
+  const targetTapIntervalMs = clamp(
+    Math.round(override?.targetTapIntervalMs ?? base.targetTapIntervalMs),
+    40,
+    400
+  );
+  const perfectToleranceMs = clamp(
+    Math.round(override?.perfectToleranceMs ?? base.perfectToleranceMs),
+    1,
+    120
+  );
+  const goodToleranceMs = clamp(
+    Math.round(override?.goodToleranceMs ?? base.goodToleranceMs),
+    perfectToleranceMs,
+    200
+  );
+  const offBeatMultiplier = clamp(override?.offBeatMultiplier ?? base.offBeatMultiplier, 0, 1);
+
+  return {
+    targetTapIntervalMs,
+    perfectToleranceMs,
+    goodToleranceMs,
+    offBeatMultiplier
+  };
+};
+
+const resolveDifficultyTuningWithOverride = (
+  difficulty: DifficultyLevel,
+  base: DifficultyGameplayTuning,
+  override: DifficultyGameplayTuningOverride | undefined
+): DifficultyGameplayTuning => {
+  const perfectWindow = mergeMeterWindow(base.throwPhase.chargePerfectWindow, override?.chargePerfectWindow);
+  const goodWindowInput = mergeMeterWindow(base.throwPhase.chargeGoodWindow, override?.chargeGoodWindow);
+  const goodWindow: MeterWindow = {
+    start: Math.min(goodWindowInput.start, perfectWindow.start),
+    end: Math.max(goodWindowInput.end, perfectWindow.end)
+  };
+
+  const rhythm =
+    difficulty === 'elite' && base.speedUp.rhythm
+      ? sanitizeEliteRhythmTuning(base.speedUp.rhythm, override?.rhythm)
+      : undefined;
+
+  return {
+    speedUp: {
+      tapGainNorm: clamp(override?.tapGainNorm ?? base.speedUp.tapGainNorm, 0.001, 0.3),
+      tapSoftCapIntervalMs: clamp(
+        Math.round(override?.tapSoftCapIntervalMs ?? base.speedUp.tapSoftCapIntervalMs),
+        40,
+        400
+      ),
+      tapSoftCapMinMultiplier: clamp(
+        override?.tapSoftCapMinMultiplier ?? base.speedUp.tapSoftCapMinMultiplier,
+        0.01,
+        1
+      ),
+      rhythm
+    },
+    movement: {
+      runupSpeedDecayPerSecond: clamp(
+        override?.runupSpeedDecayPerSecond ?? base.movement.runupSpeedDecayPerSecond,
+        0,
+        2
+      ),
+      chargeAimSpeedDecayPerSecond: clamp(
+        override?.chargeAimSpeedDecayPerSecond ?? base.movement.chargeAimSpeedDecayPerSecond,
+        0,
+        2
+      ),
+      chargeAimStopSpeedNorm: clamp(
+        override?.chargeAimStopSpeedNorm ?? base.movement.chargeAimStopSpeedNorm,
+        0,
+        1
+      )
+    },
+    throwPhase: {
+      chargeFillDurationMs: clamp(
+        Math.round(override?.chargeFillDurationMs ?? base.throwPhase.chargeFillDurationMs),
+        200,
+        2000
+      ),
+      chargePerfectWindow: perfectWindow,
+      chargeGoodWindow: goodWindow
+    }
+  };
+};
+
+export const resolveDifficultyGameplayTuning = (
+  difficulty: DifficultyLevel,
+  overrides: DifficultyGameplayTuningOverrides = EMPTY_DIFFICULTY_GAMEPLAY_TUNING_OVERRIDES
+): DifficultyGameplayTuning =>
+  resolveDifficultyTuningWithOverride(
+    difficulty,
+    DIFFICULTY_GAMEPLAY_TUNING[difficulty],
+    overrides[difficulty]
+  );
+
+export const getDifficultyGameplayTuning = (
+  difficulty: DifficultyLevel,
+  overrides: DifficultyGameplayTuningOverrides = EMPTY_DIFFICULTY_GAMEPLAY_TUNING_OVERRIDES
+): DifficultyGameplayTuning => resolveDifficultyGameplayTuning(difficulty, overrides);

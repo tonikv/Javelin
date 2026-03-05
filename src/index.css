@@ -408,6 +408,13 @@ button.ghost {
   font-weight: 700;
 }
 
+.save-form-note {
+  margin: 0;
+  font-size: 0.84rem;
+  color: var(--text-soft);
+  font-weight: 700;
+}
+
 .badge {
   width: fit-content;
   background: var(--badge-bg);
@@ -420,6 +427,80 @@ button.ghost {
 .control-help,
 .scoreboard {
   padding: 12px 14px;
+}
+
+.dev-admin-panel {
+  padding: 12px 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.dev-admin-panel h3 {
+  margin: 0;
+}
+
+.dev-admin-note {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.dev-admin-error {
+  margin: 0;
+  color: var(--warning);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.dev-admin-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.dev-admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dev-admin-tuning-grid {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.dev-admin-fieldset {
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  padding: 8px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.dev-admin-fieldset > legend {
+  padding: 0 4px;
+  font-weight: 800;
+}
+
+.dev-admin-fieldset > label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.78rem;
+  color: var(--text-soft);
+}
+
+.dev-admin-fieldset input {
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius);
+  min-height: 36px;
+  padding: 6px 8px;
+  background: var(--input-bg);
+  color: var(--text-main);
 }
 
 .control-help h3,
@@ -663,6 +744,12 @@ button.ghost {
 
   .language-switch select {
     min-width: 140px;
+  }
+}
+
+@media (min-width: 900px) {
+  .dev-admin-tuning-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 

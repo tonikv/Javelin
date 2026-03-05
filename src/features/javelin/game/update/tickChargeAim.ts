@@ -19,7 +19,7 @@ export const tickChargeAim = (state: GameState, dtMs: number, nowMs: number): Ga
   if (state.phase.tag !== 'chargeAim') {
     return state;
   }
-  const tuning = getDifficultyGameplayTuning(state.difficulty);
+  const tuning = getDifficultyGameplayTuning(state.difficulty, state.devTuningOverrides);
 
   const elapsedMs = Math.max(0, nowMs - state.phase.chargeStartedAtMs);
   const rawFill01 = elapsedMs / tuning.throwPhase.chargeFillDurationMs;

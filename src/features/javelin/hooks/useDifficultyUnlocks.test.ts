@@ -3,7 +3,8 @@ import { DIFFICULTY_UNLOCK_STORAGE_KEY } from '../game/constants';
 import {
   DEFAULT_DIFFICULTY_UNLOCKS,
   applyDifficultyUnlockProgress,
-  loadDifficultyUnlocks
+  loadDifficultyUnlocks,
+  saveDifficultyUnlocks
 } from './useDifficultyUnlocks';
 
 beforeEach(() => {
@@ -54,5 +55,11 @@ describe('difficulty unlock progression', () => {
       JSON.stringify({ rookie: true, pro: true, elite: false })
     );
     expect(loadDifficultyUnlocks()).toEqual({ rookie: true, pro: true, elite: false });
+  });
+
+  it('can reset unlock payload to defaults', () => {
+    saveDifficultyUnlocks({ rookie: true, pro: true, elite: true });
+    saveDifficultyUnlocks(DEFAULT_DIFFICULTY_UNLOCKS);
+    expect(loadDifficultyUnlocks()).toEqual(DEFAULT_DIFFICULTY_UNLOCKS);
   });
 });

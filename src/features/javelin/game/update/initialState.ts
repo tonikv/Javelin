@@ -12,6 +12,7 @@ export const createInitialGameState = (): GameState => {
     nowMs,
     roundId: 0,
     difficulty: 'rookie',
+    devTuningOverrides: {},
     windMs: sampleWindTargetMs(nowMs),
     windZMs: sampleCrosswindTargetMs(nowMs),
     aimAngleDeg: ANGLE_DEFAULT_DEG,

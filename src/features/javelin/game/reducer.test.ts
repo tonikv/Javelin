@@ -105,6 +105,67 @@ describe('gameReducer', () => {
     expect(changed.difficulty).toBe('elite');
   });
 
+  it('applies dev tuning overrides in idle and affects next round tuning', () => {
+    let baseline = createInitialGameState();
+    baseline = gameReducer(baseline, { type: 'startRound', atMs: 1000, windMs: 0 });
+    baseline = gameReducer(baseline, { type: 'rhythmTap', atMs: 1000 });
+    const baselineTapSpeed = baseline.phase.tag === 'runup' ? baseline.phase.speedNorm : 0;
+
+    let overridden = createInitialGameState();
+    overridden = gameReducer(overridden, {
+      type: 'setDevTuningOverrides',
+      overrides: {
+        rookie: {
+          tapGainNorm: 0.2
+        }
+      }
+    });
+    overridden = gameReducer(overridden, { type: 'startRound', atMs: 1000, windMs: 0 });
+    overridden = gameReducer(overridden, { type: 'rhythmTap', atMs: 1000 });
+    const overriddenTapSpeed = overridden.phase.tag === 'runup' ? overridden.phase.speedNorm : 0;
+
+    expect(overriddenTapSpeed).toBeGreaterThan(baselineTapSpeed);
+  });
+
+  it('ignores dev tuning override actions during active throw phases', () => {
+    let state = createInitialGameState();
+    state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0 });
+    const next = gameReducer(state, {
+      type: 'setDevTuningOverrides',
+      overrides: {
+        rookie: { tapGainNorm: 0.2 }
+      }
+    });
+    expect(next).toBe(state);
+  });
+
+  it('resets dev tuning overrides in idle and restores default behavior', () => {
+    let withOverride = createInitialGameState();
+    withOverride = gameReducer(withOverride, {
+      type: 'setDevTuningOverrides',
+      overrides: {
+        rookie: {
+          tapGainNorm: 0.2
+        }
+      }
+    });
+    withOverride = gameReducer(withOverride, { type: 'resetDevTuningOverrides' });
+    expect(withOverride.devTuningOverrides).toEqual({});
+
+    withOverride = gameReducer(withOverride, { type: 'startRound', atMs: 1000, windMs: 0 });
+    withOverride = gameReducer(withOverride, { type: 'rhythmTap', atMs: 1000 });
+
+    let baseline = createInitialGameState();
+    baseline = gameReducer(baseline, { type: 'startRound', atMs: 1000, windMs: 0 });
+    baseline = gameReducer(baseline, { type: 'rhythmTap', atMs: 1000 });
+
+    expect(withOverride.phase.tag).toBe('runup');
+    expect(baseline.phase.tag).toBe('runup');
+    if (withOverride.phase.tag === 'runup' && baseline.phase.tag === 'runup') {
+      expect(withOverride.phase.speedNorm).toBeCloseTo(baseline.phase.speedNorm, 6);
+    }
+  });
+
   it('applies stricter timing and speed decay in pro and elite compared with rookie', () => {
     const rookie = getDifficultyGameplayTuning('rookie');
     const pro = getDifficultyGameplayTuning('pro');

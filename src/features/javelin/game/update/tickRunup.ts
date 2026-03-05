@@ -14,7 +14,10 @@ export const tickRunup = (state: GameState, dtMs: number): GameState => {
   if (state.phase.tag !== 'runup') {
     return state;
   }
-  const { runupSpeedDecayPerSecond } = getDifficultyGameplayTuning(state.difficulty).movement;
+  const { runupSpeedDecayPerSecond } = getDifficultyGameplayTuning(
+    state.difficulty,
+    state.devTuningOverrides
+  ).movement;
 
   const speedAfterDecay = clamp(
     state.phase.speedNorm - (dtMs / 1000) * runupSpeedDecayPerSecond,

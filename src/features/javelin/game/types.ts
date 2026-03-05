@@ -1,3 +1,5 @@
+import type { DifficultyGameplayTuningOverrides } from './tuning';
+
 export type Locale = 'fi' | 'sv' | 'en';
 
 export type FaultReason = 'lateRelease' | 'invalidRelease' | 'lowAngle';
@@ -139,6 +141,7 @@ export type GameState = {
   nowMs: number;
   roundId: number;
   difficulty: DifficultyLevel;
+  devTuningOverrides: DifficultyGameplayTuningOverrides;
   windMs: number;
   windZMs: number;
   aimAngleDeg: number;
@@ -149,6 +152,8 @@ export type GameAction =
   | { type: 'startRound'; atMs: number; windMs: number; windZMs?: number }
   | { type: 'rhythmTap'; atMs: number }
   | { type: 'setDifficulty'; difficulty: DifficultyLevel }
+  | { type: 'setDevTuningOverrides'; overrides: DifficultyGameplayTuningOverrides }
+  | { type: 'resetDevTuningOverrides' }
   | { type: 'beginChargeAim'; atMs: number }
   | { type: 'setAngle'; angleDeg: number }
   | { type: 'adjustAngle'; deltaDeg: number }

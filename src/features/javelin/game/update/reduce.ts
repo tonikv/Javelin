@@ -12,7 +12,11 @@ import {
   THROW_LINE_X_M
 } from '../constants';
 import { clamp } from '../math';
-import { GAMEPLAY_TUNING, getDifficultyGameplayTuning } from '../tuning';
+import {
+  EMPTY_DIFFICULTY_GAMEPLAY_TUNING_OVERRIDES,
+  GAMEPLAY_TUNING,
+  getDifficultyGameplayTuning
+} from '../tuning';
 import type { GameAction, GameState } from '../types';
 import { advanceCrosswindMs, advanceWindMs } from '../wind';
 import { createLateReleaseFaultPhase, isRunning, runupTapGainMultiplier } from './helpers';
@@ -40,6 +44,30 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
       return {
         ...state,
         difficulty: action.difficulty
+      };
+    }
+    case 'setDevTuningOverrides': {
+      if (state.phase.tag !== 'idle' && state.phase.tag !== 'result') {
+        return state;
+      }
+      if (state.devTuningOverrides === action.overrides) {
+        return state;
+      }
+      return {
+        ...state,
+        devTuningOverrides: action.overrides
+      };
+    }
+    case 'resetDevTuningOverrides': {
+      if (state.phase.tag !== 'idle' && state.phase.tag !== 'result') {
+        return state;
+      }
+      if (Object.keys(state.devTuningOverrides).length === 0) {
+        return state;
+      }
+      return {
+        ...state,
+        devTuningOverrides: EMPTY_DIFFICULTY_GAMEPLAY_TUNING_OVERRIDES
       };
     }
     case 'startRound': {
@@ -70,13 +98,15 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
       if (state.phase.tag !== 'runup') {
         return state;
       }
-      const difficultyTuning = getDifficultyGameplayTuning(state.difficulty);
+      const difficultyTuning = getDifficultyGameplayTuning(state.difficulty, state.devTuningOverrides);
       const phase = state.phase;
       const lastTapAtMs = phase.tap.lastTapAtMs;
       const tapIntervalMs =
         lastTapAtMs === null ? Number.POSITIVE_INFINITY : Math.max(0, action.atMs - lastTapAtMs);
       const tapGainMultiplier =
-        lastTapAtMs === null ? 1 : runupTapGainMultiplier(tapIntervalMs, state.difficulty);
+        lastTapAtMs === null
+          ? 1
+          : runupTapGainMultiplier(tapIntervalMs, state.difficulty, state.devTuningOverrides);
       const tapGainNorm = difficultyTuning.speedUp.tapGainNorm * tapGainMultiplier;
       const speedNorm = clamp(phase.speedNorm + tapGainNorm, 0, 1);
 
@@ -106,7 +136,7 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
       if (state.phase.tag !== 'runup') {
         return state;
       }
-      const difficultyTuning = getDifficultyGameplayTuning(state.difficulty);
+      const difficultyTuning = getDifficultyGameplayTuning(state.difficulty, state.devTuningOverrides);
       return {
         ...state,
         nowMs: action.atMs,
@@ -181,7 +211,7 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
       if (state.phase.tag !== 'chargeAim') {
         return state;
       }
-      const difficultyTuning = getDifficultyGameplayTuning(state.difficulty);
+      const difficultyTuning = getDifficultyGameplayTuning(state.difficulty, state.devTuningOverrides);
       const elapsedMs = Math.max(0, action.atMs - state.phase.chargeStartedAtMs);
       const rawFill01 = elapsedMs / difficultyTuning.throwPhase.chargeFillDurationMs;
       const fullCycles = Math.floor(rawFill01);

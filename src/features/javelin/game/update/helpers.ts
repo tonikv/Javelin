@@ -12,7 +12,11 @@ import {
 } from '../constants';
 import { clamp, easeOutQuad, toRad, wrap01 } from '../math';
 import { createPhysicalJavelin } from '../physics';
-import { GAMEPLAY_TUNING, getDifficultyGameplayTuning } from '../tuning';
+import {
+  GAMEPLAY_TUNING,
+  getDifficultyGameplayTuning,
+  type DifficultyGameplayTuningOverrides
+} from '../tuning';
 import type { DifficultyLevel, GameState, TimingQuality } from '../types';
 
 const {
@@ -23,8 +27,12 @@ const {
   followThroughStepDistanceM: FOLLOW_THROUGH_STEP_DISTANCE_M
 } = GAMEPLAY_TUNING.movement;
 
-export const eliteRhythmGainMultiplier = (deltaMs: number, difficulty: DifficultyLevel): number => {
-  const rhythm = getDifficultyGameplayTuning(difficulty).speedUp.rhythm;
+export const eliteRhythmGainMultiplier = (
+  deltaMs: number,
+  difficulty: DifficultyLevel,
+  overrides: DifficultyGameplayTuningOverrides
+): number => {
+  const rhythm = getDifficultyGameplayTuning(difficulty, overrides).speedUp.rhythm;
   if (!rhythm) {
     return 1;
   }
@@ -40,11 +48,15 @@ export const eliteRhythmGainMultiplier = (deltaMs: number, difficulty: Difficult
   return 1 - normalized * 0.45;
 };
 
-export const runupTapGainMultiplier = (deltaMs: number, difficulty: DifficultyLevel): number => {
-  const profile = getDifficultyGameplayTuning(difficulty);
+export const runupTapGainMultiplier = (
+  deltaMs: number,
+  difficulty: DifficultyLevel,
+  overrides: DifficultyGameplayTuningOverrides
+): number => {
+  const profile = getDifficultyGameplayTuning(difficulty, overrides);
   const ratio = clamp(deltaMs / profile.speedUp.tapSoftCapIntervalMs, 0, 1);
   const antiMashMultiplier = Math.max(profile.speedUp.tapSoftCapMinMultiplier, ratio * ratio);
-  return antiMashMultiplier * eliteRhythmGainMultiplier(deltaMs, difficulty);
+  return antiMashMultiplier * eliteRhythmGainMultiplier(deltaMs, difficulty, overrides);
 };
 
 export const runStrideHz = (speedNorm: number): number => 1 + speedNorm * 2.2;

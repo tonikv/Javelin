@@ -93,6 +93,7 @@ type RegisterThrowResultInput = {
 type UseDifficultyUnlocksResult = {
   unlocks: DifficultyUnlocks;
   registerThrowResult: (input: RegisterThrowResultInput) => void;
+  resetUnlocks: () => void;
 };
 
 export const useDifficultyUnlocks = (): UseDifficultyUnlocksResult => {
@@ -113,8 +114,14 @@ export const useDifficultyUnlocks = (): UseDifficultyUnlocksResult => {
     });
   }, []);
 
+  const resetUnlocks = useCallback(() => {
+    setUnlocks(DEFAULT_DIFFICULTY_UNLOCKS);
+    saveDifficultyUnlocks(DEFAULT_DIFFICULTY_UNLOCKS);
+  }, []);
+
   return {
     unlocks,
-    registerThrowResult
+    registerThrowResult,
+    resetUnlocks
   };
 };
