@@ -1,27 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import {
-  RUNUP_MAX_TAPS,
-  RUNUP_MAX_X_M,
-  THROW_LINE_X_M
-} from './constants';
+import { RUNUP_MAX_TAPS, RUNUP_MAX_X_M, THROW_LINE_X_M } from './constants';
 import { gameReducer } from './reducer';
-import {
-  GAMEPLAY_TUNING,
-  getDifficultyGameplayTuning
-} from './tuning';
+import { GAMEPLAY_TUNING, getDifficultyGameplayTuning } from './tuning';
 import { createInitialGameState } from './update';
 import { advanceCrosswindMs, advanceWindMs } from './wind';
 
-const {
-  chargeMaxCycles: CHARGE_MAX_CYCLES,
-  throwAnimDurationMs: THROW_ANIM_DURATION_MS
-} = GAMEPLAY_TUNING.throwPhase;
-const {
-  runupStartXM: RUNUP_START_X_M
-} = GAMEPLAY_TUNING.movement;
-const {
-  tapSoftCapIntervalMs: RUNUP_TAP_SOFT_CAP_INTERVAL_MS
-} = GAMEPLAY_TUNING.speedUp;
+const { chargeMaxCycles: CHARGE_MAX_CYCLES, throwAnimDurationMs: THROW_ANIM_DURATION_MS } =
+  GAMEPLAY_TUNING.throwPhase;
+const { runupStartXM: RUNUP_START_X_M } = GAMEPLAY_TUNING.movement;
+const { tapSoftCapIntervalMs: RUNUP_TAP_SOFT_CAP_INTERVAL_MS } = GAMEPLAY_TUNING.speedUp;
 
 const tapRunupNTimes = (
   state: ReturnType<typeof createInitialGameState>,
@@ -171,23 +158,40 @@ describe('gameReducer', () => {
     const elite = getDifficultyGameplayTuning('elite');
 
     const windowWidth = (start: number, end: number): number => end - start;
-    expect(windowWidth(pro.throwPhase.chargePerfectWindow.start, pro.throwPhase.chargePerfectWindow.end)).toBeLessThan(
+    expect(
+      windowWidth(pro.throwPhase.chargePerfectWindow.start, pro.throwPhase.chargePerfectWindow.end)
+    ).toBeLessThan(
       windowWidth(
         rookie.throwPhase.chargePerfectWindow.start,
         rookie.throwPhase.chargePerfectWindow.end
       )
     );
     expect(
-      windowWidth(elite.throwPhase.chargePerfectWindow.start, elite.throwPhase.chargePerfectWindow.end)
+      windowWidth(
+        elite.throwPhase.chargePerfectWindow.start,
+        elite.throwPhase.chargePerfectWindow.end
+      )
     ).toBeLessThan(
       windowWidth(pro.throwPhase.chargePerfectWindow.start, pro.throwPhase.chargePerfectWindow.end)
     );
-    expect(pro.movement.runupSpeedDecayPerSecond).toBeGreaterThan(rookie.movement.runupSpeedDecayPerSecond);
-    expect(elite.movement.runupSpeedDecayPerSecond).toBeGreaterThan(pro.movement.runupSpeedDecayPerSecond);
-    expect(rookie.releaseMeter?.sweepDurationMsMax).toBe(elite.releaseMeter?.sweepDurationMsMax);
-    expect(pro.releaseMeter?.sweepDurationMsMax).toBe(elite.releaseMeter?.sweepDurationMsMax);
-    expect((rookie.releaseMeter?.perfectWidth ?? 0)).toBeGreaterThan(pro.releaseMeter?.perfectWidth ?? 0);
-    expect((pro.releaseMeter?.perfectWidth ?? 0)).toBeGreaterThan(elite.releaseMeter?.perfectWidth ?? 0);
+    expect(pro.movement.runupSpeedDecayPerSecond).toBeGreaterThan(
+      rookie.movement.runupSpeedDecayPerSecond
+    );
+    expect(elite.movement.runupSpeedDecayPerSecond).toBeGreaterThan(
+      pro.movement.runupSpeedDecayPerSecond
+    );
+    expect(rookie.releaseMeter?.sweepDurationMsMax ?? 0).toBeGreaterThan(
+      elite.releaseMeter?.sweepDurationMsMax ?? 0
+    );
+    expect(pro.releaseMeter?.sweepDurationMsMax ?? 0).toBeGreaterThan(
+      elite.releaseMeter?.sweepDurationMsMax ?? 0
+    );
+    expect(rookie.releaseMeter?.perfectWidth ?? 0).toBeGreaterThan(
+      pro.releaseMeter?.perfectWidth ?? 0
+    );
+    expect(pro.releaseMeter?.perfectWidth ?? 0).toBeGreaterThan(
+      elite.releaseMeter?.perfectWidth ?? 0
+    );
   });
 
   it('elite rhythm rewards on-beat taps and penalizes off-beat taps', () => {
@@ -454,7 +458,7 @@ describe('gameReducer', () => {
     state = gameReducer(state, { type: 'beginChargeAim', atMs: 4600 });
     const startSpeed = state.phase.tag === 'chargeAim' ? state.phase.speedNorm : 0;
 
-    const tickCount = Math.floor((((rookieReleaseTuning?.sweepDurationMsMax ?? 520) * 0.9) / 100));
+    const tickCount = Math.floor(((rookieReleaseTuning?.sweepDurationMsMax ?? 520) * 0.9) / 100);
     for (let i = 1; i <= tickCount; i += 1) {
       state = gameReducer(state, { type: 'tick', dtMs: 100, nowMs: 4600 + i * 100 });
     }
@@ -563,9 +567,10 @@ describe('gameReducer', () => {
     const rookieReleaseTuning = getDifficultyGameplayTuning('rookie').releaseMeter;
     const proReleaseTuning = getDifficultyGameplayTuning('pro').releaseMeter;
     const eliteReleaseTuning = getDifficultyGameplayTuning('elite').releaseMeter;
-    const halfSweepMs = Math.round((eliteReleaseTuning?.sweepDurationMsMax ?? 520) * 0.5);
 
     for (const difficulty of ['rookie', 'pro', 'elite'] as const) {
+      const releaseTuning = getDifficultyGameplayTuning(difficulty).releaseMeter;
+      const halfSweepMs = Math.round((releaseTuning?.sweepDurationMsMax ?? 520) * 0.5);
       let state = createInitialGameState();
       state = gameReducer(state, { type: 'setDifficulty', difficulty });
       state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0 });
@@ -582,10 +587,18 @@ describe('gameReducer', () => {
       }
     }
 
-    expect(rookieReleaseTuning?.sweepDurationMsMax).toBe(eliteReleaseTuning?.sweepDurationMsMax);
-    expect(proReleaseTuning?.sweepDurationMsMax).toBe(eliteReleaseTuning?.sweepDurationMsMax);
-    expect((rookieReleaseTuning?.perfectWidth ?? 0)).toBeGreaterThan(proReleaseTuning?.perfectWidth ?? 0);
-    expect((proReleaseTuning?.perfectWidth ?? 0)).toBeGreaterThan(eliteReleaseTuning?.perfectWidth ?? 0);
+    expect(rookieReleaseTuning?.sweepDurationMsMax ?? 0).toBeGreaterThan(
+      eliteReleaseTuning?.sweepDurationMsMax ?? 0
+    );
+    expect(proReleaseTuning?.sweepDurationMsMax ?? 0).toBeGreaterThan(
+      eliteReleaseTuning?.sweepDurationMsMax ?? 0
+    );
+    expect(rookieReleaseTuning?.perfectWidth ?? 0).toBeGreaterThan(
+      proReleaseTuning?.perfectWidth ?? 0
+    );
+    expect(proReleaseTuning?.perfectWidth ?? 0).toBeGreaterThan(
+      eliteReleaseTuning?.perfectWidth ?? 0
+    );
   });
 
   it('sets release flash timestamp on charge release', () => {

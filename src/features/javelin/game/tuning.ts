@@ -235,12 +235,12 @@ export const DIFFICULTY_GAMEPLAY_TUNING: Record<DifficultyLevel, DifficultyGamep
       chargeGoodWindow: { start: 0.62, end: 0.96 }
     },
     releaseMeter: {
-      sweepDurationMsMin: 360,
-      sweepDurationMsMax: 520,
-      perfectWidth: 0.14,
-      goodWidth: 0.3,
-      highSpeedPerfectWidth: 0.11,
-      highSpeedGoodWidth: 0.25
+      sweepDurationMsMin: 560,
+      sweepDurationMsMax: 820,
+      perfectWidth: 0.2,
+      goodWidth: 0.4,
+      highSpeedPerfectWidth: 0.16,
+      highSpeedGoodWidth: 0.34
     }
   },
   pro: {
@@ -260,12 +260,12 @@ export const DIFFICULTY_GAMEPLAY_TUNING: Record<DifficultyLevel, DifficultyGamep
       chargeGoodWindow: { start: 0.7, end: 0.94 }
     },
     releaseMeter: {
-      sweepDurationMsMin: 360,
-      sweepDurationMsMax: 520,
-      perfectWidth: 0.11,
-      goodWidth: 0.24,
-      highSpeedPerfectWidth: 0.085,
-      highSpeedGoodWidth: 0.2
+      sweepDurationMsMin: 510,
+      sweepDurationMsMax: 760,
+      perfectWidth: 0.16,
+      goodWidth: 0.34,
+      highSpeedPerfectWidth: 0.125,
+      highSpeedGoodWidth: 0.28
     },
     runupRhythm: {
       tempoCurve: [
@@ -342,7 +342,10 @@ const sanitizeMeterWindow = (window: MeterWindow): MeterWindow => {
   return { start: end, end: start };
 };
 
-const mergeMeterWindow = (base: MeterWindow, override: Partial<MeterWindow> | undefined): MeterWindow =>
+const mergeMeterWindow = (
+  base: MeterWindow,
+  override: Partial<MeterWindow> | undefined
+): MeterWindow =>
   sanitizeMeterWindow({
     start: override?.start ?? base.start,
     end: override?.end ?? base.end
@@ -450,8 +453,14 @@ const resolveDifficultyTuningWithOverride = (
   base: DifficultyGameplayTuning,
   override: DifficultyGameplayTuningOverride | undefined
 ): DifficultyGameplayTuning => {
-  const perfectWindow = mergeMeterWindow(base.throwPhase.chargePerfectWindow, override?.chargePerfectWindow);
-  const goodWindowInput = mergeMeterWindow(base.throwPhase.chargeGoodWindow, override?.chargeGoodWindow);
+  const perfectWindow = mergeMeterWindow(
+    base.throwPhase.chargePerfectWindow,
+    override?.chargePerfectWindow
+  );
+  const goodWindowInput = mergeMeterWindow(
+    base.throwPhase.chargeGoodWindow,
+    override?.chargeGoodWindow
+  );
   const goodWindow: MeterWindow = {
     start: Math.min(goodWindowInput.start, perfectWindow.start),
     end: Math.max(goodWindowInput.end, perfectWindow.end)
