@@ -134,10 +134,11 @@ export const useGlobalLeaderboard = ({
         return false;
       }
 
+      const { difficulty: inputDifficulty, ...payload } = input;
       try {
         await postGlobalScore({
-          difficulty: input.difficulty ?? difficulty,
-          ...input
+          ...payload,
+          difficulty: inputDifficulty ?? difficulty
         });
         setErrorKind('none');
         return true;

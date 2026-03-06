@@ -4,7 +4,8 @@ import {
   fetchGlobalLeaderboard,
   GlobalLeaderboardApiError,
   parseGlobalLeaderboardEntries,
-  resolveGlobalLeaderboardApiBase
+  resolveGlobalLeaderboardApiBase,
+  type LeaderboardDifficulty
 } from './globalLeaderboardApi';
 
 afterEach(() => {
@@ -118,6 +119,23 @@ describe('createPostGlobalScorePayload', () => {
         locale: 'en'
       })
     ).toThrowError(GlobalLeaderboardApiError);
+  });
+
+  it('normalizes difficulty and truncates clientVersion to backend limit', () => {
+    const payload = createPostGlobalScorePayload({
+      difficulty: ' Pro ' as unknown as LeaderboardDifficulty,
+      playerName: 'ADA',
+      distanceM: 70,
+      playedAtIso: '2026-03-05T19:40:00.000Z',
+      windMs: 0,
+      locale: 'en',
+      clientVersion: ` ${'a'.repeat(64)} `
+    });
+
+    expect(payload).toMatchObject({
+      difficulty: 'pro',
+      clientVersion: 'a'.repeat(32)
+    });
   });
 });
 

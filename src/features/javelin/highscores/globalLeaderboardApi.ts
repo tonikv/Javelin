@@ -106,6 +106,36 @@ const toLocale = (value: unknown): Locale => {
   return 'en';
 };
 
+const cleanText = (value: string): string => {
+  let result = '';
+  for (const char of value) {
+    const code = char.charCodeAt(0);
+    if ((code >= 0x00 && code <= 0x1f) || code === 0x7f) {
+      continue;
+    }
+    result += char;
+  }
+  return result.trim();
+};
+
+const normalizeDifficultyOrNull = (value: unknown): LeaderboardDifficulty | null => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  return toDifficultyOrNull(value.trim().toLowerCase());
+};
+
+const sanitizeOptionalClientVersion = (value: string | undefined): string | undefined => {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const cleaned = cleanText(value);
+  if (cleaned.length === 0) {
+    return undefined;
+  }
+  return cleaned.slice(0, LEADERBOARD_LIMITS.clientVersionMaxLength);
+};
+
 const parseGlobalLeaderboardItem = (
   value: unknown,
   fallbackDifficulty: LeaderboardDifficulty | null
@@ -140,7 +170,7 @@ const parseGlobalLeaderboardItem = (
   const launchSpeedCms = toOptionalFiniteNumber(raw.launchSpeedCms);
   const angleCdeg = toOptionalFiniteNumber(raw.angleCdeg);
   const windMs = toOptionalFiniteNumber(raw.windMs) ?? 0;
-  const difficulty = toDifficultyOrNull(raw.difficulty) ?? fallbackDifficulty;
+  const difficulty = normalizeDifficultyOrNull(raw.difficulty) ?? fallbackDifficulty;
   if (difficulty === null) {
     return null;
   }
@@ -167,7 +197,7 @@ export const parseGlobalLeaderboardEntries = (payload: unknown): HighscoreEntry[
   if (!Array.isArray(castPayload.items)) {
     throw new Error('Global leaderboard response items must be an array');
   }
-  const payloadDifficulty = toDifficultyOrNull(castPayload.difficulty);
+  const payloadDifficulty = normalizeDifficultyOrNull(castPayload.difficulty);
 
   return castPayload.items
     .map((item) => parseGlobalLeaderboardItem(item, payloadDifficulty))
@@ -193,6 +223,14 @@ export const getGlobalLeaderboardApiBase = (): string | null =>
 export const createPostGlobalScorePayload = (
   input: PostGlobalScoreInput
 ): Record<string, unknown> => {
+  const difficulty = normalizeDifficultyOrNull(input.difficulty);
+  if (difficulty === null) {
+    throw new GlobalLeaderboardApiError(
+      'invalid-input',
+      `Invalid difficulty: must be one of ${leaderboardDifficulties.join(', ')}`
+    );
+  }
+
   const normalizedPlayerName = normalizePlayerName(input.playerName);
   const nameValidationError = validatePlayerName(normalizedPlayerName);
   if (nameValidationError !== null) {
@@ -208,7 +246,7 @@ export const createPostGlobalScorePayload = (
   }
 
   return {
-    difficulty: input.difficulty,
+    difficulty,
     playerName: normalizedPlayerName,
     distanceMm: Math.max(
       LEADERBOARD_LIMITS.distanceMm.min,
@@ -221,7 +259,7 @@ export const createPostGlobalScorePayload = (
       input.launchSpeedMs === undefined ? undefined : Math.round(input.launchSpeedMs * 100),
     angleCdeg: input.angleDeg === undefined ? undefined : Math.round(input.angleDeg * 100),
     locale: input.locale,
-    clientVersion: input.clientVersion
+    clientVersion: sanitizeOptionalClientVersion(input.clientVersion)
   };
 };
 

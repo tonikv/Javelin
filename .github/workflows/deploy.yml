@@ -19,13 +19,14 @@ jobs:
     runs-on: ubuntu-latest
     env:
       VITE_LEADERBOARD_API_BASE: ${{ vars.VITE_LEADERBOARD_API_BASE }}
-      VITE_APP_VERSION: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+      - name: Set app version from commit
+        run: echo "VITE_APP_VERSION=${GITHUB_SHA::12}" >> "$GITHUB_ENV"
       - run: npm ci
       - run: npm test
       - name: Check leaderboard API base variable
