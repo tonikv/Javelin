@@ -5,7 +5,8 @@ import { difficultyLevels } from '../game/types';
 import type {
   DifficultyGameplayTuningOverride,
   DifficultyGameplayTuningOverrides,
-  EliteRhythmTuning
+  ReleaseMeterTuning,
+  RunupRhythmTuning
 } from '../game/tuning';
 import type { DifficultyUnlocks } from './useDifficultyUnlocks';
 
@@ -58,33 +59,123 @@ const parseWindowOverride = (
   };
 };
 
-const parseRhythmOverride = (
+const parseTempoCurveOverride = (value: unknown): RunupRhythmTuning['tempoCurve'] | undefined | null => {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  const parsed = value.map((entry) => {
+    if (!isRecord(entry)) {
+      return null;
+    }
+    const speedNorm = parseOptionalFiniteNumber(entry.speedNorm);
+    const targetIntervalMs = parseOptionalFiniteNumber(entry.targetIntervalMs);
+    if (
+      speedNorm === null ||
+      targetIntervalMs === null ||
+      speedNorm === undefined ||
+      targetIntervalMs === undefined
+    ) {
+      return null;
+    }
+    return {
+      speedNorm,
+      targetIntervalMs
+    };
+  });
+
+  if (parsed.some((entry) => entry === null)) {
+    return null;
+  }
+
+  return parsed.filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+};
+
+const parseRunupRhythmOverride = (
   value: unknown
-): DifficultyGameplayTuningOverride['rhythm'] | undefined | null => {
+): DifficultyGameplayTuningOverride['runupRhythm'] | undefined | null => {
   if (value === undefined) {
     return undefined;
   }
   if (!isRecord(value)) {
     return null;
   }
-  const targetTapIntervalMs = parseOptionalFiniteNumber(value.targetTapIntervalMs);
-  const perfectToleranceMs = parseOptionalFiniteNumber(value.perfectToleranceMs);
-  const goodToleranceMs = parseOptionalFiniteNumber(value.goodToleranceMs);
-  const offBeatMultiplier = parseOptionalFiniteNumber(value.offBeatMultiplier);
+  const tempoCurve = parseTempoCurveOverride(value.tempoCurve);
+  const perfectToleranceRatio = parseOptionalFiniteNumber(value.perfectToleranceRatio);
+  const goodToleranceRatio = parseOptionalFiniteNumber(value.goodToleranceRatio);
+  const perfectMultiplier = parseOptionalFiniteNumber(value.perfectMultiplier);
+  const goodMultiplier = parseOptionalFiniteNumber(value.goodMultiplier);
+  const missMultiplier = parseOptionalFiniteNumber(value.missMultiplier);
+  const stabilityGainPerGood = parseOptionalFiniteNumber(value.stabilityGainPerGood);
+  const stabilityLossPerMiss = parseOptionalFiniteNumber(value.stabilityLossPerMiss);
+  const stableDecayMultiplier = parseOptionalFiniteNumber(value.stableDecayMultiplier);
+  const unstableDecayMultiplier = parseOptionalFiniteNumber(value.unstableDecayMultiplier);
+  const comboMax = parseOptionalFiniteNumber(value.comboMax);
   if (
-    targetTapIntervalMs === null ||
-    perfectToleranceMs === null ||
-    goodToleranceMs === null ||
-    offBeatMultiplier === null
+    tempoCurve === null ||
+    perfectToleranceRatio === null ||
+    goodToleranceRatio === null ||
+    perfectMultiplier === null ||
+    goodMultiplier === null ||
+    missMultiplier === null ||
+    stabilityGainPerGood === null ||
+    stabilityLossPerMiss === null ||
+    stableDecayMultiplier === null ||
+    unstableDecayMultiplier === null ||
+    comboMax === null
   ) {
     return null;
   }
   return {
-    targetTapIntervalMs,
-    perfectToleranceMs,
-    goodToleranceMs,
-    offBeatMultiplier
-  } as Partial<EliteRhythmTuning>;
+    tempoCurve,
+    perfectToleranceRatio,
+    goodToleranceRatio,
+    perfectMultiplier,
+    goodMultiplier,
+    missMultiplier,
+    stabilityGainPerGood,
+    stabilityLossPerMiss,
+    stableDecayMultiplier,
+    unstableDecayMultiplier,
+    comboMax
+  } as Partial<RunupRhythmTuning>;
+};
+
+const parseReleaseMeterOverride = (
+  value: unknown
+): DifficultyGameplayTuningOverride['releaseMeter'] | undefined | null => {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!isRecord(value)) {
+    return null;
+  }
+  const sweepDurationMsMin = parseOptionalFiniteNumber(value.sweepDurationMsMin);
+  const sweepDurationMsMax = parseOptionalFiniteNumber(value.sweepDurationMsMax);
+  const perfectWidth = parseOptionalFiniteNumber(value.perfectWidth);
+  const goodWidth = parseOptionalFiniteNumber(value.goodWidth);
+  const highSpeedPerfectWidth = parseOptionalFiniteNumber(value.highSpeedPerfectWidth);
+  const highSpeedGoodWidth = parseOptionalFiniteNumber(value.highSpeedGoodWidth);
+  if (
+    sweepDurationMsMin === null ||
+    sweepDurationMsMax === null ||
+    perfectWidth === null ||
+    goodWidth === null ||
+    highSpeedPerfectWidth === null ||
+    highSpeedGoodWidth === null
+  ) {
+    return null;
+  }
+  return {
+    sweepDurationMsMin,
+    sweepDurationMsMax,
+    perfectWidth,
+    goodWidth,
+    highSpeedPerfectWidth,
+    highSpeedGoodWidth
+  } as Partial<ReleaseMeterTuning>;
 };
 
 const parseDifficultyOverride = (
@@ -105,7 +196,10 @@ const parseDifficultyOverride = (
   const chargeFillDurationMs = parseOptionalFiniteNumber(value.chargeFillDurationMs);
   const chargePerfectWindow = parseWindowOverride(value.chargePerfectWindow);
   const chargeGoodWindow = parseWindowOverride(value.chargeGoodWindow);
-  const rhythm = parseRhythmOverride(value.rhythm);
+  const runupRhythm = parseRunupRhythmOverride(
+    value.runupRhythm ?? value.eliteRunupRhythm ?? value.rhythm
+  );
+  const releaseMeter = parseReleaseMeterOverride(value.releaseMeter ?? value.eliteReleaseMeter);
 
   if (
     tapGainNorm === null ||
@@ -117,7 +211,8 @@ const parseDifficultyOverride = (
     chargeFillDurationMs === null ||
     chargePerfectWindow === null ||
     chargeGoodWindow === null ||
-    rhythm === null
+    runupRhythm === null ||
+    releaseMeter === null
   ) {
     return null;
   }
@@ -132,7 +227,8 @@ const parseDifficultyOverride = (
     chargeFillDurationMs,
     chargePerfectWindow,
     chargeGoodWindow,
-    rhythm
+    runupRhythm,
+    releaseMeter
   };
 };
 

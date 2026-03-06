@@ -70,6 +70,34 @@ type AudioTuning = {
   crowdAmbientGain: number;
 };
 
+export type RunupTempoCurvePoint = {
+  speedNorm: number;
+  targetIntervalMs: number;
+};
+
+export type RunupRhythmTuning = {
+  tempoCurve: RunupTempoCurvePoint[];
+  perfectToleranceRatio: number;
+  goodToleranceRatio: number;
+  missMultiplier: number;
+  goodMultiplier: number;
+  perfectMultiplier: number;
+  stabilityGainPerGood: number;
+  stabilityLossPerMiss: number;
+  stableDecayMultiplier: number;
+  unstableDecayMultiplier: number;
+  comboMax: number;
+};
+
+export type ReleaseMeterTuning = {
+  sweepDurationMsMin: number;
+  sweepDurationMsMax: number;
+  perfectWidth: number;
+  goodWidth: number;
+  highSpeedPerfectWidth: number;
+  highSpeedGoodWidth: number;
+};
+
 export type GameplayTuning = {
   speedUp: SpeedUpTuning;
   throwPhase: ThrowPhaseTuning;
@@ -78,17 +106,6 @@ export type GameplayTuning = {
   angleControl: AngleControlTuning;
   trajectoryIndicator: TrajectoryIndicatorTuning;
   audio: AudioTuning;
-};
-
-export type EliteRhythmTuning = {
-  targetTapIntervalMs: number;
-  perfectToleranceMs: number;
-  goodToleranceMs: number;
-  offBeatMultiplier: number;
-};
-
-type DifficultySpeedUpTuning = SpeedUpTuning & {
-  rhythm?: EliteRhythmTuning;
 };
 
 type DifficultyThrowPhaseTuning = Pick<
@@ -102,9 +119,11 @@ type DifficultyMovementTuning = Pick<
 >;
 
 export type DifficultyGameplayTuning = {
-  speedUp: DifficultySpeedUpTuning;
+  speedUp: SpeedUpTuning;
   throwPhase: DifficultyThrowPhaseTuning;
   movement: DifficultyMovementTuning;
+  runupRhythm?: RunupRhythmTuning;
+  releaseMeter?: ReleaseMeterTuning;
 };
 
 export type DifficultyGameplayTuningOverride = {
@@ -117,7 +136,8 @@ export type DifficultyGameplayTuningOverride = {
   chargeFillDurationMs?: number;
   chargePerfectWindow?: Partial<MeterWindow>;
   chargeGoodWindow?: Partial<MeterWindow>;
-  rhythm?: Partial<EliteRhythmTuning>;
+  runupRhythm?: Partial<RunupRhythmTuning>;
+  releaseMeter?: Partial<ReleaseMeterTuning>;
 };
 
 export type DifficultyGameplayTuningOverrides = Partial<
@@ -213,6 +233,14 @@ export const DIFFICULTY_GAMEPLAY_TUNING: Record<DifficultyLevel, DifficultyGamep
       chargeFillDurationMs: 760,
       chargePerfectWindow: { start: 0.8, end: 0.94 },
       chargeGoodWindow: { start: 0.62, end: 0.96 }
+    },
+    releaseMeter: {
+      sweepDurationMsMin: 360,
+      sweepDurationMsMax: 520,
+      perfectWidth: 0.14,
+      goodWidth: 0.3,
+      highSpeedPerfectWidth: 0.11,
+      highSpeedGoodWidth: 0.25
     }
   },
   pro: {
@@ -230,19 +258,40 @@ export const DIFFICULTY_GAMEPLAY_TUNING: Record<DifficultyLevel, DifficultyGamep
       chargeFillDurationMs: 700,
       chargePerfectWindow: { start: 0.84, end: 0.92 },
       chargeGoodWindow: { start: 0.7, end: 0.94 }
+    },
+    releaseMeter: {
+      sweepDurationMsMin: 360,
+      sweepDurationMsMax: 520,
+      perfectWidth: 0.11,
+      goodWidth: 0.24,
+      highSpeedPerfectWidth: 0.085,
+      highSpeedGoodWidth: 0.2
+    },
+    runupRhythm: {
+      tempoCurve: [
+        { speedNorm: 0.0, targetIntervalMs: 210 },
+        { speedNorm: 0.35, targetIntervalMs: 194 },
+        { speedNorm: 0.65, targetIntervalMs: 178 },
+        { speedNorm: 0.85, targetIntervalMs: 164 },
+        { speedNorm: 1.0, targetIntervalMs: 154 }
+      ],
+      perfectToleranceRatio: 0.18,
+      goodToleranceRatio: 0.34,
+      perfectMultiplier: 1,
+      goodMultiplier: 0.9,
+      missMultiplier: 0.58,
+      stabilityGainPerGood: 0.035,
+      stabilityLossPerMiss: 0.045,
+      stableDecayMultiplier: 0.96,
+      unstableDecayMultiplier: 1.02,
+      comboMax: 4
     }
   },
   elite: {
     speedUp: {
       tapGainNorm: 0.068,
       tapSoftCapIntervalMs: 140,
-      tapSoftCapMinMultiplier: 0.08,
-      rhythm: {
-        targetTapIntervalMs: 125,
-        perfectToleranceMs: 18,
-        goodToleranceMs: 36,
-        offBeatMultiplier: 0.2
-      }
+      tapSoftCapMinMultiplier: 0.08
     },
     movement: {
       runupSpeedDecayPerSecond: 0.26,
@@ -253,6 +302,33 @@ export const DIFFICULTY_GAMEPLAY_TUNING: Record<DifficultyLevel, DifficultyGamep
       chargeFillDurationMs: 650,
       chargePerfectWindow: { start: 0.87, end: 0.91 },
       chargeGoodWindow: { start: 0.76, end: 0.92 }
+    },
+    runupRhythm: {
+      tempoCurve: [
+        { speedNorm: 0.0, targetIntervalMs: 180 },
+        { speedNorm: 0.35, targetIntervalMs: 160 },
+        { speedNorm: 0.65, targetIntervalMs: 140 },
+        { speedNorm: 0.85, targetIntervalMs: 124 },
+        { speedNorm: 1.0, targetIntervalMs: 112 }
+      ],
+      perfectToleranceRatio: 0.1,
+      goodToleranceRatio: 0.2,
+      perfectMultiplier: 1,
+      goodMultiplier: 0.72,
+      missMultiplier: 0.25,
+      stabilityGainPerGood: 0.08,
+      stabilityLossPerMiss: 0.14,
+      stableDecayMultiplier: 0.82,
+      unstableDecayMultiplier: 1.08,
+      comboMax: 6
+    },
+    releaseMeter: {
+      sweepDurationMsMin: 360,
+      sweepDurationMsMax: 520,
+      perfectWidth: 0.08,
+      goodWidth: 0.18,
+      highSpeedPerfectWidth: 0.06,
+      highSpeedGoodWidth: 0.16
     }
   }
 };
@@ -272,37 +348,105 @@ const mergeMeterWindow = (base: MeterWindow, override: Partial<MeterWindow> | un
     end: override?.end ?? base.end
   });
 
-const sanitizeEliteRhythmTuning = (
-  base: EliteRhythmTuning,
-  override: Partial<EliteRhythmTuning> | undefined
-): EliteRhythmTuning => {
-  const targetTapIntervalMs = clamp(
-    Math.round(override?.targetTapIntervalMs ?? base.targetTapIntervalMs),
-    40,
-    400
+const sanitizeRunupTempoCurve = (
+  base: RunupTempoCurvePoint[],
+  override: RunupTempoCurvePoint[] | undefined
+): RunupTempoCurvePoint[] => {
+  const source = override && override.length >= 2 ? override : base;
+  return [...source]
+    .map((point) => ({
+      speedNorm: clamp(point.speedNorm, 0, 1),
+      targetIntervalMs: clamp(Math.round(point.targetIntervalMs), 40, 400)
+    }))
+    .sort((left, right) => left.speedNorm - right.speedNorm);
+};
+
+const sanitizeRunupRhythmTuning = (
+  base: RunupRhythmTuning,
+  override: Partial<RunupRhythmTuning> | undefined
+): RunupRhythmTuning => {
+  const perfectToleranceRatio = clamp(
+    override?.perfectToleranceRatio ?? base.perfectToleranceRatio,
+    0.02,
+    0.4
   );
-  const perfectToleranceMs = clamp(
-    Math.round(override?.perfectToleranceMs ?? base.perfectToleranceMs),
-    1,
-    120
+  const goodToleranceRatio = clamp(
+    override?.goodToleranceRatio ?? base.goodToleranceRatio,
+    perfectToleranceRatio,
+    0.8
   );
-  const goodToleranceMs = clamp(
-    Math.round(override?.goodToleranceMs ?? base.goodToleranceMs),
-    perfectToleranceMs,
-    200
+  const stableDecayMultiplier = clamp(
+    override?.stableDecayMultiplier ?? base.stableDecayMultiplier,
+    0.25,
+    1
   );
-  const offBeatMultiplier = clamp(override?.offBeatMultiplier ?? base.offBeatMultiplier, 0, 1);
+  const unstableDecayMultiplier = clamp(
+    override?.unstableDecayMultiplier ?? base.unstableDecayMultiplier,
+    stableDecayMultiplier,
+    2
+  );
 
   return {
-    targetTapIntervalMs,
-    perfectToleranceMs,
-    goodToleranceMs,
-    offBeatMultiplier
+    tempoCurve: sanitizeRunupTempoCurve(base.tempoCurve, override?.tempoCurve),
+    perfectToleranceRatio,
+    goodToleranceRatio,
+    perfectMultiplier: clamp(override?.perfectMultiplier ?? base.perfectMultiplier, 0.1, 1.5),
+    goodMultiplier: clamp(override?.goodMultiplier ?? base.goodMultiplier, 0.1, 1.5),
+    missMultiplier: clamp(override?.missMultiplier ?? base.missMultiplier, 0.01, 1),
+    stabilityGainPerGood: clamp(
+      override?.stabilityGainPerGood ?? base.stabilityGainPerGood,
+      0.01,
+      0.5
+    ),
+    stabilityLossPerMiss: clamp(
+      override?.stabilityLossPerMiss ?? base.stabilityLossPerMiss,
+      0.01,
+      0.5
+    ),
+    stableDecayMultiplier,
+    unstableDecayMultiplier,
+    comboMax: clamp(Math.round(override?.comboMax ?? base.comboMax), 0, 12)
+  };
+};
+
+const sanitizeReleaseMeterTuning = (
+  base: ReleaseMeterTuning,
+  override: Partial<ReleaseMeterTuning> | undefined
+): ReleaseMeterTuning => {
+  const sweepDurationMsMin = clamp(
+    Math.round(override?.sweepDurationMsMin ?? base.sweepDurationMsMin),
+    160,
+    1200
+  );
+  const sweepDurationMsMax = clamp(
+    Math.round(override?.sweepDurationMsMax ?? base.sweepDurationMsMax),
+    sweepDurationMsMin,
+    1400
+  );
+  const perfectWidth = clamp(override?.perfectWidth ?? base.perfectWidth, 0.02, 0.3);
+  const goodWidth = clamp(override?.goodWidth ?? base.goodWidth, perfectWidth, 0.5);
+  const highSpeedPerfectWidth = clamp(
+    override?.highSpeedPerfectWidth ?? base.highSpeedPerfectWidth,
+    0.02,
+    perfectWidth
+  );
+  const highSpeedGoodWidth = clamp(
+    override?.highSpeedGoodWidth ?? base.highSpeedGoodWidth,
+    highSpeedPerfectWidth,
+    goodWidth
+  );
+
+  return {
+    sweepDurationMsMin,
+    sweepDurationMsMax,
+    perfectWidth,
+    goodWidth,
+    highSpeedPerfectWidth,
+    highSpeedGoodWidth
   };
 };
 
 const resolveDifficultyTuningWithOverride = (
-  difficulty: DifficultyLevel,
   base: DifficultyGameplayTuning,
   override: DifficultyGameplayTuningOverride | undefined
 ): DifficultyGameplayTuning => {
@@ -312,11 +456,6 @@ const resolveDifficultyTuningWithOverride = (
     start: Math.min(goodWindowInput.start, perfectWindow.start),
     end: Math.max(goodWindowInput.end, perfectWindow.end)
   };
-
-  const rhythm =
-    difficulty === 'elite' && base.speedUp.rhythm
-      ? sanitizeEliteRhythmTuning(base.speedUp.rhythm, override?.rhythm)
-      : undefined;
 
   return {
     speedUp: {
@@ -330,8 +469,7 @@ const resolveDifficultyTuningWithOverride = (
         override?.tapSoftCapMinMultiplier ?? base.speedUp.tapSoftCapMinMultiplier,
         0.01,
         1
-      ),
-      rhythm
+      )
     },
     movement: {
       runupSpeedDecayPerSecond: clamp(
@@ -358,7 +496,13 @@ const resolveDifficultyTuningWithOverride = (
       ),
       chargePerfectWindow: perfectWindow,
       chargeGoodWindow: goodWindow
-    }
+    },
+    runupRhythm: base.runupRhythm
+      ? sanitizeRunupRhythmTuning(base.runupRhythm, override?.runupRhythm)
+      : undefined,
+    releaseMeter: base.releaseMeter
+      ? sanitizeReleaseMeterTuning(base.releaseMeter, override?.releaseMeter)
+      : undefined
   };
 };
 
@@ -367,7 +511,6 @@ export const resolveDifficultyGameplayTuning = (
   overrides: DifficultyGameplayTuningOverrides = EMPTY_DIFFICULTY_GAMEPLAY_TUNING_OVERRIDES
 ): DifficultyGameplayTuning =>
   resolveDifficultyTuningWithOverride(
-    difficulty,
     DIFFICULTY_GAMEPLAY_TUNING[difficulty],
     overrides[difficulty]
   );

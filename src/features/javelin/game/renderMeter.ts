@@ -5,30 +5,47 @@ import {
   WORLD_METER_OFFSET_Y_PX,
   WORLD_METER_RADIUS_PX
 } from './constants';
+import { centeredWindow } from './chargeMeter';
 import { clamp01, wrap01 } from './math';
-import { getForcePreviewPercent, getRunupMeterPhase01, getSpeedPercent } from './selectors';
+import { getForcePreviewPercent, getSpeedPercent, getRunupMeterPhase01 } from './selectors';
 import { getRenderPalette } from './renderTheme';
-import { GAMEPLAY_TUNING } from './tuning';
+import { getDifficultyGameplayTuning } from './tuning';
 import type { HeadAnchor } from './renderAthlete';
-import type { GameState, TimingQuality } from './types';
+import type { ChargeMeterSnapshot, GameState, MeterWindow, TimingQuality } from './types';
 import type { ThemeMode } from '../../../theme/init';
 
-const {
-  chargeGoodWindow: CHARGE_GOOD_WINDOW,
-  chargePerfectWindow: CHARGE_PERFECT_WINDOW
-} = GAMEPLAY_TUNING.throwPhase;
-
 type MeterZones = {
-  perfect: { start: number; end: number };
-  good: { start: number; end: number };
+  perfect: MeterWindow;
+  good: MeterWindow;
 };
 
-type WorldMeterState = {
+type ArcMeterState = {
+  kind: 'arc';
   phase01: number;
   zones: MeterZones | null;
   feedback: TimingQuality | null;
-  valuePercent: number;
+  valueLabel: string;
 };
+
+type CenterLaneMeterState = {
+  kind: 'centerLane';
+  cursor01: number;
+  zones: MeterZones;
+  feedback: TimingQuality | null;
+  valueLabel: string;
+};
+
+type RhythmLaneMeterState = {
+  kind: 'rhythmLane';
+  marker01: number | null;
+  zones: MeterZones;
+  feedback: TimingQuality | null;
+  targetLabel: string;
+  valueLabel: string;
+  stability01: number;
+};
+
+type WorldMeterState = ArcMeterState | CenterLaneMeterState | RhythmLaneMeterState;
 
 const normalizeUiScale = (uiScale: number): number => Math.max(0.9, Math.min(1.3, uiScale));
 
@@ -78,50 +95,274 @@ const drawSemicircleArc = (
   drawSegment(0, end);
 };
 
+const getFeedbackColor = (
+  feedback: TimingQuality | null,
+  palette: ReturnType<typeof getRenderPalette>
+): string => {
+  if (feedback === 'perfect') {
+    return palette.meter.cursorPerfect;
+  }
+  if (feedback === 'good') {
+    return palette.meter.cursorGood;
+  }
+  return palette.meter.cursorMiss;
+};
+
 export const getHeadMeterScreenAnchor = (headScreen: HeadAnchor): HeadAnchor => ({
   x: headScreen.x,
   y: headScreen.y - WORLD_METER_OFFSET_Y_PX
 });
 
+const getChargeMeterZones = (meter: ChargeMeterSnapshot): MeterZones => ({
+  perfect: meter.perfectWindow,
+  good: meter.goodWindow
+});
+
+const getRhythmLaneState = (state: GameState): RhythmLaneMeterState | null => {
+  if (state.phase.tag !== 'runup' || state.phase.meterMode !== 'rhythmLane' || !state.phase.runupRhythm) {
+    return null;
+  }
+  const tuning = getDifficultyGameplayTuning(state.difficulty, state.devTuningOverrides).runupRhythm;
+  if (!tuning) {
+    return null;
+  }
+
+  const lastOffsetMs = state.phase.runupRhythm.lastOffsetMs;
+  const targetForLastTapMs =
+    state.phase.runupRhythm.lastIntervalMs !== null && lastOffsetMs !== null
+      ? Math.max(1, state.phase.runupRhythm.lastIntervalMs - lastOffsetMs)
+      : state.phase.runupRhythm.targetIntervalMs;
+  const offsetRatio = lastOffsetMs === null ? null : lastOffsetMs / targetForLastTapMs;
+  const visualHalfRangeRatio = Math.max(
+    tuning.goodToleranceRatio * 2.75,
+    tuning.goodToleranceRatio + 0.08
+  );
+
+  return {
+    kind: 'rhythmLane',
+    marker01:
+      offsetRatio === null
+        ? null
+        : clamp01(0.5 + (offsetRatio / visualHalfRangeRatio) * 0.5),
+    zones: {
+      perfect: centeredWindow(0.5, tuning.perfectToleranceRatio / visualHalfRangeRatio),
+      good: centeredWindow(0.5, tuning.goodToleranceRatio / visualHalfRangeRatio)
+    },
+    feedback: state.phase.runupRhythm.lastQuality,
+    targetLabel: `${Math.round(state.phase.runupRhythm.targetIntervalMs)} ms`,
+    valueLabel: `${getSpeedPercent(state)}%`,
+    stability01: state.phase.runupRhythm.stability01
+  };
+};
+
 const getWorldMeterState = (state: GameState): WorldMeterState | null => {
+  const rhythmLane = getRhythmLaneState(state);
+  if (rhythmLane) {
+    return rhythmLane;
+  }
+
   if (state.phase.tag === 'runup') {
     const meterPhase = getRunupMeterPhase01(state);
     if (meterPhase === null) {
       return null;
     }
     return {
+      kind: 'arc',
       phase01: meterPhase,
       zones: null,
       feedback: null,
-      valuePercent: getSpeedPercent(state)
+      valueLabel: `${getSpeedPercent(state)}%`
     };
   }
 
   if (state.phase.tag === 'chargeAim') {
+    if (state.phase.chargeMeter.mode === 'centerSweep') {
+      return {
+        kind: 'centerLane',
+        cursor01: state.phase.chargeMeter.phase01,
+        zones: getChargeMeterZones(state.phase.chargeMeter),
+        feedback: state.phase.chargeMeter.lastQuality,
+        valueLabel: `${getForcePreviewPercent(state) ?? Math.round(state.phase.forceNormPreview * 100)}%`
+      };
+    }
     return {
+      kind: 'arc',
       phase01: state.phase.chargeMeter.phase01,
-      zones: {
-        perfect: CHARGE_PERFECT_WINDOW,
-        good: CHARGE_GOOD_WINDOW
-      },
+      zones: getChargeMeterZones(state.phase.chargeMeter),
       feedback: state.phase.chargeMeter.lastQuality,
-      valuePercent: getForcePreviewPercent(state) ?? Math.round(state.phase.forceNormPreview * 100)
+      valueLabel: `${getForcePreviewPercent(state) ?? Math.round(state.phase.forceNormPreview * 100)}%`
     };
   }
 
   if (state.phase.tag === 'throwAnim') {
+    if (state.phase.releaseMeter.mode === 'centerSweep') {
+      return {
+        kind: 'centerLane',
+        cursor01: state.phase.releaseMeter.phase01,
+        zones: getChargeMeterZones(state.phase.releaseMeter),
+        feedback: state.phase.releaseQuality,
+        valueLabel: `${getForcePreviewPercent(state) ?? Math.round(state.phase.forceNorm * 100)}%`
+      };
+    }
     return {
-      phase01: state.phase.forceNorm,
-      zones: {
-        perfect: CHARGE_PERFECT_WINDOW,
-        good: CHARGE_GOOD_WINDOW
-      },
+      kind: 'arc',
+      phase01: state.phase.releaseMeter.phase01,
+      zones: getChargeMeterZones(state.phase.releaseMeter),
       feedback: state.phase.releaseQuality,
-      valuePercent: getForcePreviewPercent(state) ?? Math.round(state.phase.forceNorm * 100)
+      valueLabel: `${getForcePreviewPercent(state) ?? Math.round(state.phase.forceNorm * 100)}%`
     };
   }
 
   return null;
+};
+
+const drawValueLabel = (
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  text: string,
+  fontPx: number,
+  palette: ReturnType<typeof getRenderPalette>,
+  visualScale: number
+): void => {
+  ctx.font = `700 ${Math.round(fontPx)}px ${CANVAS_FONT_STACK}`;
+  ctx.textAlign = 'center';
+  ctx.strokeStyle = palette.meter.valueTextOutline;
+  ctx.lineWidth = Math.max(2, 1.7 * visualScale);
+  ctx.strokeText(text, x, y);
+  ctx.fillStyle = palette.meter.valueTextFill;
+  ctx.fillText(text, x, y);
+};
+
+const drawRoundedRect = (
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number
+): void => {
+  if (width <= 0 || height <= 0) {
+    return;
+  }
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + width - radius, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+  ctx.lineTo(x + width, y + height - radius);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+  ctx.lineTo(x + radius, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
+};
+
+const drawLaneWindow = (
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  window: MeterWindow,
+  color: string
+): void => {
+  const startX = x + width * clamp01(window.start);
+  const endX = x + width * clamp01(window.end);
+  ctx.fillStyle = color;
+  ctx.fillRect(startX, y, Math.max(2, endX - startX), height);
+};
+
+const drawLaneMeter = (
+  ctx: CanvasRenderingContext2D,
+  meterState: CenterLaneMeterState | RhythmLaneMeterState,
+  anchor: HeadAnchor,
+  visualScale: number,
+  palette: ReturnType<typeof getRenderPalette>
+): void => {
+  const laneWidth = WORLD_METER_RADIUS_PX * visualScale * 2.8;
+  const laneHeight = 11 * visualScale;
+  const laneX = anchor.x - laneWidth * 0.5;
+  const laneY = anchor.y - laneHeight * 0.5;
+  const laneRadius = 6 * visualScale;
+
+  drawRoundedRect(ctx, laneX, laneY, laneWidth, laneHeight, laneRadius);
+  ctx.fillStyle = palette.meter.trackArc;
+  ctx.fill();
+
+  drawLaneWindow(ctx, laneX, laneY, laneWidth, laneHeight, meterState.zones.good, palette.meter.zoneGood);
+  drawLaneWindow(
+    ctx,
+    laneX,
+    laneY,
+    laneWidth,
+    laneHeight,
+    meterState.zones.perfect,
+    palette.meter.zonePerfect
+  );
+
+  ctx.strokeStyle = palette.meter.cursorStroke;
+  ctx.lineWidth = Math.max(1.5, 1.5 * visualScale);
+  ctx.beginPath();
+  ctx.moveTo(anchor.x, laneY - 2 * visualScale);
+  ctx.lineTo(anchor.x, laneY + laneHeight + 2 * visualScale);
+  ctx.stroke();
+
+  if (meterState.kind === 'centerLane') {
+    const cursorX = laneX + laneWidth * clamp01(meterState.cursor01);
+    const cursorY = laneY + laneHeight * 0.5;
+    ctx.fillStyle = getFeedbackColor(meterState.feedback, palette);
+    ctx.beginPath();
+    ctx.arc(cursorX, cursorY, WORLD_METER_CURSOR_RADIUS_PX * visualScale, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  } else {
+    if (meterState.marker01 !== null) {
+      const markerX = laneX + laneWidth * clamp01(meterState.marker01);
+      ctx.strokeStyle = getFeedbackColor(meterState.feedback, palette);
+      ctx.lineWidth = Math.max(3, 3 * visualScale);
+      ctx.beginPath();
+      ctx.moveTo(markerX, laneY - 4 * visualScale);
+      ctx.lineTo(markerX, laneY + laneHeight + 4 * visualScale);
+      ctx.stroke();
+    }
+
+    const stabilityHeight = Math.max(2, 3 * visualScale);
+    const stabilityY = laneY + laneHeight + 6 * visualScale;
+    drawRoundedRect(ctx, laneX, stabilityY, laneWidth, stabilityHeight, stabilityHeight * 0.5);
+    ctx.fillStyle = palette.meter.trackArc;
+    ctx.fill();
+    drawRoundedRect(
+      ctx,
+      laneX,
+      stabilityY,
+      laneWidth * clamp01(meterState.stability01),
+      stabilityHeight,
+      stabilityHeight * 0.5
+    );
+    ctx.fillStyle = palette.meter.runupFill;
+    ctx.fill();
+
+    drawValueLabel(
+      ctx,
+      anchor.x,
+      laneY - 7 * visualScale,
+      meterState.targetLabel,
+      9.5 * visualScale,
+      palette,
+      visualScale
+    );
+  }
+
+  drawValueLabel(
+    ctx,
+    anchor.x,
+    laneY + laneHeight + (meterState.kind === 'rhythmLane' ? 18 : 14) * visualScale,
+    meterState.valueLabel,
+    11 * visualScale,
+    palette,
+    visualScale
+  );
 };
 
 export const drawWorldTimingMeter = (
@@ -149,6 +390,12 @@ export const drawWorldTimingMeter = (
 
   ctx.save();
   ctx.globalAlpha = 0.96;
+
+  if (meterState.kind !== 'arc') {
+    drawLaneMeter(ctx, meterState, anchor, visualScale, palette);
+    ctx.restore();
+    return;
+  }
 
   drawSemicircleArc(
     ctx,
@@ -200,16 +447,10 @@ export const drawWorldTimingMeter = (
   const cursorX = anchor.x + Math.cos(cursorAngle) * meterRadius;
   const cursorY = anchor.y + Math.sin(cursorAngle) * meterRadius;
 
-  const cursorFill =
+  ctx.fillStyle =
     meterState.zones === null
       ? palette.meter.cursorPerfect
-      : meterState.feedback === 'perfect'
-        ? palette.meter.cursorPerfect
-        : meterState.feedback === 'good'
-          ? palette.meter.cursorGood
-          : palette.meter.cursorMiss;
-
-  ctx.fillStyle = cursorFill;
+      : getFeedbackColor(meterState.feedback, palette);
   ctx.strokeStyle = palette.meter.cursorStroke;
   ctx.lineWidth = Math.max(2, 2 * visualScale);
   ctx.beginPath();
@@ -217,14 +458,15 @@ export const drawWorldTimingMeter = (
   ctx.fill();
   ctx.stroke();
 
-  const valueLabel = `${meterState.valuePercent}%`;
-  ctx.font = `700 ${Math.round(11 * visualScale)}px ${CANVAS_FONT_STACK}`;
-  ctx.textAlign = 'center';
-  ctx.strokeStyle = palette.meter.valueTextOutline;
-  ctx.lineWidth = Math.max(2, 1.7 * visualScale);
-  ctx.strokeText(valueLabel, anchor.x, anchor.y + 16 * visualScale);
-  ctx.fillStyle = palette.meter.valueTextFill;
-  ctx.fillText(valueLabel, anchor.x, anchor.y + 16 * visualScale);
+  drawValueLabel(
+    ctx,
+    anchor.x,
+    anchor.y + 16 * visualScale,
+    meterState.valueLabel,
+    11 * visualScale,
+    palette,
+    visualScale
+  );
 
   ctx.restore();
 };

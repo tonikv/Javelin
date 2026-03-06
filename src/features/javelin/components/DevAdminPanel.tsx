@@ -7,6 +7,13 @@ import {
 } from '../game/tuning';
 import type { DevAdminSettings } from '../hooks/useDevAdminSettings';
 
+const ELITE_TEMPO_POINT_COUNT = 5;
+
+type TempoCurvePointDraft = {
+  speedNorm: string;
+  targetIntervalMs: string;
+};
+
 type DifficultyDraft = {
   tapGainNorm: string;
   tapSoftCapIntervalMs: string;
@@ -19,10 +26,23 @@ type DifficultyDraft = {
   chargePerfectWindowEnd: string;
   chargeGoodWindowStart: string;
   chargeGoodWindowEnd: string;
-  targetTapIntervalMs: string;
-  perfectToleranceMs: string;
-  goodToleranceMs: string;
-  offBeatMultiplier: string;
+  tempoCurve: TempoCurvePointDraft[];
+  perfectToleranceRatio: string;
+  goodToleranceRatio: string;
+  perfectMultiplier: string;
+  goodMultiplier: string;
+  missMultiplier: string;
+  stabilityGainPerGood: string;
+  stabilityLossPerMiss: string;
+  stableDecayMultiplier: string;
+  unstableDecayMultiplier: string;
+  comboMax: string;
+  sweepDurationMsMin: string;
+  sweepDurationMsMax: string;
+  releasePerfectWidth: string;
+  releaseGoodWidth: string;
+  highSpeedPerfectWidth: string;
+  highSpeedGoodWidth: string;
 };
 
 type DraftByDifficulty = Record<DifficultyLevel, DifficultyDraft>;
@@ -40,12 +60,21 @@ type DevAdminPanelProps = {
 const toNumberString = (value: number): string =>
   Number.isInteger(value) ? String(value) : value.toFixed(3).replace(/0+$/g, '').replace(/\.$/, '');
 
+const getFallbackEliteTempoCurve = (): TempoCurvePointDraft[] => [
+  { speedNorm: '0', targetIntervalMs: '180' },
+  { speedNorm: '0.35', targetIntervalMs: '160' },
+  { speedNorm: '0.65', targetIntervalMs: '140' },
+  { speedNorm: '0.85', targetIntervalMs: '124' },
+  { speedNorm: '1', targetIntervalMs: '112' }
+];
+
 const toDifficultyDraft = (
   difficulty: DifficultyLevel,
   overrides: DifficultyGameplayTuningOverrides
 ): DifficultyDraft => {
   const resolved = getDifficultyGameplayTuning(difficulty, overrides);
-  const rhythm = resolved.speedUp.rhythm;
+  const runupRhythm = resolved.runupRhythm;
+  const releaseMeter = resolved.releaseMeter;
 
   return {
     tapGainNorm: toNumberString(resolved.speedUp.tapGainNorm),
@@ -59,10 +88,27 @@ const toDifficultyDraft = (
     chargePerfectWindowEnd: toNumberString(resolved.throwPhase.chargePerfectWindow.end),
     chargeGoodWindowStart: toNumberString(resolved.throwPhase.chargeGoodWindow.start),
     chargeGoodWindowEnd: toNumberString(resolved.throwPhase.chargeGoodWindow.end),
-    targetTapIntervalMs: toNumberString(rhythm?.targetTapIntervalMs ?? 125),
-    perfectToleranceMs: toNumberString(rhythm?.perfectToleranceMs ?? 18),
-    goodToleranceMs: toNumberString(rhythm?.goodToleranceMs ?? 36),
-    offBeatMultiplier: toNumberString(rhythm?.offBeatMultiplier ?? 0.2)
+    tempoCurve:
+      runupRhythm?.tempoCurve.map((point) => ({
+        speedNorm: toNumberString(point.speedNorm),
+        targetIntervalMs: toNumberString(point.targetIntervalMs)
+      })) ?? getFallbackEliteTempoCurve(),
+    perfectToleranceRatio: toNumberString(runupRhythm?.perfectToleranceRatio ?? 0.1),
+    goodToleranceRatio: toNumberString(runupRhythm?.goodToleranceRatio ?? 0.2),
+    perfectMultiplier: toNumberString(runupRhythm?.perfectMultiplier ?? 1),
+    goodMultiplier: toNumberString(runupRhythm?.goodMultiplier ?? 0.72),
+    missMultiplier: toNumberString(runupRhythm?.missMultiplier ?? 0.25),
+    stabilityGainPerGood: toNumberString(runupRhythm?.stabilityGainPerGood ?? 0.08),
+    stabilityLossPerMiss: toNumberString(runupRhythm?.stabilityLossPerMiss ?? 0.14),
+    stableDecayMultiplier: toNumberString(runupRhythm?.stableDecayMultiplier ?? 0.82),
+    unstableDecayMultiplier: toNumberString(runupRhythm?.unstableDecayMultiplier ?? 1.08),
+    comboMax: toNumberString(runupRhythm?.comboMax ?? 6),
+    sweepDurationMsMin: toNumberString(releaseMeter?.sweepDurationMsMin ?? 360),
+    sweepDurationMsMax: toNumberString(releaseMeter?.sweepDurationMsMax ?? 520),
+    releasePerfectWidth: toNumberString(releaseMeter?.perfectWidth ?? 0.08),
+    releaseGoodWidth: toNumberString(releaseMeter?.goodWidth ?? 0.18),
+    highSpeedPerfectWidth: toNumberString(releaseMeter?.highSpeedPerfectWidth ?? 0.06),
+    highSpeedGoodWidth: toNumberString(releaseMeter?.highSpeedGoodWidth ?? 0.16)
   };
 };
 
@@ -128,34 +174,97 @@ const parseOverridesFromDraft = (draft: DraftByDifficulty): DifficultyGameplayTu
       }
     } as const;
 
-    if (difficulty === 'elite') {
-      const targetTapIntervalMs = parseFiniteNumber(source.targetTapIntervalMs);
-      const perfectToleranceMs = parseFiniteNumber(source.perfectToleranceMs);
-      const goodToleranceMs = parseFiniteNumber(source.goodToleranceMs);
-      const offBeatMultiplier = parseFiniteNumber(source.offBeatMultiplier);
+    const sweepDurationMsMin = parseFiniteNumber(source.sweepDurationMsMin);
+    const sweepDurationMsMax = parseFiniteNumber(source.sweepDurationMsMax);
+    const releasePerfectWidth = parseFiniteNumber(source.releasePerfectWidth);
+    const releaseGoodWidth = parseFiniteNumber(source.releaseGoodWidth);
+    const highSpeedPerfectWidth = parseFiniteNumber(source.highSpeedPerfectWidth);
+    const highSpeedGoodWidth = parseFiniteNumber(source.highSpeedGoodWidth);
 
+    if (
+      sweepDurationMsMin === null ||
+      sweepDurationMsMax === null ||
+      releasePerfectWidth === null ||
+      releaseGoodWidth === null ||
+      highSpeedPerfectWidth === null ||
+      highSpeedGoodWidth === null
+    ) {
+      throw new Error('invalid-number');
+    }
+
+    if (difficulty !== 'rookie') {
+      const tempoCurve = source.tempoCurve.map((point) => ({
+        speedNorm: parseFiniteNumber(point.speedNorm),
+        targetIntervalMs: parseFiniteNumber(point.targetIntervalMs)
+      }));
+      const perfectToleranceRatio = parseFiniteNumber(source.perfectToleranceRatio);
+      const goodToleranceRatio = parseFiniteNumber(source.goodToleranceRatio);
+      const perfectMultiplier = parseFiniteNumber(source.perfectMultiplier);
+      const goodMultiplier = parseFiniteNumber(source.goodMultiplier);
+      const missMultiplier = parseFiniteNumber(source.missMultiplier);
+      const stabilityGainPerGood = parseFiniteNumber(source.stabilityGainPerGood);
+      const stabilityLossPerMiss = parseFiniteNumber(source.stabilityLossPerMiss);
+      const stableDecayMultiplier = parseFiniteNumber(source.stableDecayMultiplier);
+      const unstableDecayMultiplier = parseFiniteNumber(source.unstableDecayMultiplier);
+      const comboMax = parseFiniteNumber(source.comboMax);
       if (
-        targetTapIntervalMs === null ||
-        perfectToleranceMs === null ||
-        goodToleranceMs === null ||
-        offBeatMultiplier === null
+        tempoCurve.length !== ELITE_TEMPO_POINT_COUNT ||
+        tempoCurve.some((point) => point.speedNorm === null || point.targetIntervalMs === null) ||
+        perfectToleranceRatio === null ||
+        goodToleranceRatio === null ||
+        perfectMultiplier === null ||
+        goodMultiplier === null ||
+        missMultiplier === null ||
+        stabilityGainPerGood === null ||
+        stabilityLossPerMiss === null ||
+        stableDecayMultiplier === null ||
+        unstableDecayMultiplier === null ||
+        comboMax === null
       ) {
         throw new Error('invalid-number');
       }
 
       result[difficulty] = {
         ...next,
-        rhythm: {
-          targetTapIntervalMs,
-          perfectToleranceMs,
-          goodToleranceMs,
-          offBeatMultiplier
-        }
+        releaseMeter: {
+          sweepDurationMsMin,
+          sweepDurationMsMax,
+          perfectWidth: releasePerfectWidth,
+          goodWidth: releaseGoodWidth,
+          highSpeedPerfectWidth,
+          highSpeedGoodWidth
+        },
+        runupRhythm: {
+          tempoCurve: tempoCurve.map((point) => ({
+            speedNorm: point.speedNorm ?? 0,
+            targetIntervalMs: point.targetIntervalMs ?? 0
+          })),
+          perfectToleranceRatio,
+          goodToleranceRatio,
+          perfectMultiplier,
+          goodMultiplier,
+          missMultiplier,
+          stabilityGainPerGood,
+          stabilityLossPerMiss,
+          stableDecayMultiplier,
+          unstableDecayMultiplier,
+          comboMax
+        },
       };
       continue;
     }
 
-    result[difficulty] = next;
+    result[difficulty] = {
+      ...next,
+      releaseMeter: {
+        sweepDurationMsMin,
+        sweepDurationMsMax,
+        perfectWidth: releasePerfectWidth,
+        goodWidth: releaseGoodWidth,
+        highSpeedPerfectWidth,
+        highSpeedGoodWidth
+      }
+    };
   }
 
   return result;
@@ -184,6 +293,28 @@ export const DevAdminPanel = ({
       [difficulty]: {
         ...previous[difficulty],
         [field]: value
+      }
+    }));
+  };
+
+  const updateTempoCurvePoint = (
+    difficulty: DifficultyLevel,
+    index: number,
+    field: keyof TempoCurvePointDraft,
+    value: string
+  ): void => {
+    setDraft((previous) => ({
+      ...previous,
+      [difficulty]: {
+        ...previous[difficulty],
+        tempoCurve: previous[difficulty].tempoCurve.map((point, pointIndex) =>
+          pointIndex === index
+            ? {
+                ...point,
+                [field]: value
+              }
+            : point
+        )
       }
     }));
   };
@@ -280,17 +411,6 @@ export const DevAdminPanel = ({
                 />
               </label>
               <label>
-                chargeFillDurationMs
-                <input
-                  type="number"
-                  step="1"
-                  value={row.chargeFillDurationMs}
-                  onChange={(event) =>
-                    updateDraftField(difficulty, 'chargeFillDurationMs', event.target.value)
-                  }
-                />
-              </label>
-              <label>
                 chargePerfectWindow.start
                 <input
                   type="number"
@@ -335,54 +455,214 @@ export const DevAdminPanel = ({
                 />
               </label>
 
-              {difficulty === 'elite' && (
+              {difficulty !== 'rookie' && (
                 <>
+                  {row.tempoCurve.map((point, index) => (
+                    <label key={`tempo-${index}`}>
+                      tempoCurve[{index}]
+                      <div className="dev-admin-inline-grid">
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={point.speedNorm}
+                          onChange={(event) =>
+                            updateTempoCurvePoint(difficulty, index, 'speedNorm', event.target.value)
+                          }
+                        />
+                        <input
+                          type="number"
+                          step="1"
+                          value={point.targetIntervalMs}
+                          onChange={(event) =>
+                            updateTempoCurvePoint(
+                              difficulty,
+                              index,
+                              'targetIntervalMs',
+                              event.target.value
+                            )
+                          }
+                        />
+                      </div>
+                    </label>
+                  ))}
                   <label>
-                    targetTapIntervalMs
-                    <input
-                      type="number"
-                      step="1"
-                      value={row.targetTapIntervalMs}
-                      onChange={(event) =>
-                        updateDraftField(difficulty, 'targetTapIntervalMs', event.target.value)
-                      }
-                    />
-                  </label>
-                  <label>
-                    perfectToleranceMs
-                    <input
-                      type="number"
-                      step="1"
-                      value={row.perfectToleranceMs}
-                      onChange={(event) =>
-                        updateDraftField(difficulty, 'perfectToleranceMs', event.target.value)
-                      }
-                    />
-                  </label>
-                  <label>
-                    goodToleranceMs
-                    <input
-                      type="number"
-                      step="1"
-                      value={row.goodToleranceMs}
-                      onChange={(event) =>
-                        updateDraftField(difficulty, 'goodToleranceMs', event.target.value)
-                      }
-                    />
-                  </label>
-                  <label>
-                    offBeatMultiplier
+                    perfectToleranceRatio
                     <input
                       type="number"
                       step="0.01"
-                      value={row.offBeatMultiplier}
+                      value={row.perfectToleranceRatio}
                       onChange={(event) =>
-                        updateDraftField(difficulty, 'offBeatMultiplier', event.target.value)
+                        updateDraftField(difficulty, 'perfectToleranceRatio', event.target.value)
+                      }
+                    />
+                  </label>
+                  <label>
+                    goodToleranceRatio
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={row.goodToleranceRatio}
+                      onChange={(event) =>
+                        updateDraftField(difficulty, 'goodToleranceRatio', event.target.value)
+                      }
+                    />
+                  </label>
+                  <label>
+                    perfectMultiplier
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={row.perfectMultiplier}
+                      onChange={(event) =>
+                        updateDraftField(difficulty, 'perfectMultiplier', event.target.value)
+                      }
+                    />
+                  </label>
+                  <label>
+                    goodMultiplier
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={row.goodMultiplier}
+                      onChange={(event) =>
+                        updateDraftField(difficulty, 'goodMultiplier', event.target.value)
+                      }
+                    />
+                  </label>
+                  <label>
+                    missMultiplier
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={row.missMultiplier}
+                      onChange={(event) =>
+                        updateDraftField(difficulty, 'missMultiplier', event.target.value)
+                      }
+                    />
+                  </label>
+                  <label>
+                    stabilityGainPerGood
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={row.stabilityGainPerGood}
+                      onChange={(event) =>
+                        updateDraftField(difficulty, 'stabilityGainPerGood', event.target.value)
+                      }
+                    />
+                  </label>
+                  <label>
+                    stabilityLossPerMiss
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={row.stabilityLossPerMiss}
+                      onChange={(event) =>
+                        updateDraftField(difficulty, 'stabilityLossPerMiss', event.target.value)
+                      }
+                    />
+                  </label>
+                  <label>
+                    stableDecayMultiplier
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={row.stableDecayMultiplier}
+                      onChange={(event) =>
+                        updateDraftField(difficulty, 'stableDecayMultiplier', event.target.value)
+                      }
+                    />
+                  </label>
+                  <label>
+                    unstableDecayMultiplier
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={row.unstableDecayMultiplier}
+                      onChange={(event) =>
+                        updateDraftField(difficulty, 'unstableDecayMultiplier', event.target.value)
+                      }
+                    />
+                  </label>
+                  <label>
+                    comboMax
+                    <input
+                      type="number"
+                      step="1"
+                      value={row.comboMax}
+                      onChange={(event) =>
+                        updateDraftField(difficulty, 'comboMax', event.target.value)
                       }
                     />
                   </label>
                 </>
               )}
+              <label>
+                sweepDurationMsMin
+                <input
+                  type="number"
+                  step="1"
+                  value={row.sweepDurationMsMin}
+                  onChange={(event) =>
+                    updateDraftField(difficulty, 'sweepDurationMsMin', event.target.value)
+                  }
+                />
+              </label>
+              <label>
+                sweepDurationMsMax
+                <input
+                  type="number"
+                  step="1"
+                  value={row.sweepDurationMsMax}
+                  onChange={(event) =>
+                    updateDraftField(difficulty, 'sweepDurationMsMax', event.target.value)
+                  }
+                />
+              </label>
+              <label>
+                releasePerfectWidth
+                <input
+                  type="number"
+                  step="0.01"
+                  value={row.releasePerfectWidth}
+                  onChange={(event) =>
+                    updateDraftField(difficulty, 'releasePerfectWidth', event.target.value)
+                  }
+                />
+              </label>
+              <label>
+                releaseGoodWidth
+                <input
+                  type="number"
+                  step="0.01"
+                  value={row.releaseGoodWidth}
+                  onChange={(event) =>
+                    updateDraftField(difficulty, 'releaseGoodWidth', event.target.value)
+                  }
+                />
+              </label>
+              <label>
+                highSpeedPerfectWidth
+                <input
+                  type="number"
+                  step="0.01"
+                  value={row.highSpeedPerfectWidth}
+                  onChange={(event) =>
+                    updateDraftField(difficulty, 'highSpeedPerfectWidth', event.target.value)
+                  }
+                />
+              </label>
+              <label>
+                highSpeedGoodWidth
+                <input
+                  type="number"
+                  step="0.01"
+                  value={row.highSpeedGoodWidth}
+                  onChange={(event) =>
+                    updateDraftField(difficulty, 'highSpeedGoodWidth', event.target.value)
+                  }
+                />
+              </label>
             </fieldset>
           );
         })}

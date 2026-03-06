@@ -32,21 +32,27 @@ describe('difficulty tuning resolver', () => {
   it('sanitizes elite rhythm bounds coherently', () => {
     const resolved = resolveDifficultyGameplayTuning('elite', {
       elite: {
-        rhythm: {
-          perfectToleranceMs: 50,
-          goodToleranceMs: 10,
-          offBeatMultiplier: 2
+        runupRhythm: {
+          perfectToleranceRatio: 0.4,
+          goodToleranceRatio: 0.05,
+          missMultiplier: 2,
+          stableDecayMultiplier: 2,
+          unstableDecayMultiplier: 0.1
         }
       }
     });
 
-    expect(resolved.speedUp.rhythm).toBeDefined();
-    if (resolved.speedUp.rhythm) {
-      expect(resolved.speedUp.rhythm.goodToleranceMs).toBeGreaterThanOrEqual(
-        resolved.speedUp.rhythm.perfectToleranceMs
+    expect(resolved.runupRhythm).toBeDefined();
+    if (resolved.runupRhythm) {
+      expect(resolved.runupRhythm.goodToleranceRatio).toBeGreaterThanOrEqual(
+        resolved.runupRhythm.perfectToleranceRatio
       );
-      expect(resolved.speedUp.rhythm.offBeatMultiplier).toBeLessThanOrEqual(1);
-      expect(resolved.speedUp.rhythm.offBeatMultiplier).toBeGreaterThanOrEqual(0);
+      expect(resolved.runupRhythm.missMultiplier).toBeLessThanOrEqual(1);
+      expect(resolved.runupRhythm.missMultiplier).toBeGreaterThanOrEqual(0.01);
+      expect(resolved.runupRhythm.stableDecayMultiplier).toBeLessThanOrEqual(1);
+      expect(resolved.runupRhythm.unstableDecayMultiplier).toBeGreaterThanOrEqual(
+        resolved.runupRhythm.stableDecayMultiplier
+      );
     }
   });
 });

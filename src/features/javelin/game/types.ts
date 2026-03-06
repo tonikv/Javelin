@@ -17,19 +17,37 @@ export type MeterWindow = {
 
 export type RunupTapState = {
   lastTapAtMs: number | null;
-  lastTapGainNorm: number;
+  lastTapMultiplier: number;
 };
 
-/**
- * Tracks cyclic throw-force charge progress.
- * `phase01` wraps from 1 back to 0 on each cycle.
- * Exceeding configured max cycles triggers a late-release fault.
- */
-export type ChargeMeterState = {
+export type RhythmHitQuality = 'perfect' | 'good' | 'miss';
+
+export type RunupRhythmState = {
+  targetIntervalMs: number;
+  lastIntervalMs: number | null;
+  lastOffsetMs: number | null;
+  lastQuality: RhythmHitQuality | null;
+  combo: number;
+  stability01: number;
+};
+
+export type RunupMeterMode = 'speedFill' | 'rhythmLane';
+
+export type ChargeMeterMode = 'loop' | 'centerSweep';
+
+export type ChargeMeterSnapshot = {
+  mode: ChargeMeterMode;
   phase01: number;
   perfectWindow: MeterWindow;
   goodWindow: MeterWindow;
   lastQuality: TimingQuality | null;
+};
+
+/**
+ * Tracks active charge-meter progress.
+ * `phase01` is interpreted by `mode` and sampled continuously until release.
+ */
+export type ChargeMeterState = ChargeMeterSnapshot & {
   lastSampleAtMs: number;
 };
 
@@ -76,16 +94,19 @@ export type GamePhase =
   | { tag: 'idle' }
   | {
       tag: 'runup';
+      meterMode: RunupMeterMode;
       speedNorm: number;
       startedAtMs: number;
       tapCount: number;
       runupDistanceM: number;
       tap: RunupTapState;
+      runupRhythm: RunupRhythmState | null;
       athletePose: AthletePoseState;
     }
   | {
       tag: 'chargeAim';
       speedNorm: number;
+      entrySpeedNorm: number;
       runupDistanceM: number;
       startedAtMs: number;
       runEntryAnimT: number;
@@ -102,6 +123,7 @@ export type GamePhase =
       angleDeg: number;
       forceNorm: number;
       releaseQuality: TimingQuality;
+      releaseMeter: ChargeMeterSnapshot;
       lineCrossedAtRelease: boolean;
       releaseFlashAtMs: number;
       animProgress: number;

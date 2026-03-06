@@ -10,14 +10,15 @@ import {
   RUNUP_SPEED_MAX_MS,
   RUNUP_SPEED_MIN_MS
 } from '../constants';
-import { clamp, easeOutQuad, toRad, wrap01 } from '../math';
+import { clamp, easeOutQuad, lerp, toRad, wrap01 } from '../math';
 import { createPhysicalJavelin } from '../physics';
 import {
   GAMEPLAY_TUNING,
   getDifficultyGameplayTuning,
-  type DifficultyGameplayTuningOverrides
+  type DifficultyGameplayTuningOverrides,
+  type RunupRhythmTuning
 } from '../tuning';
-import type { DifficultyLevel, GameState, TimingQuality } from '../types';
+import type { DifficultyLevel, GameState, RhythmHitQuality, TimingQuality } from '../types';
 
 const {
   faultJavelinLaunchSpeedMs: FAULT_JAVELIN_LAUNCH_SPEED_MS
@@ -27,25 +28,33 @@ const {
   followThroughStepDistanceM: FOLLOW_THROUGH_STEP_DISTANCE_M
 } = GAMEPLAY_TUNING.movement;
 
-export const eliteRhythmGainMultiplier = (
+export const rhythmTapQualityMultiplier = (
   deltaMs: number,
   difficulty: DifficultyLevel,
   overrides: DifficultyGameplayTuningOverrides
 ): number => {
-  const rhythm = getDifficultyGameplayTuning(difficulty, overrides).speedUp.rhythm;
+  const rhythm = getDifficultyGameplayTuning(difficulty, overrides).runupRhythm;
   if (!rhythm) {
     return 1;
   }
-  const delta = Math.abs(deltaMs - rhythm.targetTapIntervalMs);
-  if (delta <= rhythm.perfectToleranceMs) {
-    return 1;
+  const targetTapIntervalMs = getRunupTargetTapIntervalMs(0, rhythm);
+  const quality = classifyRunupRhythmTap(deltaMs, targetTapIntervalMs, rhythm);
+  if (quality === 'perfect') {
+    return rhythm.perfectMultiplier;
   }
-  if (delta > rhythm.goodToleranceMs) {
-    return rhythm.offBeatMultiplier;
+  if (quality === 'good') {
+    return rhythm.goodMultiplier;
   }
-  const span = Math.max(1, rhythm.goodToleranceMs - rhythm.perfectToleranceMs);
-  const normalized = clamp((delta - rhythm.perfectToleranceMs) / span, 0, 1);
-  return 1 - normalized * 0.45;
+  return rhythm.missMultiplier;
+};
+
+export const getRunupAntiMashMultiplier = (
+  deltaMs: number,
+  tapSoftCapIntervalMs: number,
+  tapSoftCapMinMultiplier: number
+): number => {
+  const ratio = clamp(deltaMs / tapSoftCapIntervalMs, 0, 1);
+  return Math.max(tapSoftCapMinMultiplier, ratio * ratio);
 };
 
 export const runupTapGainMultiplier = (
@@ -54,9 +63,137 @@ export const runupTapGainMultiplier = (
   overrides: DifficultyGameplayTuningOverrides
 ): number => {
   const profile = getDifficultyGameplayTuning(difficulty, overrides);
-  const ratio = clamp(deltaMs / profile.speedUp.tapSoftCapIntervalMs, 0, 1);
-  const antiMashMultiplier = Math.max(profile.speedUp.tapSoftCapMinMultiplier, ratio * ratio);
-  return antiMashMultiplier * eliteRhythmGainMultiplier(deltaMs, difficulty, overrides);
+  return (
+    getRunupAntiMashMultiplier(
+      deltaMs,
+      profile.speedUp.tapSoftCapIntervalMs,
+      profile.speedUp.tapSoftCapMinMultiplier
+    ) * rhythmTapQualityMultiplier(deltaMs, difficulty, overrides)
+  );
+};
+
+export const getRunupTargetTapIntervalMs = (
+  speedNorm: number,
+  tuning: RunupRhythmTuning
+): number => {
+  if (tuning.tempoCurve.length === 0) {
+    return 160;
+  }
+  const clampedSpeedNorm = clamp(speedNorm, 0, 1);
+  const [firstPoint, ...restPoints] = tuning.tempoCurve;
+  if (!firstPoint) {
+    return 160;
+  }
+  if (clampedSpeedNorm <= firstPoint.speedNorm) {
+    return firstPoint.targetIntervalMs;
+  }
+
+  let previousPoint = firstPoint;
+  for (const point of restPoints) {
+    if (clampedSpeedNorm <= point.speedNorm) {
+      const span = Math.max(0.0001, point.speedNorm - previousPoint.speedNorm);
+      const t = clamp((clampedSpeedNorm - previousPoint.speedNorm) / span, 0, 1);
+      return lerp(previousPoint.targetIntervalMs, point.targetIntervalMs, t);
+    }
+    previousPoint = point;
+  }
+
+  return previousPoint.targetIntervalMs;
+};
+
+export const classifyRunupRhythmTap = (
+  intervalMs: number,
+  targetMs: number,
+  tuning: RunupRhythmTuning
+): RhythmHitQuality => {
+  const deltaMs = Math.abs(intervalMs - targetMs);
+  const perfectToleranceMs = targetMs * tuning.perfectToleranceRatio;
+  const goodToleranceMs = targetMs * tuning.goodToleranceRatio;
+  if (deltaMs <= perfectToleranceMs) {
+    return 'perfect';
+  }
+  if (deltaMs <= goodToleranceMs) {
+    return 'good';
+  }
+  return 'miss';
+};
+
+export const getRhythmComboBonusMultiplier = (combo: number): number => {
+  if (combo >= 6) {
+    return 1.06;
+  }
+  if (combo >= 4) {
+    return 1.04;
+  }
+  if (combo >= 2) {
+    return 1.02;
+  }
+  return 1;
+};
+
+export const getNextRhythmCombo = (
+  combo: number,
+  quality: RhythmHitQuality,
+  comboMax: number
+): number => {
+  if (quality === 'miss') {
+    return Math.max(0, combo - 2);
+  }
+  return Math.min(comboMax, combo + 1);
+};
+
+export const getNextRhythmStability = (
+  stability01: number,
+  quality: RhythmHitQuality,
+  tuning: RunupRhythmTuning
+): number => {
+  if (quality === 'miss') {
+    return clamp(stability01 - tuning.stabilityLossPerMiss, 0, 1);
+  }
+  return clamp(stability01 + tuning.stabilityGainPerGood, 0, 1);
+};
+
+export const getRunupRhythmDecayMultiplier = (
+  stability01: number,
+  tuning: RunupRhythmTuning
+): number =>
+  lerp(tuning.unstableDecayMultiplier, tuning.stableDecayMultiplier, clamp(stability01, 0, 1));
+
+export const computeRhythmTapGain = ({
+  intervalMs,
+  tapGainNorm,
+  tapSoftCapIntervalMs,
+  tapSoftCapMinMultiplier,
+  quality,
+  combo,
+  tuning
+}: {
+  intervalMs: number;
+  tapGainNorm: number;
+  tapSoftCapIntervalMs: number;
+  tapSoftCapMinMultiplier: number;
+  quality: RhythmHitQuality;
+  combo: number;
+  tuning: RunupRhythmTuning;
+}): { gainNorm: number; antiMashMultiplier: number; qualityMultiplier: number; comboMultiplier: number } => {
+  const antiMashMultiplier = getRunupAntiMashMultiplier(
+    intervalMs,
+    tapSoftCapIntervalMs,
+    tapSoftCapMinMultiplier
+  );
+  const qualityMultiplier =
+    quality === 'perfect'
+      ? tuning.perfectMultiplier
+      : quality === 'good'
+        ? tuning.goodMultiplier
+        : tuning.missMultiplier;
+  const comboMultiplier = getRhythmComboBonusMultiplier(combo);
+  return {
+    gainNorm: tapGainNorm * antiMashMultiplier * qualityMultiplier * comboMultiplier,
+    antiMashMultiplier,
+    qualityMultiplier,
+    comboMultiplier
+  };
 };
 
 export const runStrideHz = (speedNorm: number): number => 1 + speedNorm * 2.2;

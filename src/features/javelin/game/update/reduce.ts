@@ -4,7 +4,7 @@
  * Never mutates the input state.
  */
 import { computeAthletePoseGeometry } from '../athletePose';
-import { applyForceQualityBonus, computeForcePreview, getTimingQuality } from '../chargeMeter';
+import { computeChargeMeterSample, computeReleaseForceNorm } from '../chargeMeter';
 import {
   ANGLE_MAX_DEG,
   ANGLE_MIN_DEG,
@@ -19,7 +19,16 @@ import {
 } from '../tuning';
 import type { GameAction, GameState } from '../types';
 import { advanceCrosswindMs, advanceWindMs } from '../wind';
-import { createLateReleaseFaultPhase, isRunning, runupTapGainMultiplier } from './helpers';
+import {
+  classifyRunupRhythmTap,
+  computeRhythmTapGain,
+  createLateReleaseFaultPhase,
+  getNextRhythmCombo,
+  getNextRhythmStability,
+  getRunupTargetTapIntervalMs,
+  isRunning,
+  runupTapGainMultiplier
+} from './helpers';
 import { tickChargeAim } from './tickChargeAim';
 import { tickFault } from './tickFault';
 import { tickFlight } from './tickFlight';
@@ -71,6 +80,7 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
       };
     }
     case 'startRound': {
+      const difficultyTuning = getDifficultyGameplayTuning(state.difficulty, state.devTuningOverrides);
       return {
         ...state,
         nowMs: action.atMs,
@@ -79,14 +89,25 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
         windZMs: action.windZMs ?? state.windZMs,
         phase: {
           tag: 'runup',
+          meterMode: difficultyTuning.runupRhythm ? 'rhythmLane' : 'speedFill',
           speedNorm: 0,
           startedAtMs: action.atMs,
           tapCount: 0,
           runupDistanceM: RUNUP_START_X_M,
           tap: {
             lastTapAtMs: null,
-            lastTapGainNorm: 0
+            lastTapMultiplier: 0
           },
+          runupRhythm: difficultyTuning.runupRhythm
+            ? {
+                targetIntervalMs: getRunupTargetTapIntervalMs(0, difficultyTuning.runupRhythm),
+                lastIntervalMs: null,
+                lastOffsetMs: null,
+                lastQuality: null,
+                combo: 0,
+                stability01: 0
+              }
+            : null,
           athletePose: {
             animTag: 'idle',
             animT: 0
@@ -103,11 +124,57 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
       const lastTapAtMs = phase.tap.lastTapAtMs;
       const tapIntervalMs =
         lastTapAtMs === null ? Number.POSITIVE_INFINITY : Math.max(0, action.atMs - lastTapAtMs);
-      const tapGainMultiplier =
-        lastTapAtMs === null
-          ? 1
-          : runupTapGainMultiplier(tapIntervalMs, state.difficulty, state.devTuningOverrides);
-      const tapGainNorm = difficultyTuning.speedUp.tapGainNorm * tapGainMultiplier;
+      const runupRhythmTuning = difficultyTuning.runupRhythm;
+      const runupRhythmState = phase.runupRhythm;
+
+      let tapGainMultiplier = 1;
+      let tapGainNorm = difficultyTuning.speedUp.tapGainNorm;
+      let nextRunupRhythm = runupRhythmState;
+
+      if (lastTapAtMs !== null && runupRhythmTuning && runupRhythmState) {
+        const targetIntervalMs = getRunupTargetTapIntervalMs(phase.speedNorm, runupRhythmTuning);
+        const offsetMs = tapIntervalMs - targetIntervalMs;
+        const quality = classifyRunupRhythmTap(tapIntervalMs, targetIntervalMs, runupRhythmTuning);
+        const nextCombo = getNextRhythmCombo(runupRhythmState.combo, quality, runupRhythmTuning.comboMax);
+        const tapGain = computeRhythmTapGain({
+          intervalMs: tapIntervalMs,
+          tapGainNorm: difficultyTuning.speedUp.tapGainNorm,
+          tapSoftCapIntervalMs: difficultyTuning.speedUp.tapSoftCapIntervalMs,
+          tapSoftCapMinMultiplier: difficultyTuning.speedUp.tapSoftCapMinMultiplier,
+          quality,
+          combo: nextCombo,
+          tuning: runupRhythmTuning
+        });
+        tapGainNorm = tapGain.gainNorm;
+        tapGainMultiplier =
+          tapGainNorm / Math.max(0.0001, difficultyTuning.speedUp.tapGainNorm);
+        nextRunupRhythm = {
+          ...runupRhythmState,
+          targetIntervalMs,
+          lastIntervalMs: tapIntervalMs,
+          lastOffsetMs: offsetMs,
+          lastQuality: quality,
+          combo: nextCombo,
+          stability01: getNextRhythmStability(
+            runupRhythmState.stability01,
+            quality,
+            runupRhythmTuning
+          )
+        };
+      } else if (lastTapAtMs !== null) {
+        tapGainMultiplier = runupTapGainMultiplier(
+          tapIntervalMs,
+          state.difficulty,
+          state.devTuningOverrides
+        );
+        tapGainNorm = difficultyTuning.speedUp.tapGainNorm * tapGainMultiplier;
+      } else if (runupRhythmTuning && runupRhythmState) {
+        nextRunupRhythm = {
+          ...runupRhythmState,
+          targetIntervalMs: getRunupTargetTapIntervalMs(phase.speedNorm, runupRhythmTuning)
+        };
+      }
+
       const speedNorm = clamp(phase.speedNorm + tapGainNorm, 0, 1);
 
       return {
@@ -119,8 +186,15 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
           tapCount: Math.min(phase.tapCount + 1, RUNUP_MAX_TAPS),
           tap: {
             lastTapAtMs: action.atMs,
-            lastTapGainNorm: tapGainMultiplier
+            lastTapMultiplier: tapGainMultiplier
           },
+          runupRhythm:
+            runupRhythmTuning && nextRunupRhythm
+              ? {
+                  ...nextRunupRhythm,
+                  targetIntervalMs: getRunupTargetTapIntervalMs(speedNorm, runupRhythmTuning)
+                }
+              : nextRunupRhythm,
           athletePose: {
             animTag: isRunning(speedNorm) ? 'run' : 'idle',
             animT: isRunning(speedNorm)
@@ -137,25 +211,32 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
         return state;
       }
       const difficultyTuning = getDifficultyGameplayTuning(state.difficulty, state.devTuningOverrides);
+      const chargeMeterSample = computeChargeMeterSample(
+        0,
+        difficultyTuning,
+        state.phase.speedNorm
+      );
       return {
         ...state,
         nowMs: action.atMs,
         phase: {
           tag: 'chargeAim',
           speedNorm: state.phase.speedNorm,
+          entrySpeedNorm: state.phase.speedNorm,
           runupDistanceM: state.phase.runupDistanceM,
           startedAtMs: state.phase.startedAtMs,
           runEntryAnimT: state.phase.athletePose.animT,
           angleDeg: state.aimAngleDeg,
           chargeStartedAtMs: action.atMs,
           chargeMeter: {
-            phase01: 0,
-            perfectWindow: difficultyTuning.throwPhase.chargePerfectWindow,
-            goodWindow: difficultyTuning.throwPhase.chargeGoodWindow,
-            lastQuality: null,
+            mode: chargeMeterSample.mode,
+            phase01: chargeMeterSample.phase01,
+            perfectWindow: chargeMeterSample.perfectWindow,
+            goodWindow: chargeMeterSample.goodWindow,
+            lastQuality: chargeMeterSample.quality,
             lastSampleAtMs: action.atMs
           },
-          forceNormPreview: computeForcePreview(0),
+          forceNormPreview: chargeMeterSample.previewForceNorm,
           athletePose: {
             animTag: 'aim',
             animT: 0
@@ -213,22 +294,23 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
       }
       const difficultyTuning = getDifficultyGameplayTuning(state.difficulty, state.devTuningOverrides);
       const elapsedMs = Math.max(0, action.atMs - state.phase.chargeStartedAtMs);
-      const rawFill01 = elapsedMs / difficultyTuning.throwPhase.chargeFillDurationMs;
-      const fullCycles = Math.floor(rawFill01);
-      if (fullCycles >= CHARGE_MAX_CYCLES) {
+      const chargeMeterSample = computeChargeMeterSample(
+        elapsedMs,
+        difficultyTuning,
+        state.phase.entrySpeedNorm
+      );
+      if (chargeMeterSample.completedCycles >= CHARGE_MAX_CYCLES) {
         return {
           ...state,
           nowMs: action.atMs,
           phase: createLateReleaseFaultPhase(state.phase, action.atMs)
         };
       }
-      const phase01 = clamp(rawFill01 % 1, 0, 1);
-      const quality = getTimingQuality(
-        phase01,
-        state.phase.chargeMeter.perfectWindow,
-        state.phase.chargeMeter.goodWindow
+      const forceNorm = computeReleaseForceNorm(
+        chargeMeterSample.phase01,
+        chargeMeterSample.quality,
+        chargeMeterSample.mode
       );
-      const forceNorm = applyForceQualityBonus(computeForcePreview(phase01), quality);
       const releasePose = computeAthletePoseGeometry(
         {
           animTag: 'throw',
@@ -255,7 +337,14 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
           athleteXM: state.phase.runupDistanceM,
           angleDeg: state.phase.angleDeg,
           forceNorm,
-          releaseQuality: quality,
+          releaseQuality: chargeMeterSample.quality,
+          releaseMeter: {
+            mode: chargeMeterSample.mode,
+            phase01: chargeMeterSample.phase01,
+            perfectWindow: chargeMeterSample.perfectWindow,
+            goodWindow: chargeMeterSample.goodWindow,
+            lastQuality: chargeMeterSample.quality
+          },
           lineCrossedAtRelease,
           releaseFlashAtMs: action.atMs,
           animProgress: 0,

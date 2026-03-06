@@ -28,11 +28,13 @@ describe('camera', () => {
       ...baseState,
       phase: {
         tag: 'runup',
+        meterMode: 'speedFill',
         speedNorm: 0.4,
         startedAtMs: 1000,
         tapCount: 3,
         runupDistanceM: 10.2,
-        tap: { lastTapAtMs: 1180, lastTapGainNorm: 0.8 },
+        tap: { lastTapAtMs: 1180, lastTapMultiplier: 0.8 },
+        runupRhythm: null,
         athletePose: { animTag: 'run', animT: 0.2 }
       }
     };
@@ -41,12 +43,14 @@ describe('camera', () => {
       phase: {
         tag: 'chargeAim',
         speedNorm: 0.55,
+        entrySpeedNorm: 0.55,
         runupDistanceM: 12.1,
         startedAtMs: 1000,
         runEntryAnimT: 0.4,
         angleDeg: 35,
         chargeStartedAtMs: 1500,
         chargeMeter: {
+          mode: 'loop',
           phase01: 0.6,
           perfectWindow: { start: 0.78, end: 0.98 },
           goodWindow: { start: 0.56, end: 0.98 },
@@ -66,6 +70,13 @@ describe('camera', () => {
         angleDeg: 33,
         forceNorm: 0.76,
         releaseQuality: 'perfect',
+        releaseMeter: {
+          mode: 'loop',
+          phase01: 0.9,
+          perfectWindow: { start: 0.78, end: 0.98 },
+          goodWindow: { start: 0.56, end: 0.98 },
+          lastQuality: 'perfect'
+        },
         lineCrossedAtRelease: false,
         releaseFlashAtMs: 2100,
         animProgress: 0.4,
@@ -183,11 +194,13 @@ describe('camera', () => {
       ...baseState,
       phase: {
         tag: 'runup',
+        meterMode: 'speedFill',
         speedNorm: 0.2,
         startedAtMs: 1000,
         tapCount: 1,
         runupDistanceM: RUNUP_START_X_M,
-        tap: { lastTapAtMs: 1000, lastTapGainNorm: 1 },
+        tap: { lastTapAtMs: 1000, lastTapMultiplier: 1 },
+        runupRhythm: null,
         athletePose: { animTag: 'idle', animT: 0 }
       }
     };
@@ -210,11 +223,13 @@ describe('camera', () => {
       ...baseState,
       phase: {
         tag: 'runup',
+        meterMode: 'speedFill',
         speedNorm: 0.2,
         startedAtMs: 1000,
         tapCount: 1,
         runupDistanceM: RUNUP_START_X_M,
-        tap: { lastTapAtMs: 1000, lastTapGainNorm: 1 },
+        tap: { lastTapAtMs: 1000, lastTapMultiplier: 1 },
+        runupRhythm: null,
         athletePose: { animTag: 'idle', animT: 0 }
       }
     };

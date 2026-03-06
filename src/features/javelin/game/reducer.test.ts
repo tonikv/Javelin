@@ -13,7 +13,6 @@ import { createInitialGameState } from './update';
 import { advanceCrosswindMs, advanceWindMs } from './wind';
 
 const {
-  chargeFillDurationMs: CHARGE_FILL_DURATION_MS,
   chargeMaxCycles: CHARGE_MAX_CYCLES,
   throwAnimDurationMs: THROW_ANIM_DURATION_MS
 } = GAMEPLAY_TUNING.throwPhase;
@@ -185,8 +184,10 @@ describe('gameReducer', () => {
     );
     expect(pro.movement.runupSpeedDecayPerSecond).toBeGreaterThan(rookie.movement.runupSpeedDecayPerSecond);
     expect(elite.movement.runupSpeedDecayPerSecond).toBeGreaterThan(pro.movement.runupSpeedDecayPerSecond);
-    expect(pro.throwPhase.chargeFillDurationMs).toBeLessThan(rookie.throwPhase.chargeFillDurationMs);
-    expect(elite.throwPhase.chargeFillDurationMs).toBeLessThan(pro.throwPhase.chargeFillDurationMs);
+    expect(rookie.releaseMeter?.sweepDurationMsMax).toBe(elite.releaseMeter?.sweepDurationMsMax);
+    expect(pro.releaseMeter?.sweepDurationMsMax).toBe(elite.releaseMeter?.sweepDurationMsMax);
+    expect((rookie.releaseMeter?.perfectWidth ?? 0)).toBeGreaterThan(pro.releaseMeter?.perfectWidth ?? 0);
+    expect((pro.releaseMeter?.perfectWidth ?? 0)).toBeGreaterThan(elite.releaseMeter?.perfectWidth ?? 0);
   });
 
   it('elite rhythm rewards on-beat taps and penalizes off-beat taps', () => {
@@ -209,6 +210,85 @@ describe('gameReducer', () => {
       offBeat.phase.tag === 'runup' ? offBeat.phase.speedNorm - offBeatSpeedAfterFirst : 0;
 
     expect(onBeatGain).toBeGreaterThan(offBeatGain);
+  });
+
+  it('pro and elite both start with rhythm-lane runup feedback', () => {
+    const pro = gameReducer(
+      gameReducer(createInitialGameState(), { type: 'setDifficulty', difficulty: 'pro' }),
+      { type: 'startRound', atMs: 1000, windMs: 0 }
+    );
+    const elite = gameReducer(
+      gameReducer(createInitialGameState(), { type: 'setDifficulty', difficulty: 'elite' }),
+      { type: 'startRound', atMs: 1000, windMs: 0 }
+    );
+
+    expect(pro.phase.tag).toBe('runup');
+    expect(elite.phase.tag).toBe('runup');
+    if (pro.phase.tag === 'runup' && elite.phase.tag === 'runup') {
+      expect(pro.phase.meterMode).toBe('rhythmLane');
+      expect(elite.phase.meterMode).toBe('rhythmLane');
+      expect(pro.phase.runupRhythm).not.toBeNull();
+      expect(elite.phase.runupRhythm).not.toBeNull();
+    }
+  });
+
+  it('pro rhythm is much more lenient than elite for off-beat taps', () => {
+    let pro = createInitialGameState();
+    pro = gameReducer(pro, { type: 'setDifficulty', difficulty: 'pro' });
+    pro = gameReducer(pro, { type: 'startRound', atMs: 1000, windMs: 0 });
+    pro = gameReducer(pro, { type: 'rhythmTap', atMs: 1000 });
+    const proSpeedAfterFirst = pro.phase.tag === 'runup' ? pro.phase.speedNorm : 0;
+    pro = gameReducer(pro, { type: 'rhythmTap', atMs: 1110 });
+    const proOffBeatGain = pro.phase.tag === 'runup' ? pro.phase.speedNorm - proSpeedAfterFirst : 0;
+
+    let elite = createInitialGameState();
+    elite = gameReducer(elite, { type: 'setDifficulty', difficulty: 'elite' });
+    elite = gameReducer(elite, { type: 'startRound', atMs: 1000, windMs: 0 });
+    elite = gameReducer(elite, { type: 'rhythmTap', atMs: 1000 });
+    const eliteSpeedAfterFirst = elite.phase.tag === 'runup' ? elite.phase.speedNorm : 0;
+    elite = gameReducer(elite, { type: 'rhythmTap', atMs: 1110 });
+    const eliteOffBeatGain =
+      elite.phase.tag === 'runup' ? elite.phase.speedNorm - eliteSpeedAfterFirst : 0;
+
+    expect(proOffBeatGain).toBeGreaterThan(eliteOffBeatGain);
+  });
+
+  it('runup rhythm tracks adaptive target tempo, combo, and stability feedback', () => {
+    let state = createInitialGameState();
+    state = gameReducer(state, { type: 'setDifficulty', difficulty: 'elite' });
+    state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0 });
+    state = gameReducer(state, { type: 'rhythmTap', atMs: 1000 });
+    expect(state.phase.tag).toBe('runup');
+    if (state.phase.tag !== 'runup' || state.phase.runupRhythm === null) {
+      throw new Error('Expected elite runup rhythm state.');
+    }
+
+    const firstTargetMs = state.phase.runupRhythm.targetIntervalMs;
+    let tapAtMs = 1000 + Math.round(firstTargetMs);
+    state = gameReducer(state, { type: 'rhythmTap', atMs: tapAtMs });
+    expect(state.phase.tag).toBe('runup');
+    if (state.phase.tag !== 'runup' || state.phase.runupRhythm === null) {
+      throw new Error('Expected elite runup rhythm state after second tap.');
+    }
+
+    expect(state.phase.runupRhythm.lastQuality).toBe('perfect');
+    expect(state.phase.runupRhythm.combo).toBe(1);
+    expect(state.phase.runupRhythm.stability01).toBeGreaterThan(0);
+    const secondTargetMs = state.phase.runupRhythm.targetIntervalMs;
+    expect(secondTargetMs).toBeLessThan(firstTargetMs);
+
+    const comboBeforeMiss = state.phase.runupRhythm.combo;
+    const stabilityBeforeMiss = state.phase.runupRhythm.stability01;
+    tapAtMs += Math.round(secondTargetMs * 1.8);
+    state = gameReducer(state, { type: 'rhythmTap', atMs: tapAtMs });
+    expect(state.phase.tag).toBe('runup');
+    if (state.phase.tag !== 'runup' || state.phase.runupRhythm === null) {
+      throw new Error('Expected elite runup rhythm state after miss.');
+    }
+
+    expect(state.phase.runupRhythm.lastQuality).toBe('miss');
+    expect(state.phase.runupRhythm.combo).toBeLessThan(comboBeforeMiss);
+    expect(state.phase.runupRhythm.stability01).toBeLessThan(stabilityBeforeMiss);
   });
 
   it('starts a round into runup', () => {
@@ -364,6 +444,7 @@ describe('gameReducer', () => {
   });
 
   it('decelerates during chargeAim before overfill', () => {
+    const rookieReleaseTuning = getDifficultyGameplayTuning('rookie').releaseMeter;
     let state = createInitialGameState();
     state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0 });
     state = gameReducer(state, { type: 'rhythmTap', atMs: 1880 });
@@ -373,7 +454,7 @@ describe('gameReducer', () => {
     state = gameReducer(state, { type: 'beginChargeAim', atMs: 4600 });
     const startSpeed = state.phase.tag === 'chargeAim' ? state.phase.speedNorm : 0;
 
-    const tickCount = Math.floor((CHARGE_FILL_DURATION_MS * 0.9) / 100);
+    const tickCount = Math.floor((((rookieReleaseTuning?.sweepDurationMsMax ?? 520) * 0.9) / 100));
     for (let i = 1; i <= tickCount; i += 1) {
       state = gameReducer(state, { type: 'tick', dtMs: 100, nowMs: 4600 + i * 100 });
     }
@@ -456,31 +537,55 @@ describe('gameReducer', () => {
     }
   });
 
-  it('release near end of fill yields stronger force than early release', () => {
-    let early = createInitialGameState();
-    early = gameReducer(early, { type: 'startRound', atMs: 1000, windMs: 0 });
-    early = gameReducer(early, { type: 'beginChargeAim', atMs: 1200 });
-    early = gameReducer(early, { type: 'tick', dtMs: 120, nowMs: 1320 });
-    early = gameReducer(early, { type: 'releaseCharge', atMs: 1320 });
-    expect(early.phase.tag).toBe('throwAnim');
+  it('releasing near the center sweet spot yields stronger force than releasing near the edge', () => {
+    const rookieReleaseTuning = getDifficultyGameplayTuning('rookie').releaseMeter;
+    const halfSweepMs = Math.round((rookieReleaseTuning?.sweepDurationMsMax ?? 520) * 0.5);
 
-    let late = createInitialGameState();
-    late = gameReducer(late, { type: 'startRound', atMs: 1000, windMs: 0 });
-    late = gameReducer(late, { type: 'beginChargeAim', atMs: 1200 });
-    late = gameReducer(late, {
-      type: 'tick',
-      dtMs: Math.round(CHARGE_FILL_DURATION_MS * 0.92),
-      nowMs: 1200 + Math.round(CHARGE_FILL_DURATION_MS * 0.92)
-    });
-    late = gameReducer(
-      late,
-      { type: 'releaseCharge', atMs: 1200 + Math.round(CHARGE_FILL_DURATION_MS * 0.92) }
-    );
-    expect(late.phase.tag).toBe('throwAnim');
+    let edge = createInitialGameState();
+    edge = gameReducer(edge, { type: 'startRound', atMs: 1000, windMs: 0 });
+    edge = gameReducer(edge, { type: 'beginChargeAim', atMs: 1200 });
+    edge = gameReducer(edge, { type: 'releaseCharge', atMs: 1200 });
+    expect(edge.phase.tag).toBe('throwAnim');
 
-    if (early.phase.tag === 'throwAnim' && late.phase.tag === 'throwAnim') {
-      expect(late.phase.forceNorm).toBeGreaterThan(early.phase.forceNorm);
+    let centered = createInitialGameState();
+    centered = gameReducer(centered, { type: 'startRound', atMs: 1000, windMs: 0 });
+    centered = gameReducer(centered, { type: 'beginChargeAim', atMs: 1200 });
+    centered = gameReducer(centered, { type: 'releaseCharge', atMs: 1200 + halfSweepMs });
+    expect(centered.phase.tag).toBe('throwAnim');
+
+    if (edge.phase.tag === 'throwAnim' && centered.phase.tag === 'throwAnim') {
+      expect(centered.phase.forceNorm).toBeGreaterThan(edge.phase.forceNorm);
+      expect(centered.phase.releaseQuality).not.toBe('miss');
     }
+  });
+
+  it('all difficulties use center-sweep release timing, with rookie and pro wider than elite', () => {
+    const rookieReleaseTuning = getDifficultyGameplayTuning('rookie').releaseMeter;
+    const proReleaseTuning = getDifficultyGameplayTuning('pro').releaseMeter;
+    const eliteReleaseTuning = getDifficultyGameplayTuning('elite').releaseMeter;
+    const halfSweepMs = Math.round((eliteReleaseTuning?.sweepDurationMsMax ?? 520) * 0.5);
+
+    for (const difficulty of ['rookie', 'pro', 'elite'] as const) {
+      let state = createInitialGameState();
+      state = gameReducer(state, { type: 'setDifficulty', difficulty });
+      state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0 });
+      state = gameReducer(state, { type: 'beginChargeAim', atMs: 1200 });
+      expect(state.phase.tag).toBe('chargeAim');
+      if (state.phase.tag === 'chargeAim') {
+        expect(state.phase.chargeMeter.mode).toBe('centerSweep');
+      }
+      state = gameReducer(state, { type: 'releaseCharge', atMs: 1200 + halfSweepMs });
+      expect(state.phase.tag).toBe('throwAnim');
+      if (state.phase.tag === 'throwAnim') {
+        expect(state.phase.releaseMeter.mode).toBe('centerSweep');
+        expect(state.phase.releaseMeter.lastQuality).toBe('perfect');
+      }
+    }
+
+    expect(rookieReleaseTuning?.sweepDurationMsMax).toBe(eliteReleaseTuning?.sweepDurationMsMax);
+    expect(proReleaseTuning?.sweepDurationMsMax).toBe(eliteReleaseTuning?.sweepDurationMsMax);
+    expect((rookieReleaseTuning?.perfectWidth ?? 0)).toBeGreaterThan(proReleaseTuning?.perfectWidth ?? 0);
+    expect((proReleaseTuning?.perfectWidth ?? 0)).toBeGreaterThan(eliteReleaseTuning?.perfectWidth ?? 0);
   });
 
   it('sets release flash timestamp on charge release', () => {
@@ -496,10 +601,11 @@ describe('gameReducer', () => {
   });
 
   it('allows release on second cycle with correct quality', () => {
+    const rookieReleaseTuning = getDifficultyGameplayTuning('rookie').releaseMeter;
     let state = createInitialGameState();
     state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0 });
     state = gameReducer(state, { type: 'beginChargeAim', atMs: 1200 });
-    const releaseMs = 1200 + Math.round(CHARGE_FILL_DURATION_MS * 1.85);
+    const releaseMs = 1200 + Math.round((rookieReleaseTuning?.sweepDurationMsMax ?? 520) * 1.5);
     state = gameReducer(state, {
       type: 'tick',
       dtMs: releaseMs - 1200,
@@ -513,10 +619,11 @@ describe('gameReducer', () => {
   });
 
   it('faults after exceeding max charge cycles', () => {
+    const rookieReleaseTuning = getDifficultyGameplayTuning('rookie').releaseMeter;
     let state = createInitialGameState();
     state = gameReducer(state, { type: 'startRound', atMs: 1000, windMs: 0 });
     state = gameReducer(state, { type: 'beginChargeAim', atMs: 1200 });
-    const overfillMs = CHARGE_FILL_DURATION_MS * CHARGE_MAX_CYCLES + 10;
+    const overfillMs = (rookieReleaseTuning?.sweepDurationMsMax ?? 520) * CHARGE_MAX_CYCLES + 10;
     state = gameReducer(state, { type: 'tick', dtMs: overfillMs, nowMs: 1200 + overfillMs });
 
     expect(state.phase.tag).toBe('fault');

@@ -11,6 +11,13 @@ export const wrap01 = (value: number): number => {
   return wrapped < 0 ? wrapped + 1 : wrapped;
 };
 
+/** Ping-pong a value across the [0, 1] range. */
+export const pingPong01 = (value: number): number => {
+  const wrapped = value % 2;
+  const normalized = wrapped < 0 ? wrapped + 2 : wrapped;
+  return normalized <= 1 ? normalized : 2 - normalized;
+};
+
 /** Linear interpolation between a and b. */
 export const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
 

@@ -193,7 +193,7 @@ export const renderGame = (input: RenderFrameInput): void => {
   if (state.phase.tag === 'runup') {
     const currentTapAtMs = state.phase.tap.lastTapAtMs;
     if (currentTapAtMs !== null && currentTapAtMs !== session.lastRunupTapAtMs) {
-      audio?.onRunupTap?.(state.phase.tap.lastTapGainNorm);
+      audio?.onRunupTap?.(state.phase.tap.lastTapMultiplier);
       session.lastRunupTapAtMs = currentTapAtMs;
     } else if (currentTapAtMs === null) {
       session.lastRunupTapAtMs = null;

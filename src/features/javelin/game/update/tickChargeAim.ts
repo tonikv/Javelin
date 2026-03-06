@@ -3,7 +3,7 @@
  * Updates meter cycling, run slowdown, and mixed run-to-aim animation blending.
  */
 import { RUNUP_MAX_X_M } from '../constants';
-import { computeForcePreview, getTimingQuality } from '../chargeMeter';
+import { computeChargeMeterSample } from '../chargeMeter';
 import { clamp } from '../math';
 import { GAMEPLAY_TUNING, getDifficultyGameplayTuning } from '../tuning';
 import type { GameState } from '../types';
@@ -22,16 +22,14 @@ export const tickChargeAim = (state: GameState, dtMs: number, nowMs: number): Ga
   const tuning = getDifficultyGameplayTuning(state.difficulty, state.devTuningOverrides);
 
   const elapsedMs = Math.max(0, nowMs - state.phase.chargeStartedAtMs);
-  const rawFill01 = elapsedMs / tuning.throwPhase.chargeFillDurationMs;
-  const fullCycles = Math.floor(rawFill01);
-  if (fullCycles >= CHARGE_MAX_CYCLES) {
+  const meterSample = computeChargeMeterSample(elapsedMs, tuning, state.phase.entrySpeedNorm);
+  if (meterSample.completedCycles >= CHARGE_MAX_CYCLES) {
     return {
       ...state,
       phase: createLateReleaseFaultPhase(state.phase, nowMs)
     };
   }
 
-  const phase01 = clamp(rawFill01 % 1, 0, 1);
   const speedAfterDecay = clamp(
     state.phase.speedNorm - (dtMs / 1000) * tuning.movement.chargeAimSpeedDecayPerSecond,
     0,
@@ -46,16 +44,10 @@ export const tickChargeAim = (state: GameState, dtMs: number, nowMs: number): Ga
     RUNUP_MAX_X_M
   );
   const blend01 = clamp(elapsedMs / RUN_TO_DRAWBACK_BLEND_MS, 0, 1);
-  const aimAnimT = blend01 < 1 ? blend01 * 0.2 : phase01;
+  const aimAnimT = blend01 < 1 ? blend01 * 0.2 : meterSample.phase01;
   const legAnimT = stillRunning
     ? advanceRunAnimT(state.phase.runEntryAnimT, dtMs, speedNorm)
     : state.phase.runEntryAnimT;
-  const forceNormPreview = computeForcePreview(phase01);
-  const quality = getTimingQuality(
-    phase01,
-    state.phase.chargeMeter.perfectWindow,
-    state.phase.chargeMeter.goodWindow
-  );
 
   return {
     ...state,
@@ -64,11 +56,14 @@ export const tickChargeAim = (state: GameState, dtMs: number, nowMs: number): Ga
       speedNorm,
       runupDistanceM,
       runEntryAnimT: legAnimT,
-      forceNormPreview,
+      forceNormPreview: meterSample.previewForceNorm,
       chargeMeter: {
         ...state.phase.chargeMeter,
-        phase01,
-        lastQuality: quality,
+        mode: meterSample.mode,
+        phase01: meterSample.phase01,
+        perfectWindow: meterSample.perfectWindow,
+        goodWindow: meterSample.goodWindow,
+        lastQuality: meterSample.quality,
         lastSampleAtMs: nowMs
       },
       athletePose: {

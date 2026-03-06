@@ -44,14 +44,16 @@ describe('javelin visibility state', () => {
       ...baseState,
       phase: {
         tag: 'runup',
+        meterMode: 'speedFill',
         speedNorm: 0.6,
         startedAtMs: 1000,
         tapCount: 4,
         runupDistanceM: 10,
         tap: {
           lastTapAtMs: 1880,
-          lastTapGainNorm: 0.85
+          lastTapMultiplier: 0.85
         },
+        runupRhythm: null,
         athletePose: { animTag: 'run', animT: 0.4 }
       }
     };
@@ -61,12 +63,14 @@ describe('javelin visibility state', () => {
       phase: {
         tag: 'chargeAim',
         speedNorm: 0.72,
+        entrySpeedNorm: 0.72,
         runupDistanceM: 17.4,
         startedAtMs: 1200,
         runEntryAnimT: 0.78,
         angleDeg: 35,
         chargeStartedAtMs: 1800,
         chargeMeter: {
+          mode: 'loop',
           phase01: 0.5,
           perfectWindow: { start: 0.47, end: 0.53 },
           goodWindow: { start: 0.4, end: 0.6 },
@@ -179,12 +183,14 @@ describe('javelin visibility state', () => {
     const chargePhaseBase: Extract<GameState['phase'], { tag: 'chargeAim' }> = {
       tag: 'chargeAim',
       speedNorm: 0.55,
+      entrySpeedNorm: 0.55,
       runupDistanceM: 10,
       startedAtMs: 1000,
       runEntryAnimT: 0.4,
       angleDeg: 34,
       chargeStartedAtMs: 1800,
       chargeMeter: {
+        mode: 'loop',
         phase01: 0.25,
         perfectWindow: { start: 0.47, end: 0.53 },
         goodWindow: { start: 0.4, end: 0.6 },
@@ -231,14 +237,16 @@ describe('javelin visibility state', () => {
       ...baseState,
       phase: {
         tag: 'runup',
+        meterMode: 'speedFill',
         speedNorm: 0,
         startedAtMs: 1000,
         tapCount: 0,
         runupDistanceM: RUNUP_START_X_M,
         tap: {
           lastTapAtMs: null,
-          lastTapGainNorm: 0
+          lastTapMultiplier: 0
         },
+        runupRhythm: null,
         athletePose: { animTag: 'idle', animT: 0 }
       }
     };

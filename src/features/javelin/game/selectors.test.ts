@@ -12,14 +12,16 @@ const makeRunupState = (speedNorm: number): GameState => ({
   aimAngleDeg: 36,
   phase: {
     tag: 'runup',
+    meterMode: 'speedFill',
     speedNorm,
     startedAtMs: 1000,
     tapCount: 1,
     runupDistanceM: 0,
     tap: {
       lastTapAtMs: 1200,
-      lastTapGainNorm: 0.8
+      lastTapMultiplier: 0.8
     },
+    runupRhythm: null,
     athletePose: {
       animTag: 'run',
       animT: 0
