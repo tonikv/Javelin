@@ -1,4 +1,4 @@
-AWSTemplateFormatVersion: "2010-09-09"
+AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: Javelin global leaderboard (HTTP API + Lambda + DynamoDB)
 
@@ -10,7 +10,9 @@ Parameters:
   IpHashSalt:
     Type: String
     NoEcho: true
-    Default: change-me
+    MinLength: 16
+    AllowedPattern: '^(?!change-me$).+$'
+    ConstraintDescription: Must be at least 16 chars and must not be the placeholder value.
     Description: Salt used for hashing source IPs in score submit cooldown guard.
 
 Globals:
@@ -122,4 +124,4 @@ Resources:
 Outputs:
   ApiUrl:
     Description: Base URL for leaderboard API.
-    Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+    Value: !Sub 'https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com'

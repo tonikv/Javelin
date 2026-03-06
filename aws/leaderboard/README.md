@@ -36,6 +36,7 @@ sam deploy --guided
 ```
 
 Set `AllowedOrigins` to your frontend origins (for example `https://tonikv.github.io,http://localhost:5173`).
+Set `IpHashSalt` to a non-placeholder secret (minimum 16 characters).
 
 ## API
 

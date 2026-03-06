@@ -1,14 +1,21 @@
 import { MAX_HIGHSCORES } from '../game/constants';
-import type { DifficultyLevel, HighscoreEntry, Locale } from '../game/types';
-import { normalizePlayerNameInput, validatePlayerName } from './nameModeration';
+import type { HighscoreEntry, Locale } from '../game/types';
+import {
+  LEADERBOARD_LIMITS,
+  leaderboardDifficulties,
+  type LeaderboardDifficulty,
+  isLeaderboardDifficulty,
+  normalizePlayerName,
+  validatePlayerName
+} from './leaderboardContract';
 
-export const leaderboardDifficulties = ['rookie', 'pro', 'elite'] as const satisfies readonly DifficultyLevel[];
-
-export type LeaderboardDifficulty = DifficultyLevel;
+export { leaderboardDifficulties };
+export type { LeaderboardDifficulty };
 
 export type FetchGlobalLeaderboardInput = {
   difficulty: LeaderboardDifficulty;
   limit?: number;
+  signal?: AbortSignal;
 };
 
 export type PostGlobalScoreInput = {
@@ -31,6 +38,29 @@ type GlobalLeaderboardApiPayload = {
 
 type GlobalLeaderboardItemRecord = Record<string, unknown>;
 
+type GlobalLeaderboardApiErrorCode =
+  | 'aborted'
+  | 'http'
+  | 'invalid-input'
+  | 'invalid-response'
+  | 'network'
+  | 'unavailable';
+
+export class GlobalLeaderboardApiError extends Error {
+  readonly code: GlobalLeaderboardApiErrorCode;
+  readonly status?: number;
+
+  constructor(code: GlobalLeaderboardApiErrorCode, message: string, status?: number) {
+    super(message);
+    this.name = 'GlobalLeaderboardApiError';
+    this.code = code;
+    this.status = status;
+  }
+}
+
+export const isGlobalLeaderboardApiError = (error: unknown): error is GlobalLeaderboardApiError =>
+  error instanceof GlobalLeaderboardApiError;
+
 const compareHighscores = (a: HighscoreEntry, b: HighscoreEntry): number => {
   if (b.distanceM !== a.distanceM) {
     return b.distanceM - a.distanceM;
@@ -41,13 +71,11 @@ const compareHighscores = (a: HighscoreEntry, b: HighscoreEntry): number => {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 
-const difficultySet = new Set<LeaderboardDifficulty>(leaderboardDifficulties);
-
 const toDifficultyOrNull = (value: unknown): LeaderboardDifficulty | null => {
-  if (typeof value !== 'string') {
+  if (!isLeaderboardDifficulty(value)) {
     return null;
   }
-  return difficultySet.has(value as LeaderboardDifficulty) ? (value as LeaderboardDifficulty) : null;
+  return value;
 };
 
 const toFiniteNumberOrNull = (value: unknown): number | null =>
@@ -86,7 +114,11 @@ const parseGlobalLeaderboardItem = (
   }
 
   const raw = value as GlobalLeaderboardItemRecord;
-  if (typeof raw.scoreId !== 'string' || typeof raw.playerName !== 'string' || typeof raw.playedAt !== 'string') {
+  if (
+    typeof raw.scoreId !== 'string' ||
+    typeof raw.playerName !== 'string' ||
+    typeof raw.playedAt !== 'string'
+  ) {
     return null;
   }
 
@@ -96,7 +128,11 @@ const parseGlobalLeaderboardItem = (
   }
 
   const distanceMm = toFiniteNumberOrNull(raw.distanceMm);
-  if (distanceMm === null || distanceMm < 0) {
+  if (
+    distanceMm === null ||
+    distanceMm < LEADERBOARD_LIMITS.distanceMm.min ||
+    distanceMm > LEADERBOARD_LIMITS.distanceMm.max
+  ) {
     return null;
   }
 
@@ -153,33 +189,50 @@ export const resolveGlobalLeaderboardApiBase = (raw: string | undefined): string
 export const getGlobalLeaderboardApiBase = (): string | null =>
   resolveGlobalLeaderboardApiBase(import.meta.env.VITE_LEADERBOARD_API_BASE);
 
-const createHttpError = (status: number): Error => new Error(`Global leaderboard API request failed with ${status}`);
-
-export const createPostGlobalScorePayload = (input: PostGlobalScoreInput): Record<string, unknown> => {
-  const normalizedPlayerName = normalizePlayerNameInput(input.playerName);
+export const createPostGlobalScorePayload = (
+  input: PostGlobalScoreInput
+): Record<string, unknown> => {
+  const normalizedPlayerName = normalizePlayerName(input.playerName);
   const nameValidationError = validatePlayerName(normalizedPlayerName);
   if (nameValidationError !== null) {
-    throw new Error(`Invalid player name: ${nameValidationError}`);
+    throw new GlobalLeaderboardApiError(
+      'invalid-input',
+      `Invalid player name: ${nameValidationError}`
+    );
+  }
+
+  const distanceMm = Math.round(input.distanceM * 1000);
+  if (!Number.isFinite(distanceMm)) {
+    throw new GlobalLeaderboardApiError('invalid-input', 'Invalid distanceM');
   }
 
   return {
     difficulty: input.difficulty,
     playerName: normalizedPlayerName,
-    distanceMm: Math.max(0, Math.round(input.distanceM * 1000)),
+    distanceMm: Math.max(
+      LEADERBOARD_LIMITS.distanceMm.min,
+      Math.min(LEADERBOARD_LIMITS.distanceMm.max, distanceMm)
+    ),
     playedAt: new Date(input.playedAtIso).toISOString(),
     windMs: input.windMs,
     windZMs: input.windZMs,
-    launchSpeedCms: input.launchSpeedMs === undefined ? undefined : Math.round(input.launchSpeedMs * 100),
+    launchSpeedCms:
+      input.launchSpeedMs === undefined ? undefined : Math.round(input.launchSpeedMs * 100),
     angleCdeg: input.angleDeg === undefined ? undefined : Math.round(input.angleDeg * 100),
     locale: input.locale,
     clientVersion: input.clientVersion
   };
 };
 
-export const fetchGlobalLeaderboard = async (input: FetchGlobalLeaderboardInput): Promise<HighscoreEntry[]> => {
+export const fetchGlobalLeaderboard = async (
+  input: FetchGlobalLeaderboardInput
+): Promise<HighscoreEntry[]> => {
   const apiBase = getGlobalLeaderboardApiBase();
   if (apiBase === null) {
-    throw new Error('Global leaderboard API base is not configured');
+    throw new GlobalLeaderboardApiError(
+      'unavailable',
+      'Global leaderboard API base is not configured'
+    );
   }
 
   const limit = Math.max(1, Math.min(input.limit ?? MAX_HIGHSCORES, MAX_HIGHSCORES));
@@ -191,21 +244,41 @@ export const fetchGlobalLeaderboard = async (input: FetchGlobalLeaderboardInput)
     method: 'GET',
     headers: {
       accept: 'application/json'
+    },
+    signal: input.signal
+  }).catch((error: unknown) => {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new GlobalLeaderboardApiError('aborted', 'Global leaderboard refresh aborted');
     }
+    throw new GlobalLeaderboardApiError('network', 'Global leaderboard request failed');
   });
 
   if (!response.ok) {
-    throw createHttpError(response.status);
+    throw new GlobalLeaderboardApiError(
+      'http',
+      `Global leaderboard API request failed with ${response.status}`,
+      response.status
+    );
   }
 
   const payload = (await response.json()) as unknown;
-  return parseGlobalLeaderboardEntries(payload);
+  try {
+    return parseGlobalLeaderboardEntries(payload);
+  } catch {
+    throw new GlobalLeaderboardApiError(
+      'invalid-response',
+      'Invalid global leaderboard response payload'
+    );
+  }
 };
 
 export const postGlobalScore = async (input: PostGlobalScoreInput): Promise<void> => {
   const apiBase = getGlobalLeaderboardApiBase();
   if (apiBase === null) {
-    throw new Error('Global leaderboard API base is not configured');
+    throw new GlobalLeaderboardApiError(
+      'unavailable',
+      'Global leaderboard API base is not configured'
+    );
   }
 
   const response = await fetch(`${apiBase}/leaderboard`, {
@@ -218,6 +291,10 @@ export const postGlobalScore = async (input: PostGlobalScoreInput): Promise<void
   });
 
   if (!response.ok) {
-    throw createHttpError(response.status);
+    throw new GlobalLeaderboardApiError(
+      'http',
+      `Global leaderboard API request failed with ${response.status}`,
+      response.status
+    );
   }
 };

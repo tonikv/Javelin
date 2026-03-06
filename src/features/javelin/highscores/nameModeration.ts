@@ -1,34 +1,14 @@
-export const BLOCKLISTED_NAME_TRIGRAMS = [
-  'ASS',
-  'CUM',
-  'FUC',
-  'FUK',
-  'KKK',
-  'NIG',
-  'SEX',
-  'XXX'
-] as const;
+import {
+  BLOCKLISTED_NAME_TRIGRAMS,
+  type PlayerNameValidationError,
+  normalizePlayerName,
+  validatePlayerName
+} from './leaderboardContract';
 
-const blockedNameSet = new Set<string>(BLOCKLISTED_NAME_TRIGRAMS);
+export { BLOCKLISTED_NAME_TRIGRAMS, validatePlayerName };
+export type { PlayerNameValidationError };
 
-export type PlayerNameValidationError = 'length' | 'blocked';
-
-export const normalizePlayerNameInput = (value: string): string =>
-  value
-    .toUpperCase()
-    .replace(/[^A-Z]/g, '')
-    .slice(0, 3);
+export const normalizePlayerNameInput = normalizePlayerName;
 
 export const isBlockedPlayerName = (value: string): boolean =>
-  blockedNameSet.has(normalizePlayerNameInput(value));
-
-export const validatePlayerName = (value: string): PlayerNameValidationError | null => {
-  const normalized = normalizePlayerNameInput(value);
-  if (normalized.length !== 3) {
-    return 'length';
-  }
-  if (blockedNameSet.has(normalized)) {
-    return 'blocked';
-  }
-  return null;
-};
+  validatePlayerName(value) === 'blocked';

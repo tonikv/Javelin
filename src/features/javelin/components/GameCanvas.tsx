@@ -24,11 +24,12 @@ type GameCanvasProps = {
 };
 
 const getPhaseAnnouncement = (
-  state: GameState,
+  phaseTag: GameState['phase']['tag'],
+  resultDistanceM: number | null,
   t: (key: string) => string,
   numberFormat: Intl.NumberFormat
 ): string => {
-  switch (state.phase.tag) {
+  switch (phaseTag) {
     case 'runup':
       return t('a11y.announce.runupStarted');
     case 'chargeAim':
@@ -38,7 +39,7 @@ const getPhaseAnnouncement = (
     case 'flight':
       return t('a11y.announce.flight');
     case 'result':
-      return `${t('a11y.announce.resultPrefix')}: ${numberFormat.format(state.phase.distanceM)} m`;
+      return `${t('a11y.announce.resultPrefix')}: ${numberFormat.format(resultDistanceM ?? 0)} m`;
     case 'fault':
       return t('a11y.announce.fault');
     case 'idle':
@@ -81,8 +82,7 @@ export const GameCanvas = ({ state, dispatch }: GameCanvasProps): ReactElement =
     }),
     [t]
   );
-  const announcedResultDistance =
-    state.phase.tag === 'result' ? state.phase.distanceM : null;
+  const announcedResultDistance = state.phase.tag === 'result' ? state.phase.distanceM : null;
   const releaseFlashLabels = useMemo(
     () => ({
       perfect: t('hud.perfect'),
@@ -115,7 +115,9 @@ export const GameCanvas = ({ state, dispatch }: GameCanvasProps): ReactElement =
       return;
     }
     lastAnnouncedPhaseRef.current = state.phase.tag;
-    setPhaseAnnouncement(getPhaseAnnouncement(state, t, numberFormat));
+    setPhaseAnnouncement(
+      getPhaseAnnouncement(state.phase.tag, announcedResultDistance, t, numberFormat)
+    );
   }, [announcedResultDistance, numberFormat, state.phase.tag, t]);
 
   usePointerControls({ canvas: canvasRef.current, dispatch, state });

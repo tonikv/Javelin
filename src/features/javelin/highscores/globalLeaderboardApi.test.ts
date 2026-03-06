@@ -1,9 +1,29 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createPostGlobalScorePayload,
+  fetchGlobalLeaderboard,
+  GlobalLeaderboardApiError,
   parseGlobalLeaderboardEntries,
   resolveGlobalLeaderboardApiBase
 } from './globalLeaderboardApi';
+
+const getMutableEnv = (): Record<string, string | undefined> =>
+  (import.meta as unknown as { env: Record<string, string | undefined> }).env;
+
+const originalApiBase = getMutableEnv().VITE_LEADERBOARD_API_BASE;
+
+const setApiBase = (value: string | undefined): void => {
+  Object.defineProperty(getMutableEnv(), 'VITE_LEADERBOARD_API_BASE', {
+    configurable: true,
+    writable: true,
+    value
+  });
+};
+
+afterEach(() => {
+  setApiBase(originalApiBase);
+  vi.unstubAllGlobals();
+});
 
 describe('resolveGlobalLeaderboardApiBase', () => {
   it('returns null when missing', () => {
@@ -13,7 +33,9 @@ describe('resolveGlobalLeaderboardApiBase', () => {
   });
 
   it('trims and strips trailing slash', () => {
-    expect(resolveGlobalLeaderboardApiBase(' https://api.example.com/ ')).toBe('https://api.example.com');
+    expect(resolveGlobalLeaderboardApiBase(' https://api.example.com/ ')).toBe(
+      'https://api.example.com'
+    );
   });
 });
 
@@ -96,6 +118,57 @@ describe('createPostGlobalScorePayload', () => {
       angleCdeg: 3525,
       locale: 'en',
       clientVersion: '0.1.0'
+    });
+  });
+
+  it('throws typed error for invalid player names', () => {
+    expect(() =>
+      createPostGlobalScorePayload({
+        difficulty: 'elite',
+        playerName: '***',
+        distanceM: 70,
+        playedAtIso: '2026-03-05T19:40:00.000Z',
+        windMs: 0,
+        locale: 'en'
+      })
+    ).toThrowError(GlobalLeaderboardApiError);
+  });
+});
+
+describe('fetchGlobalLeaderboard', () => {
+  it('maps bad payloads to invalid-response error', async () => {
+    setApiBase('https://api.example.com');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ bad: 'shape' })
+      } as Response)
+    );
+
+    await expect(fetchGlobalLeaderboard({ difficulty: 'pro' })).rejects.toSatisfy((error) => {
+      const candidate = error as { code?: string };
+      expect(candidate.code).toBe('invalid-response');
+      return true;
+    });
+  });
+
+  it('exposes status for http errors', async () => {
+    setApiBase('https://api.example.com');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 429
+      } as Response)
+    );
+
+    await expect(fetchGlobalLeaderboard({ difficulty: 'elite' })).rejects.toSatisfy((error) => {
+      const candidate = error as { code?: string; status?: number };
+      expect(candidate.code).toBe('http');
+      expect(candidate.status).toBe(429);
+      return true;
     });
   });
 });

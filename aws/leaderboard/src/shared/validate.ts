@@ -1,28 +1,12 @@
 import type { APIGatewayProxyEventQueryStringParameters } from 'aws-lambda';
-import { difficulties, type Difficulty, type NewScoreInput, type ScoreItem } from './model';
-import { isBlockedPlayerName } from './nameModeration';
-
-const difficultySet = new Set<Difficulty>(difficulties);
-
-const DEFAULT_LIMIT = 10;
-const MAX_LIMIT = 50;
-
-const CLIENT_VERSION_MAX_LENGTH = 32;
-const COUNTRY_MAX_LENGTH = 8;
-const LOCALE_MAX_LENGTH = 12;
-const PLAYER_NAME_PATTERN = /^[A-Z]{3}$/;
-
-const DISTANCE_MIN_MM = 0;
-const DISTANCE_MAX_MM = 130000;
-
-const ANGLE_MIN_CDEG = 0;
-const ANGLE_MAX_CDEG = 9000;
-
-const SPEED_MIN_CMS = 0;
-const SPEED_MAX_CMS = 4500;
-
-const WIND_MIN_MS = -30;
-const WIND_MAX_MS = 30;
+import {
+  LEADERBOARD_LIMITS,
+  PLAYER_NAME_PATTERN,
+  isBlockedPlayerName,
+  isLeaderboardDifficulty,
+  leaderboardDifficulties
+} from './leaderboardContract';
+import type { Difficulty, NewScoreInput, ScoreItem } from './model';
 
 export class ValidationError extends Error {
   constructor(message: string) {
@@ -37,13 +21,23 @@ const toValidationError = (field: string, message: string): ValidationError =>
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 
-const cleanText = (value: string): string => value.replace(/[\u0000-\u001F\u007F]/g, '').trim();
+const cleanText = (value: string): string => {
+  let result = '';
+  for (const char of value) {
+    const code = char.charCodeAt(0);
+    if ((code >= 0x00 && code <= 0x1f) || code === 0x7f) {
+      continue;
+    }
+    result += char;
+  }
+  return result.trim();
+};
 
 const parseRequiredDifficulty = (value: unknown): Difficulty => {
-  if (typeof value !== 'string' || !difficultySet.has(value as Difficulty)) {
-    throw toValidationError('difficulty', `must be one of ${difficulties.join(', ')}`);
+  if (!isLeaderboardDifficulty(value)) {
+    throw toValidationError('difficulty', `must be one of ${leaderboardDifficulties.join(', ')}`);
   }
-  return value as Difficulty;
+  return value;
 };
 
 const parsePlayerName = (value: unknown): string => {
@@ -60,7 +54,11 @@ const parsePlayerName = (value: unknown): string => {
   return cleaned;
 };
 
-const parseOptionalString = (value: unknown, field: string, maxLength: number): string | undefined => {
+const parseOptionalString = (
+  value: unknown,
+  field: string,
+  maxLength: number
+): string | undefined => {
   if (value === undefined) {
     return undefined;
   }
@@ -87,14 +85,24 @@ const parseRequiredInteger = (value: unknown, field: string, min: number, max: n
   return value;
 };
 
-const parseOptionalInteger = (value: unknown, field: string, min: number, max: number): number | undefined => {
+const parseOptionalInteger = (
+  value: unknown,
+  field: string,
+  min: number,
+  max: number
+): number | undefined => {
   if (value === undefined) {
     return undefined;
   }
   return parseRequiredInteger(value, field, min, max);
 };
 
-const parseOptionalNumber = (value: unknown, field: string, min: number, max: number): number | undefined => {
+const parseOptionalNumber = (
+  value: unknown,
+  field: string,
+  min: number,
+  max: number
+): number | undefined => {
   if (value === undefined) {
     return undefined;
   }
@@ -131,7 +139,7 @@ export const parseGetLeaderboardInput = (
   if (rawLimit === undefined || rawLimit.length === 0) {
     return {
       difficulty,
-      limit: DEFAULT_LIMIT
+      limit: LEADERBOARD_LIMITS.defaultFetchLimit
     };
   }
 
@@ -139,8 +147,8 @@ export const parseGetLeaderboardInput = (
   if (!Number.isInteger(limit)) {
     throw toValidationError('limit', 'must be an integer');
   }
-  if (limit < 1 || limit > MAX_LIMIT) {
-    throw toValidationError('limit', `must be between 1 and ${MAX_LIMIT}`);
+  if (limit < 1 || limit > LEADERBOARD_LIMITS.maxFetchLimit) {
+    throw toValidationError('limit', `must be between 1 and ${LEADERBOARD_LIMITS.maxFetchLimit}`);
   }
 
   return {
@@ -149,7 +157,10 @@ export const parseGetLeaderboardInput = (
   };
 };
 
-export const decodeRequestBody = (body: string | null | undefined, isBase64Encoded: boolean): string => {
+export const decodeRequestBody = (
+  body: string | null | undefined,
+  isBase64Encoded: boolean
+): string => {
   if (!body) {
     throw new ValidationError('Request body is required');
   }
@@ -173,7 +184,12 @@ export const parsePostScoreInput = (rawBody: string): NewScoreInput => {
 
   const difficulty = parseRequiredDifficulty(payload.difficulty);
   const playerName = parsePlayerName(payload.playerName);
-  const distanceMm = parseRequiredInteger(payload.distanceMm, 'distanceMm', DISTANCE_MIN_MM, DISTANCE_MAX_MM);
+  const distanceMm = parseRequiredInteger(
+    payload.distanceMm,
+    'distanceMm',
+    LEADERBOARD_LIMITS.distanceMm.min,
+    LEADERBOARD_LIMITS.distanceMm.max
+  );
   const playedAt = parsePlayedAt(payload.playedAt);
 
   return {
@@ -181,13 +197,37 @@ export const parsePostScoreInput = (rawBody: string): NewScoreInput => {
     playerName,
     distanceMm,
     playedAt,
-    clientVersion: parseOptionalString(payload.clientVersion, 'clientVersion', CLIENT_VERSION_MAX_LENGTH),
-    windMs: parseOptionalNumber(payload.windMs, 'windMs', WIND_MIN_MS, WIND_MAX_MS),
-    windZMs: parseOptionalNumber(payload.windZMs, 'windZMs', WIND_MIN_MS, WIND_MAX_MS),
-    launchSpeedCms: parseOptionalInteger(payload.launchSpeedCms, 'launchSpeedCms', SPEED_MIN_CMS, SPEED_MAX_CMS),
-    angleCdeg: parseOptionalInteger(payload.angleCdeg, 'angleCdeg', ANGLE_MIN_CDEG, ANGLE_MAX_CDEG),
-    country: parseOptionalString(payload.country, 'country', COUNTRY_MAX_LENGTH),
-    locale: parseOptionalString(payload.locale, 'locale', LOCALE_MAX_LENGTH)
+    clientVersion: parseOptionalString(
+      payload.clientVersion,
+      'clientVersion',
+      LEADERBOARD_LIMITS.clientVersionMaxLength
+    ),
+    windMs: parseOptionalNumber(
+      payload.windMs,
+      'windMs',
+      LEADERBOARD_LIMITS.windMs.min,
+      LEADERBOARD_LIMITS.windMs.max
+    ),
+    windZMs: parseOptionalNumber(
+      payload.windZMs,
+      'windZMs',
+      LEADERBOARD_LIMITS.windMs.min,
+      LEADERBOARD_LIMITS.windMs.max
+    ),
+    launchSpeedCms: parseOptionalInteger(
+      payload.launchSpeedCms,
+      'launchSpeedCms',
+      LEADERBOARD_LIMITS.speedCms.min,
+      LEADERBOARD_LIMITS.speedCms.max
+    ),
+    angleCdeg: parseOptionalInteger(
+      payload.angleCdeg,
+      'angleCdeg',
+      LEADERBOARD_LIMITS.angleCdeg.min,
+      LEADERBOARD_LIMITS.angleCdeg.max
+    ),
+    country: parseOptionalString(payload.country, 'country', LEADERBOARD_LIMITS.countryMaxLength),
+    locale: parseOptionalString(payload.locale, 'locale', LEADERBOARD_LIMITS.localeMaxLength)
   };
 };
 
@@ -210,8 +250,7 @@ const parseStoredOptionalNumber = (value: unknown): number | undefined => {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 };
 
-const isDifficulty = (value: unknown): value is Difficulty =>
-  typeof value === 'string' && difficultySet.has(value as Difficulty);
+const isDifficulty = (value: unknown): value is Difficulty => isLeaderboardDifficulty(value);
 
 const parseStoredItem = (value: unknown): ScoreItem | null => {
   if (!isRecord(value)) {

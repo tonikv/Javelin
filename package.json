@@ -5,19 +5,35 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "typecheck": "tsc --noEmit",
+    "typecheck:backend": "npm --prefix aws/leaderboard run typecheck",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "node scripts/prettier-changed.mjs write",
+    "format:check": "node scripts/prettier-changed.mjs check",
     "build": "tsc --noEmit && vite build",
+    "build:backend": "npm --prefix aws/leaderboard run build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:backend": "npm --prefix aws/leaderboard run test",
+    "validate": "npm run typecheck && npm run typecheck:backend && npm run lint && npm run format:check && npm run test && npm run test:backend && npm run build && npm run build:backend"
   },
   "dependencies": {
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@typescript-eslint/eslint-plugin": "^8.46.2",
+    "@typescript-eslint/parser": "^8.46.2",
     "@types/react": "^19.1.12",
     "@types/react-dom": "^19.1.9",
     "@vitejs/plugin-react": "^5.0.4",
+    "eslint": "^9.39.1",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "globals": "^16.4.0",
+    "prettier": "^3.6.2",
     "typescript": "~5.9.3",
     "vite": "^7.3.1",
     "vite-plugin-pwa": "^1.2.0",

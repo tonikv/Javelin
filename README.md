@@ -15,7 +15,7 @@ npm run dev
 
 `VITE_LEADERBOARD_API_BASE` enables the global leaderboard API.
 If omitted, the game automatically falls back to local-only highscores.
-Current frontend integration posts/fetches global scores under difficulty `pro` (until in-game difficulty selection is added).
+Global leaderboard fetch/post uses the currently selected in-game difficulty (`rookie`, `pro`, `elite`).
 
 ## Controls
 
@@ -58,11 +58,40 @@ Current frontend integration posts/fetches global scores under difficulty `pro` 
 npm test
 ```
 
+Backend tests:
+
+```bash
+npm --prefix aws/leaderboard run test
+```
+
 ## Build
 
 ```bash
 npm run build
 ```
+
+Backend build:
+
+```bash
+npm --prefix aws/leaderboard run build
+```
+
+## Validation (Required Before PR)
+
+```bash
+npm run validate
+```
+
+This runs:
+
+- frontend typecheck
+- backend typecheck
+- lint
+- format check
+- frontend tests
+- backend tests
+- frontend build
+- backend build
 
 ## PWA / Mobile Install
 

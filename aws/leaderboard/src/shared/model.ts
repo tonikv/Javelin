@@ -1,6 +1,8 @@
-export const difficulties = ['rookie', 'pro', 'elite'] as const;
+import { leaderboardDifficulties, type LeaderboardDifficulty } from './leaderboardContract';
 
-export type Difficulty = (typeof difficulties)[number];
+export const difficulties = leaderboardDifficulties;
+
+export type Difficulty = LeaderboardDifficulty;
 
 export type ScoreItem = {
   scoreId: string;
