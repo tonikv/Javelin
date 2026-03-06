@@ -17,6 +17,9 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      VITE_LEADERBOARD_API_BASE: ${{ vars.VITE_LEADERBOARD_API_BASE }}
+      VITE_APP_VERSION: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -25,6 +28,11 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - name: Check leaderboard API base variable
+        run: |
+          if [ -z "${VITE_LEADERBOARD_API_BASE}" ]; then
+            echo "warning: VITE_LEADERBOARD_API_BASE is not set. Global leaderboard will be unavailable in production build."
+          fi
       - run: npm run build
       - uses: actions/upload-pages-artifact@v3
         with:
