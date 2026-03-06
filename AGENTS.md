@@ -43,6 +43,10 @@ Build and maintain the browser game demo "Selain Games 2026 / Keihäänheitto" w
 - Backend deployment hardening:
   - `IpHashSalt` template parameter no longer has insecure placeholder default
   - salt must be non-placeholder and at least 16 chars
+- Deferred backend runtime maintenance:
+  - `aws/leaderboard/template.yaml` still uses `nodejs20.x`
+  - plan migration to `nodejs22.x` in a dedicated pass
+  - deadline context: AWS Lambda lists `nodejs20.x` deprecation on 2026-04-30
 - Dark-mode athlete palette now matches light mode palette.
 - Dual RAF model is documented in `docs/architecture/frame-loop.md`.
 - CI/tooling safety rails are active:
