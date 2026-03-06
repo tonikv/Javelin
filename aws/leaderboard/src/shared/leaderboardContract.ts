@@ -47,6 +47,7 @@ export const validatePlayerName = (value: string): PlayerNameValidationError | n
 export const LEADERBOARD_LIMITS = {
   defaultFetchLimit: 10,
   maxFetchLimit: 50,
+  requestBodyMaxBytes: 1024,
   distanceMm: {
     min: 0,
     max: 130000

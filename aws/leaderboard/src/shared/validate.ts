@@ -164,10 +164,13 @@ export const decodeRequestBody = (
   if (!body) {
     throw new ValidationError('Request body is required');
   }
-  if (!isBase64Encoded) {
-    return body;
+  const decoded = isBase64Encoded ? Buffer.from(body, 'base64').toString('utf8') : body;
+  if (Buffer.byteLength(decoded, 'utf8') > LEADERBOARD_LIMITS.requestBodyMaxBytes) {
+    throw new ValidationError(
+      `Request body must be at most ${LEADERBOARD_LIMITS.requestBodyMaxBytes} bytes`
+    );
   }
-  return Buffer.from(body, 'base64').toString('utf8');
+  return decoded;
 };
 
 export const parsePostScoreInput = (rawBody: string): NewScoreInput => {

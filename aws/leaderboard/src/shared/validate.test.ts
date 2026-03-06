@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { ValidationError, parseGetLeaderboardInput, parsePostScoreInput } from './validate';
+import {
+  ValidationError,
+  decodeRequestBody,
+  parseGetLeaderboardInput,
+  parsePostScoreInput
+} from './validate';
 
 describe('parseGetLeaderboardInput', () => {
   it('accepts valid difficulty and default limit', () => {
@@ -17,11 +22,15 @@ describe('parseGetLeaderboardInput', () => {
   });
 
   it('rejects invalid difficulty', () => {
-    expect(() => parseGetLeaderboardInput({ difficulty: 'nightmare' })).toThrowError(ValidationError);
+    expect(() => parseGetLeaderboardInput({ difficulty: 'nightmare' })).toThrowError(
+      ValidationError
+    );
   });
 
   it('rejects non-integer limits', () => {
-    expect(() => parseGetLeaderboardInput({ difficulty: 'rookie', limit: '2.2' })).toThrowError(ValidationError);
+    expect(() => parseGetLeaderboardInput({ difficulty: 'rookie', limit: '2.2' })).toThrowError(
+      ValidationError
+    );
   });
 });
 
@@ -99,5 +108,16 @@ describe('parsePostScoreInput', () => {
 
   it('rejects invalid json body', () => {
     expect(() => parsePostScoreInput('not-json')).toThrowError(ValidationError);
+  });
+});
+
+describe('decodeRequestBody', () => {
+  it('rejects oversized plain request bodies', () => {
+    expect(() => decodeRequestBody('x'.repeat(1025), false)).toThrowError(ValidationError);
+  });
+
+  it('rejects oversized base64 request bodies', () => {
+    const encoded = Buffer.from('x'.repeat(1025), 'utf8').toString('base64');
+    expect(() => decodeRequestBody(encoded, true)).toThrowError(ValidationError);
   });
 });

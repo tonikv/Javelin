@@ -1,7 +1,10 @@
 import type { APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
 
 const BASE_HEADERS = {
-  'content-type': 'application/json; charset=utf-8'
+  'content-type': 'application/json; charset=utf-8',
+  'cache-control': 'no-store',
+  'x-content-type-options': 'nosniff',
+  'referrer-policy': 'no-referrer'
 } as const;
 
 export const jsonResponse = (
