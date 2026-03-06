@@ -16,6 +16,7 @@ export type FetchGlobalLeaderboardInput = {
   difficulty: LeaderboardDifficulty;
   limit?: number;
   signal?: AbortSignal;
+  apiBase?: string;
 };
 
 export type PostGlobalScoreInput = {
@@ -227,7 +228,7 @@ export const createPostGlobalScorePayload = (
 export const fetchGlobalLeaderboard = async (
   input: FetchGlobalLeaderboardInput
 ): Promise<HighscoreEntry[]> => {
-  const apiBase = getGlobalLeaderboardApiBase();
+  const apiBase = resolveGlobalLeaderboardApiBase(input.apiBase) ?? getGlobalLeaderboardApiBase();
   if (apiBase === null) {
     throw new GlobalLeaderboardApiError(
       'unavailable',

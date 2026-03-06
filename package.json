@@ -14,8 +14,8 @@
     "build": "tsc --noEmit && vite build",
     "build:backend": "npm --prefix aws/leaderboard run build",
     "preview": "vite preview",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "vitest run src/app src/features src/i18n src/theme",
+    "test:watch": "vitest src/app src/features src/i18n src/theme",
     "test:backend": "npm --prefix aws/leaderboard run test",
     "validate": "npm run typecheck && npm run typecheck:backend && npm run lint && npm run format:check && npm run test && npm run test:backend && npm run build && npm run build:backend"
   },

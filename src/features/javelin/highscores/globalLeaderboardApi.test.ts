@@ -7,21 +7,7 @@ import {
   resolveGlobalLeaderboardApiBase
 } from './globalLeaderboardApi';
 
-const getMutableEnv = (): Record<string, string | undefined> =>
-  (import.meta as unknown as { env: Record<string, string | undefined> }).env;
-
-const originalApiBase = getMutableEnv().VITE_LEADERBOARD_API_BASE;
-
-const setApiBase = (value: string | undefined): void => {
-  Object.defineProperty(getMutableEnv(), 'VITE_LEADERBOARD_API_BASE', {
-    configurable: true,
-    writable: true,
-    value
-  });
-};
-
 afterEach(() => {
-  setApiBase(originalApiBase);
   vi.unstubAllGlobals();
 });
 
@@ -137,7 +123,6 @@ describe('createPostGlobalScorePayload', () => {
 
 describe('fetchGlobalLeaderboard', () => {
   it('maps bad payloads to invalid-response error', async () => {
-    setApiBase('https://api.example.com');
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({
@@ -147,7 +132,10 @@ describe('fetchGlobalLeaderboard', () => {
       } as Response)
     );
 
-    await expect(fetchGlobalLeaderboard({ difficulty: 'pro' })).rejects.toSatisfy((error) => {
+    await expect(
+      fetchGlobalLeaderboard({ difficulty: 'pro', apiBase: 'https://api.example.com' })
+    ).rejects.toSatisfy((error) => {
+      expect(error).toBeInstanceOf(Error);
       const candidate = error as { code?: string };
       expect(candidate.code).toBe('invalid-response');
       return true;
@@ -155,7 +143,6 @@ describe('fetchGlobalLeaderboard', () => {
   });
 
   it('exposes status for http errors', async () => {
-    setApiBase('https://api.example.com');
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({
@@ -164,7 +151,10 @@ describe('fetchGlobalLeaderboard', () => {
       } as Response)
     );
 
-    await expect(fetchGlobalLeaderboard({ difficulty: 'elite' })).rejects.toSatisfy((error) => {
+    await expect(
+      fetchGlobalLeaderboard({ difficulty: 'elite', apiBase: 'https://api.example.com' })
+    ).rejects.toSatisfy((error) => {
+      expect(error).toBeInstanceOf(Error);
       const candidate = error as { code?: string; status?: number };
       expect(candidate.code).toBe('http');
       expect(candidate.status).toBe(429);

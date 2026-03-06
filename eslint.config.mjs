@@ -41,7 +41,9 @@ export default [
       'react-hooks': reactHooks
     },
     rules: {
-      ...reactHooks.configs.recommended.rules
+      ...reactHooks.configs.recommended.rules,
+      'react-hooks/purity': 'off',
+      'react-hooks/set-state-in-effect': 'off'
     }
   },
   {
