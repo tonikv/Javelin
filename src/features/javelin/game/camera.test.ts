@@ -34,6 +34,7 @@ describe('camera', () => {
         tapCount: 3,
         runupDistanceM: 10.2,
         tap: { lastTapAtMs: 1180, lastTapMultiplier: 0.8 },
+        chargeHold: null,
         runupRhythm: null,
         athletePose: { animTag: 'run', animT: 0.2 }
       }
@@ -200,6 +201,7 @@ describe('camera', () => {
         tapCount: 1,
         runupDistanceM: RUNUP_START_X_M,
         tap: { lastTapAtMs: 1000, lastTapMultiplier: 1 },
+        chargeHold: null,
         runupRhythm: null,
         athletePose: { animTag: 'idle', animT: 0 }
       }
@@ -229,6 +231,7 @@ describe('camera', () => {
         tapCount: 1,
         runupDistanceM: RUNUP_START_X_M,
         tap: { lastTapAtMs: 1000, lastTapMultiplier: 1 },
+        chargeHold: null,
         runupRhythm: null,
         athletePose: { animTag: 'idle', animT: 0 }
       }

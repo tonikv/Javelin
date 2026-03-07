@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { createRenderSession, renderGame, type GameAudioCallbacks } from '../game/render';
 import {
+  playChargeCenterCue,
   playChargeStart,
   playCrowdReaction,
   playFaultOof,
@@ -96,6 +97,7 @@ export const GameCanvas = ({ state, dispatch }: GameCanvasProps): ReactElement =
     () => ({
       onRunupTap: (tapGainNorm) => playRunupTap(tapGainNorm),
       onChargeStart: () => playChargeStart(),
+      onChargeCenterCue: () => playChargeCenterCue(),
       onThrowRelease: (speedNorm) => playThrowWhoosh(speedNorm),
       onFlightWindUpdate: (intensity) => setFlightWindIntensity(intensity),
       onFlightWindStop: () => setFlightWindIntensity(0),

@@ -20,9 +20,7 @@ import {
 } from '../tuning';
 import type { DifficultyLevel, GameState, RhythmHitQuality, TimingQuality } from '../types';
 
-const {
-  faultJavelinLaunchSpeedMs: FAULT_JAVELIN_LAUNCH_SPEED_MS
-} = GAMEPLAY_TUNING.throwPhase;
+const { faultJavelinLaunchSpeedMs: FAULT_JAVELIN_LAUNCH_SPEED_MS } = GAMEPLAY_TUNING.throwPhase;
 const {
   faultStumbleDistanceM: FAULT_STUMBLE_DISTANCE_M,
   followThroughStepDistanceM: FOLLOW_THROUGH_STEP_DISTANCE_M
@@ -161,6 +159,7 @@ export const getRunupRhythmDecayMultiplier = (
 
 export const computeRhythmTapGain = ({
   intervalMs,
+  targetIntervalMs,
   tapGainNorm,
   tapSoftCapIntervalMs,
   tapSoftCapMinMultiplier,
@@ -169,16 +168,23 @@ export const computeRhythmTapGain = ({
   tuning
 }: {
   intervalMs: number;
+  targetIntervalMs: number;
   tapGainNorm: number;
   tapSoftCapIntervalMs: number;
   tapSoftCapMinMultiplier: number;
   quality: RhythmHitQuality;
   combo: number;
   tuning: RunupRhythmTuning;
-}): { gainNorm: number; antiMashMultiplier: number; qualityMultiplier: number; comboMultiplier: number } => {
+}): {
+  gainNorm: number;
+  antiMashMultiplier: number;
+  qualityMultiplier: number;
+  comboMultiplier: number;
+} => {
+  const effectiveSoftCapIntervalMs = Math.max(1, Math.min(tapSoftCapIntervalMs, targetIntervalMs));
   const antiMashMultiplier = getRunupAntiMashMultiplier(
     intervalMs,
-    tapSoftCapIntervalMs,
+    effectiveSoftCapIntervalMs,
     tapSoftCapMinMultiplier
   );
   const qualityMultiplier =

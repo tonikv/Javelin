@@ -53,6 +53,7 @@ describe('javelin visibility state', () => {
           lastTapAtMs: 1880,
           lastTapMultiplier: 0.85
         },
+        chargeHold: null,
         runupRhythm: null,
         athletePose: { animTag: 'run', animT: 0.4 }
       }
@@ -246,6 +247,7 @@ describe('javelin visibility state', () => {
           lastTapAtMs: null,
           lastTapMultiplier: 0
         },
+        chargeHold: null,
         runupRhythm: null,
         athletePose: { animTag: 'idle', animT: 0 }
       }

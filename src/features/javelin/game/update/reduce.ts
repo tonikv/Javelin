@@ -5,12 +5,7 @@
  */
 import { computeAthletePoseGeometry } from '../athletePose';
 import { computeChargeMeterSample, computeReleaseForceNorm } from '../chargeMeter';
-import {
-  ANGLE_MAX_DEG,
-  ANGLE_MIN_DEG,
-  RUNUP_MAX_TAPS,
-  THROW_LINE_X_M
-} from '../constants';
+import { ANGLE_MAX_DEG, ANGLE_MIN_DEG, RUNUP_MAX_TAPS, THROW_LINE_X_M } from '../constants';
 import { clamp } from '../math';
 import {
   EMPTY_DIFFICULTY_GAMEPLAY_TUNING_OVERRIDES,
@@ -35,10 +30,8 @@ import { tickFlight } from './tickFlight';
 import { tickRunup } from './tickRunup';
 import { tickThrowAnim } from './tickThrowAnim';
 
-const {
-  chargeMaxCycles: CHARGE_MAX_CYCLES,
-  throwReleaseProgress01: THROW_RELEASE_PROGRESS
-} = GAMEPLAY_TUNING.throwPhase;
+const { chargeMaxCycles: CHARGE_MAX_CYCLES, throwReleaseProgress01: THROW_RELEASE_PROGRESS } =
+  GAMEPLAY_TUNING.throwPhase;
 const { runupStartXM: RUNUP_START_X_M } = GAMEPLAY_TUNING.movement;
 
 export const reduceGameState = (state: GameState, action: GameAction): GameState => {
@@ -80,7 +73,10 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
       };
     }
     case 'startRound': {
-      const difficultyTuning = getDifficultyGameplayTuning(state.difficulty, state.devTuningOverrides);
+      const difficultyTuning = getDifficultyGameplayTuning(
+        state.difficulty,
+        state.devTuningOverrides
+      );
       return {
         ...state,
         nowMs: action.atMs,
@@ -98,6 +94,7 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
             lastTapAtMs: null,
             lastTapMultiplier: 0
           },
+          chargeHold: null,
           runupRhythm: difficultyTuning.runupRhythm
             ? {
                 targetIntervalMs: getRunupTargetTapIntervalMs(0, difficultyTuning.runupRhythm),
@@ -115,11 +112,44 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
         }
       };
     }
+    case 'startChargeHold': {
+      if (state.phase.tag !== 'runup' || state.phase.chargeHold !== null) {
+        return state;
+      }
+      return {
+        ...state,
+        nowMs: action.atMs,
+        phase: {
+          ...state.phase,
+          chargeHold: {
+            startedAtMs: action.atMs
+          }
+        }
+      };
+    }
+    case 'cancelChargeHold': {
+      if (state.phase.tag !== 'runup' || state.phase.chargeHold === null) {
+        return state;
+      }
+      return {
+        ...state,
+        phase: {
+          ...state.phase,
+          chargeHold: null
+        }
+      };
+    }
     case 'rhythmTap': {
       if (state.phase.tag !== 'runup') {
         return state;
       }
-      const difficultyTuning = getDifficultyGameplayTuning(state.difficulty, state.devTuningOverrides);
+      if (state.phase.chargeHold !== null) {
+        return state;
+      }
+      const difficultyTuning = getDifficultyGameplayTuning(
+        state.difficulty,
+        state.devTuningOverrides
+      );
       const phase = state.phase;
       const lastTapAtMs = phase.tap.lastTapAtMs;
       const tapIntervalMs =
@@ -135,9 +165,14 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
         const targetIntervalMs = getRunupTargetTapIntervalMs(phase.speedNorm, runupRhythmTuning);
         const offsetMs = tapIntervalMs - targetIntervalMs;
         const quality = classifyRunupRhythmTap(tapIntervalMs, targetIntervalMs, runupRhythmTuning);
-        const nextCombo = getNextRhythmCombo(runupRhythmState.combo, quality, runupRhythmTuning.comboMax);
+        const nextCombo = getNextRhythmCombo(
+          runupRhythmState.combo,
+          quality,
+          runupRhythmTuning.comboMax
+        );
         const tapGain = computeRhythmTapGain({
           intervalMs: tapIntervalMs,
+          targetIntervalMs,
           tapGainNorm: difficultyTuning.speedUp.tapGainNorm,
           tapSoftCapIntervalMs: difficultyTuning.speedUp.tapSoftCapIntervalMs,
           tapSoftCapMinMultiplier: difficultyTuning.speedUp.tapSoftCapMinMultiplier,
@@ -146,8 +181,7 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
           tuning: runupRhythmTuning
         });
         tapGainNorm = tapGain.gainNorm;
-        tapGainMultiplier =
-          tapGainNorm / Math.max(0.0001, difficultyTuning.speedUp.tapGainNorm);
+        tapGainMultiplier = tapGainNorm / Math.max(0.0001, difficultyTuning.speedUp.tapGainNorm);
         nextRunupRhythm = {
           ...runupRhythmState,
           targetIntervalMs,
@@ -210,7 +244,10 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
       if (state.phase.tag !== 'runup') {
         return state;
       }
-      const difficultyTuning = getDifficultyGameplayTuning(state.difficulty, state.devTuningOverrides);
+      const difficultyTuning = getDifficultyGameplayTuning(
+        state.difficulty,
+        state.devTuningOverrides
+      );
       const chargeMeterSample = computeChargeMeterSample(
         0,
         difficultyTuning,
@@ -292,7 +329,10 @@ export const reduceGameState = (state: GameState, action: GameAction): GameState
       if (state.phase.tag !== 'chargeAim') {
         return state;
       }
-      const difficultyTuning = getDifficultyGameplayTuning(state.difficulty, state.devTuningOverrides);
+      const difficultyTuning = getDifficultyGameplayTuning(
+        state.difficulty,
+        state.devTuningOverrides
+      );
       const elapsedMs = Math.max(0, action.atMs - state.phase.chargeStartedAtMs);
       const chargeMeterSample = computeChargeMeterSample(
         elapsedMs,

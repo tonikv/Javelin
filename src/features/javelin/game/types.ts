@@ -31,6 +31,10 @@ export type RunupRhythmState = {
   stability01: number;
 };
 
+export type RunupChargeHoldState = {
+  startedAtMs: number;
+};
+
 export type RunupMeterMode = 'speedFill' | 'rhythmLane';
 
 export type ChargeMeterMode = 'loop' | 'centerSweep';
@@ -100,6 +104,7 @@ export type GamePhase =
       tapCount: number;
       runupDistanceM: number;
       tap: RunupTapState;
+      chargeHold: RunupChargeHoldState | null;
       runupRhythm: RunupRhythmState | null;
       athletePose: AthletePoseState;
     }
@@ -173,6 +178,8 @@ export type GameState = {
 export type GameAction =
   | { type: 'startRound'; atMs: number; windMs: number; windZMs?: number }
   | { type: 'rhythmTap'; atMs: number }
+  | { type: 'startChargeHold'; atMs: number }
+  | { type: 'cancelChargeHold' }
   | { type: 'setDifficulty'; difficulty: DifficultyLevel }
   | { type: 'setDevTuningOverrides'; overrides: DifficultyGameplayTuningOverrides }
   | { type: 'resetDevTuningOverrides' }

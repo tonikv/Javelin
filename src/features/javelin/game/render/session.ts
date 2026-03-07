@@ -12,6 +12,7 @@ export const createRenderSession = (): RenderSession => ({
     shownAtMs: 0
   },
   lastRunupTapAtMs: null,
+  lastChargeCenterPhase01: null,
   lastFaultJavelinLanded: false,
   lastPhaseTag: 'idle',
   paletteCache: null,

@@ -88,7 +88,9 @@ export const createTouchLongPressHandlers = ({
   const onTouchStart = (): void => {
     const phaseTag = getPhaseTag();
     if (phaseTag === 'runup') {
-      dispatch({ type: 'rhythmTap', atMs: now() });
+      const atMs = now();
+      dispatch({ type: 'rhythmTap', atMs });
+      dispatch({ type: 'startChargeHold', atMs });
       clear();
       longPressTimer = setTimer(() => {
         if (getPhaseTag() === 'runup') {
@@ -106,7 +108,11 @@ export const createTouchLongPressHandlers = ({
 
   const onTouchEnd = (): void => {
     clear();
-    if (getPhaseTag() === 'chargeAim') {
+    const phaseTag = getPhaseTag();
+    if (phaseTag === 'runup') {
+      dispatch({ type: 'cancelChargeHold' });
+    }
+    if (phaseTag === 'chargeAim') {
       dispatch({ type: 'releaseCharge', atMs: now() });
     }
   };

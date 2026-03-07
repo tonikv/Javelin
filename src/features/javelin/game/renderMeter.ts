@@ -9,7 +9,7 @@ import { centeredWindow } from './chargeMeter';
 import { clamp01, wrap01 } from './math';
 import { getForcePreviewPercent, getSpeedPercent, getRunupMeterPhase01 } from './selectors';
 import { getRenderPalette } from './renderTheme';
-import { getDifficultyGameplayTuning } from './tuning';
+import { getDifficultyGameplayTuning, type RunupRhythmTuning } from './tuning';
 import type { HeadAnchor } from './renderAthlete';
 import type { ChargeMeterSnapshot, GameState, MeterWindow, TimingQuality } from './types';
 import type { ThemeMode } from '../../../theme/init';
@@ -60,6 +60,17 @@ const normalizeMeterPhase01 = (phase01: number): number => {
 };
 
 const phaseToSemicircleAngle = (phase01: number): number => Math.PI + clamp01(phase01) * Math.PI;
+
+const getRhythmVisualHalfRangeRatio = (tuning: RunupRhythmTuning): number =>
+  clamp01(
+    Math.max(
+      0.4,
+      Math.min(1, Math.max(tuning.goodToleranceRatio * 2.75, tuning.goodToleranceRatio + 0.08))
+    )
+  );
+
+const getRhythmMarker01 = (offsetRatio: number, visualHalfRangeRatio: number): number =>
+  clamp01(0.5 + (offsetRatio / Math.max(0.0001, visualHalfRangeRatio)) * 0.5);
 
 const drawSemicircleArc = (
   ctx: CanvasRenderingContext2D,
@@ -119,10 +130,17 @@ const getChargeMeterZones = (meter: ChargeMeterSnapshot): MeterZones => ({
 });
 
 const getRhythmLaneState = (state: GameState): RhythmLaneMeterState | null => {
-  if (state.phase.tag !== 'runup' || state.phase.meterMode !== 'rhythmLane' || !state.phase.runupRhythm) {
+  if (
+    state.phase.tag !== 'runup' ||
+    state.phase.meterMode !== 'rhythmLane' ||
+    !state.phase.runupRhythm
+  ) {
     return null;
   }
-  const tuning = getDifficultyGameplayTuning(state.difficulty, state.devTuningOverrides).runupRhythm;
+  const tuning = getDifficultyGameplayTuning(
+    state.difficulty,
+    state.devTuningOverrides
+  ).runupRhythm;
   if (!tuning) {
     return null;
   }
@@ -133,17 +151,11 @@ const getRhythmLaneState = (state: GameState): RhythmLaneMeterState | null => {
       ? Math.max(1, state.phase.runupRhythm.lastIntervalMs - lastOffsetMs)
       : state.phase.runupRhythm.targetIntervalMs;
   const offsetRatio = lastOffsetMs === null ? null : lastOffsetMs / targetForLastTapMs;
-  const visualHalfRangeRatio = Math.max(
-    tuning.goodToleranceRatio * 2.75,
-    tuning.goodToleranceRatio + 0.08
-  );
+  const visualHalfRangeRatio = getRhythmVisualHalfRangeRatio(tuning);
 
   return {
     kind: 'rhythmLane',
-    marker01:
-      offsetRatio === null
-        ? null
-        : clamp01(0.5 + (offsetRatio / visualHalfRangeRatio) * 0.5),
+    marker01: offsetRatio === null ? null : getRhythmMarker01(offsetRatio, visualHalfRangeRatio),
     zones: {
       perfect: centeredWindow(0.5, tuning.perfectToleranceRatio / visualHalfRangeRatio),
       good: centeredWindow(0.5, tuning.goodToleranceRatio / visualHalfRangeRatio)
@@ -273,12 +285,141 @@ const drawLaneWindow = (
   ctx.fillRect(startX, y, Math.max(2, endX - startX), height);
 };
 
+const drawLaneBoundaryTick = (
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  top: number,
+  bottom: number,
+  color: string,
+  lineWidth: number
+): void => {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lineWidth;
+  ctx.beginPath();
+  ctx.moveTo(x, top);
+  ctx.lineTo(x, bottom);
+  ctx.stroke();
+};
+
+const drawArcCursor = (
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  radius: number,
+  phase01: number,
+  cursorRadius: number,
+  fillStyle: string,
+  strokeStyle: string,
+  lineWidth: number,
+  glowColor?: string
+): void => {
+  const cursorAngle = phaseToSemicircleAngle(normalizeMeterPhase01(phase01));
+  const cursorX = cx + Math.cos(cursorAngle) * radius;
+  const cursorY = cy + Math.sin(cursorAngle) * radius;
+
+  if (glowColor) {
+    ctx.save();
+    ctx.shadowColor = glowColor;
+    ctx.shadowBlur = cursorRadius * 2.6;
+    ctx.fillStyle = fillStyle;
+    ctx.beginPath();
+    ctx.arc(cursorX, cursorY, cursorRadius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  ctx.fillStyle = fillStyle;
+  ctx.strokeStyle = strokeStyle;
+  ctx.lineWidth = lineWidth;
+  ctx.beginPath();
+  ctx.arc(cursorX, cursorY, cursorRadius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+};
+
+const drawArcMeter = (
+  ctx: CanvasRenderingContext2D,
+  {
+    anchor,
+    radius,
+    lineWidth,
+    phase01,
+    zones,
+    feedback,
+    fillColor,
+    cursorColor,
+    cursorRadius,
+    palette,
+    visualScale,
+    cursorGlowColor
+  }: {
+    anchor: HeadAnchor;
+    radius: number;
+    lineWidth: number;
+    phase01: number;
+    zones: MeterZones | null;
+    feedback: TimingQuality | null;
+    fillColor: string;
+    cursorColor: string;
+    cursorRadius: number;
+    palette: ReturnType<typeof getRenderPalette>;
+    visualScale: number;
+    cursorGlowColor?: string;
+  }
+): void => {
+  const effectiveCursorGlowColor =
+    cursorGlowColor ?? (feedback === 'perfect' ? palette.meter.centerGlow : undefined);
+  drawSemicircleArc(ctx, anchor.x, anchor.y, radius, 0, 1, palette.meter.trackArc, lineWidth);
+  drawSemicircleArc(ctx, anchor.x, anchor.y, radius, 0, phase01, fillColor, lineWidth);
+
+  if (zones !== null) {
+    drawSemicircleArc(
+      ctx,
+      anchor.x,
+      anchor.y,
+      radius,
+      zones.good.start,
+      zones.good.end,
+      palette.meter.zoneGood,
+      lineWidth
+    );
+    drawSemicircleArc(
+      ctx,
+      anchor.x,
+      anchor.y,
+      radius,
+      zones.perfect.start,
+      zones.perfect.end,
+      palette.meter.zonePerfect,
+      lineWidth + 0.8 * visualScale
+    );
+  }
+
+  drawArcCursor(
+    ctx,
+    anchor.x,
+    anchor.y,
+    radius,
+    phase01,
+    cursorRadius,
+    cursorColor,
+    palette.meter.cursorStroke,
+    Math.max(2, 2 * visualScale),
+    effectiveCursorGlowColor
+  );
+};
+
+type LaneMeterDrawOptions = {
+  showValueLabel?: boolean;
+};
+
 const drawLaneMeter = (
   ctx: CanvasRenderingContext2D,
   meterState: CenterLaneMeterState | RhythmLaneMeterState,
   anchor: HeadAnchor,
   visualScale: number,
-  palette: ReturnType<typeof getRenderPalette>
+  palette: ReturnType<typeof getRenderPalette>,
+  options: LaneMeterDrawOptions = {}
 ): void => {
   const laneWidth = WORLD_METER_RADIUS_PX * visualScale * 2.8;
   const laneHeight = 11 * visualScale;
@@ -290,7 +431,15 @@ const drawLaneMeter = (
   ctx.fillStyle = palette.meter.trackArc;
   ctx.fill();
 
-  drawLaneWindow(ctx, laneX, laneY, laneWidth, laneHeight, meterState.zones.good, palette.meter.zoneGood);
+  drawLaneWindow(
+    ctx,
+    laneX,
+    laneY,
+    laneWidth,
+    laneHeight,
+    meterState.zones.good,
+    palette.meter.zoneGood
+  );
   drawLaneWindow(
     ctx,
     laneX,
@@ -301,20 +450,65 @@ const drawLaneMeter = (
     palette.meter.zonePerfect
   );
 
-  ctx.strokeStyle = palette.meter.cursorStroke;
-  ctx.lineWidth = Math.max(1.5, 1.5 * visualScale);
-  ctx.beginPath();
-  ctx.moveTo(anchor.x, laneY - 2 * visualScale);
-  ctx.lineTo(anchor.x, laneY + laneHeight + 2 * visualScale);
-  ctx.stroke();
+  const centerLineTop = laneY - 3 * visualScale;
+  const centerLineBottom = laneY + laneHeight + 3 * visualScale;
+  if (meterState.kind === 'centerLane' && meterState.feedback === 'perfect') {
+    drawLaneBoundaryTick(
+      ctx,
+      anchor.x,
+      centerLineTop,
+      centerLineBottom,
+      palette.meter.centerGlow,
+      Math.max(4, 4.2 * visualScale)
+    );
+  }
+  drawLaneBoundaryTick(
+    ctx,
+    anchor.x,
+    centerLineTop,
+    centerLineBottom,
+    palette.meter.cursorStroke,
+    meterState.kind === 'centerLane'
+      ? Math.max(2.2, 2.4 * visualScale)
+      : Math.max(1.5, 1.5 * visualScale)
+  );
 
   if (meterState.kind === 'centerLane') {
+    const tickTop = laneY - 2 * visualScale;
+    const tickBottom = laneY + laneHeight + 2 * visualScale;
+    for (const [position01, color, lineWidth] of [
+      [meterState.zones.good.start, palette.meter.zoneGood, Math.max(1.3, 1.3 * visualScale)],
+      [meterState.zones.good.end, palette.meter.zoneGood, Math.max(1.3, 1.3 * visualScale)],
+      [meterState.zones.perfect.start, palette.meter.zonePerfect, Math.max(2, 1.8 * visualScale)],
+      [meterState.zones.perfect.end, palette.meter.zonePerfect, Math.max(2, 1.8 * visualScale)]
+    ] as const) {
+      drawLaneBoundaryTick(
+        ctx,
+        laneX + laneWidth * clamp01(position01),
+        tickTop,
+        tickBottom,
+        color,
+        lineWidth
+      );
+    }
+
     const cursorX = laneX + laneWidth * clamp01(meterState.cursor01);
     const cursorY = laneY + laneHeight * 0.5;
+    if (meterState.feedback === 'perfect') {
+      ctx.save();
+      ctx.shadowColor = palette.meter.centerGlow;
+      ctx.shadowBlur = 9 * visualScale;
+      ctx.fillStyle = palette.meter.centerGlow;
+      ctx.beginPath();
+      ctx.arc(cursorX, cursorY, WORLD_METER_CURSOR_RADIUS_PX * visualScale * 1.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
     ctx.fillStyle = getFeedbackColor(meterState.feedback, palette);
     ctx.beginPath();
     ctx.arc(cursorX, cursorY, WORLD_METER_CURSOR_RADIUS_PX * visualScale, 0, Math.PI * 2);
     ctx.fill();
+    ctx.strokeStyle = palette.meter.cursorStroke;
     ctx.stroke();
   } else {
     if (meterState.marker01 !== null) {
@@ -354,15 +548,17 @@ const drawLaneMeter = (
     );
   }
 
-  drawValueLabel(
-    ctx,
-    anchor.x,
-    laneY + laneHeight + (meterState.kind === 'rhythmLane' ? 18 : 14) * visualScale,
-    meterState.valueLabel,
-    11 * visualScale,
-    palette,
-    visualScale
-  );
+  if ((options.showValueLabel ?? true) && meterState.valueLabel.trim().length > 0) {
+    drawValueLabel(
+      ctx,
+      anchor.x,
+      laneY + laneHeight + (meterState.kind === 'rhythmLane' ? 18 : 14) * visualScale,
+      meterState.valueLabel,
+      11 * visualScale,
+      palette,
+      visualScale
+    );
+  }
 };
 
 export const drawWorldTimingMeter = (
@@ -397,66 +593,26 @@ export const drawWorldTimingMeter = (
     return;
   }
 
-  drawSemicircleArc(
-    ctx,
-    anchor.x,
-    anchor.y,
-    meterRadius,
-    0,
-    1,
-    palette.meter.trackArc,
-    meterLineWidth
-  );
-
-  drawSemicircleArc(
-    ctx,
-    anchor.x,
-    anchor.y,
-    meterRadius,
-    0,
-    meterState.phase01,
-    meterState.zones === null ? palette.meter.runupFill : palette.meter.chargeFill,
-    meterLineWidth
-  );
-
-  if (meterState.zones !== null) {
-    drawSemicircleArc(
-      ctx,
-      anchor.x,
-      anchor.y,
-      meterRadius,
-      meterState.zones.good.start,
-      meterState.zones.good.end,
-      palette.meter.zoneGood,
-      meterLineWidth
-    );
-
-    drawSemicircleArc(
-      ctx,
-      anchor.x,
-      anchor.y,
-      meterRadius,
-      meterState.zones.perfect.start,
-      meterState.zones.perfect.end,
-      palette.meter.zonePerfect,
-      meterLineWidth + 0.8 * visualScale
-    );
-  }
-
-  const cursorAngle = phaseToSemicircleAngle(normalizeMeterPhase01(meterState.phase01));
-  const cursorX = anchor.x + Math.cos(cursorAngle) * meterRadius;
-  const cursorY = anchor.y + Math.sin(cursorAngle) * meterRadius;
-
-  ctx.fillStyle =
-    meterState.zones === null
-      ? palette.meter.cursorPerfect
-      : getFeedbackColor(meterState.feedback, palette);
-  ctx.strokeStyle = palette.meter.cursorStroke;
-  ctx.lineWidth = Math.max(2, 2 * visualScale);
-  ctx.beginPath();
-  ctx.arc(cursorX, cursorY, meterCursorRadius, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
+  drawArcMeter(ctx, {
+    anchor,
+    radius: meterRadius,
+    lineWidth: meterLineWidth,
+    phase01: meterState.phase01,
+    zones: meterState.zones,
+    feedback: meterState.feedback,
+    fillColor: meterState.zones === null ? palette.meter.runupFill : palette.meter.chargeFill,
+    cursorColor:
+      meterState.zones === null
+        ? palette.meter.cursorPerfect
+        : getFeedbackColor(meterState.feedback, palette),
+    cursorRadius: meterCursorRadius,
+    palette,
+    visualScale,
+    cursorGlowColor:
+      meterState.feedback === 'perfect' && meterState.zones !== null
+        ? palette.meter.centerGlow
+        : undefined
+  });
 
   drawValueLabel(
     ctx,

@@ -36,6 +36,7 @@ export type RenderPalette = {
     chargeFill: string;
     zoneGood: string;
     zonePerfect: string;
+    centerGlow: string;
     cursorPerfect: string;
     cursorGood: string;
     cursorMiss: string;
@@ -89,7 +90,7 @@ const LIGHT_PALETTE: RenderPalette = {
     landingTextOutline: 'rgba(8, 35, 56, 0.6)',
     landingDot: 'rgba(15, 40, 60, 0.35)',
     releaseFlashFill: '#0b2238',
-    releaseFlashOutline: 'rgba(240, 250, 255, 0.92)',
+    releaseFlashOutline: 'rgba(240, 250, 255, 0.92)'
   },
   meter: {
     trackArc: 'rgba(10, 46, 77, 0.34)',
@@ -97,12 +98,13 @@ const LIGHT_PALETTE: RenderPalette = {
     chargeFill: 'rgba(246, 210, 85, 0.72)',
     zoneGood: 'rgba(30, 142, 247, 0.82)',
     zonePerfect: 'rgba(18, 196, 119, 0.98)',
+    centerGlow: 'rgba(18, 196, 119, 0.28)',
     cursorPerfect: '#22c272',
     cursorGood: '#329cf5',
     cursorMiss: '#f6d255',
     cursorStroke: '#0f3b61',
     valueTextFill: 'rgba(6, 32, 57, 0.9)',
-    valueTextOutline: 'rgba(235, 246, 255, 0.95)',
+    valueTextOutline: 'rgba(235, 246, 255, 0.95)'
   },
   wind: {
     mastStroke: '#0f4165',
@@ -111,15 +113,15 @@ const LIGHT_PALETTE: RenderPalette = {
     headwindFlagFill: '#1f9d44',
     headwindFlagStroke: '#0b6e2d',
     tailwindFlagFill: '#cf3a2f',
-    tailwindFlagStroke: '#8e281f',
+    tailwindFlagStroke: '#8e281f'
   },
   athlete: {
     skin: '#ffe3bc',
     outline: '#073257',
     eye: '#0b2c49',
     limbStroke: '#073257',
-    limbFill: '#073257',
-  },
+    limbFill: '#073257'
+  }
 };
 
 const DARK_PALETTE: RenderPalette = {
@@ -150,7 +152,7 @@ const DARK_PALETTE: RenderPalette = {
     landingTextOutline: 'rgba(222, 239, 248, 0.68)',
     landingDot: 'rgba(198, 221, 236, 0.45)',
     releaseFlashFill: '#e7f4fc',
-    releaseFlashOutline: 'rgba(13, 28, 40, 0.92)',
+    releaseFlashOutline: 'rgba(13, 28, 40, 0.92)'
   },
   meter: {
     trackArc: 'rgba(194, 219, 234, 0.4)',
@@ -158,12 +160,13 @@ const DARK_PALETTE: RenderPalette = {
     chargeFill: 'rgba(247, 216, 106, 0.84)',
     zoneGood: 'rgba(92, 181, 255, 0.9)',
     zonePerfect: 'rgba(72, 224, 146, 1)',
+    centerGlow: 'rgba(89, 229, 154, 0.34)',
     cursorPerfect: '#59e59a',
     cursorGood: '#79bfff',
     cursorMiss: '#f7db77',
     cursorStroke: '#082338',
     valueTextFill: 'rgba(229, 244, 253, 0.96)',
-    valueTextOutline: 'rgba(6, 18, 26, 0.95)',
+    valueTextOutline: 'rgba(6, 18, 26, 0.95)'
   },
   wind: {
     mastStroke: '#c8deee',
@@ -172,14 +175,14 @@ const DARK_PALETTE: RenderPalette = {
     headwindFlagFill: '#44d483',
     headwindFlagStroke: '#2aa463',
     tailwindFlagFill: '#ff6b61',
-    tailwindFlagStroke: '#d84f47',
+    tailwindFlagStroke: '#d84f47'
   },
   athlete: {
     skin: '#ffe3bc',
     outline: '#073257',
     eye: '#0b2c49',
     limbStroke: '#073257',
-    limbFill: '#073257',
+    limbFill: '#073257'
   }
 };
 

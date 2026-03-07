@@ -16,11 +16,11 @@ const toNumberString = (value: number): string =>
   Number.isInteger(value) ? String(value) : value.toFixed(3).replace(/0+$/g, '').replace(/\.$/, '');
 
 const getFallbackEliteTempoCurve = (): TempoCurvePointDraft[] => [
-  { speedNorm: '0', targetIntervalMs: '180' },
-  { speedNorm: '0.35', targetIntervalMs: '160' },
-  { speedNorm: '0.65', targetIntervalMs: '140' },
-  { speedNorm: '0.85', targetIntervalMs: '124' },
-  { speedNorm: '1', targetIntervalMs: '112' }
+  { speedNorm: '0', targetIntervalMs: '210' },
+  { speedNorm: '0.35', targetIntervalMs: '192' },
+  { speedNorm: '0.65', targetIntervalMs: '174' },
+  { speedNorm: '0.85', targetIntervalMs: '158' },
+  { speedNorm: '1', targetIntervalMs: '146' }
 ];
 
 const toDifficultyDraft = (
@@ -48,22 +48,22 @@ const toDifficultyDraft = (
         speedNorm: toNumberString(point.speedNorm),
         targetIntervalMs: toNumberString(point.targetIntervalMs)
       })) ?? getFallbackEliteTempoCurve(),
-    perfectToleranceRatio: toNumberString(runupRhythm?.perfectToleranceRatio ?? 0.1),
-    goodToleranceRatio: toNumberString(runupRhythm?.goodToleranceRatio ?? 0.2),
+    perfectToleranceRatio: toNumberString(runupRhythm?.perfectToleranceRatio ?? 0.18),
+    goodToleranceRatio: toNumberString(runupRhythm?.goodToleranceRatio ?? 0.34),
     perfectMultiplier: toNumberString(runupRhythm?.perfectMultiplier ?? 1),
-    goodMultiplier: toNumberString(runupRhythm?.goodMultiplier ?? 0.72),
-    missMultiplier: toNumberString(runupRhythm?.missMultiplier ?? 0.25),
-    stabilityGainPerGood: toNumberString(runupRhythm?.stabilityGainPerGood ?? 0.08),
-    stabilityLossPerMiss: toNumberString(runupRhythm?.stabilityLossPerMiss ?? 0.14),
-    stableDecayMultiplier: toNumberString(runupRhythm?.stableDecayMultiplier ?? 0.82),
-    unstableDecayMultiplier: toNumberString(runupRhythm?.unstableDecayMultiplier ?? 1.08),
-    comboMax: toNumberString(runupRhythm?.comboMax ?? 6),
-    sweepDurationMsMin: toNumberString(releaseMeter?.sweepDurationMsMin ?? 360),
-    sweepDurationMsMax: toNumberString(releaseMeter?.sweepDurationMsMax ?? 520),
-    releasePerfectWidth: toNumberString(releaseMeter?.perfectWidth ?? 0.08),
-    releaseGoodWidth: toNumberString(releaseMeter?.goodWidth ?? 0.18),
-    highSpeedPerfectWidth: toNumberString(releaseMeter?.highSpeedPerfectWidth ?? 0.06),
-    highSpeedGoodWidth: toNumberString(releaseMeter?.highSpeedGoodWidth ?? 0.16)
+    goodMultiplier: toNumberString(runupRhythm?.goodMultiplier ?? 0.9),
+    missMultiplier: toNumberString(runupRhythm?.missMultiplier ?? 0.58),
+    stabilityGainPerGood: toNumberString(runupRhythm?.stabilityGainPerGood ?? 0.06),
+    stabilityLossPerMiss: toNumberString(runupRhythm?.stabilityLossPerMiss ?? 0.055),
+    stableDecayMultiplier: toNumberString(runupRhythm?.stableDecayMultiplier ?? 0.9),
+    unstableDecayMultiplier: toNumberString(runupRhythm?.unstableDecayMultiplier ?? 1),
+    comboMax: toNumberString(runupRhythm?.comboMax ?? 5),
+    sweepDurationMsMin: toNumberString(releaseMeter?.sweepDurationMsMin ?? 470),
+    sweepDurationMsMax: toNumberString(releaseMeter?.sweepDurationMsMax ?? 680),
+    releasePerfectWidth: toNumberString(releaseMeter?.perfectWidth ?? 0.12),
+    releaseGoodWidth: toNumberString(releaseMeter?.goodWidth ?? 0.26),
+    highSpeedPerfectWidth: toNumberString(releaseMeter?.highSpeedPerfectWidth ?? 0.09),
+    highSpeedGoodWidth: toNumberString(releaseMeter?.highSpeedGoodWidth ?? 0.2)
   };
 };
 

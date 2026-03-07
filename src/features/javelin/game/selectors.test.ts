@@ -21,6 +21,7 @@ const makeRunupState = (speedNorm: number): GameState => ({
       lastTapAtMs: 1200,
       lastTapMultiplier: 0.8
     },
+    chargeHold: null,
     runupRhythm: null,
     athletePose: {
       animTag: 'run',

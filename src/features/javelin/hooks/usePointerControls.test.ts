@@ -8,29 +8,33 @@ import {
   shouldReleaseChargeFromEnterKeyUp
 } from './controls';
 
-const inputTarget = (): EventTarget => ({
-  tagName: 'INPUT',
-  isContentEditable: false,
-  closest: () => null
-}) as unknown as EventTarget;
+const inputTarget = (): EventTarget =>
+  ({
+    tagName: 'INPUT',
+    isContentEditable: false,
+    closest: () => null
+  }) as unknown as EventTarget;
 
-const selectTarget = (): EventTarget => ({
-  tagName: 'SELECT',
-  isContentEditable: false,
-  closest: () => null
-}) as unknown as EventTarget;
+const selectTarget = (): EventTarget =>
+  ({
+    tagName: 'SELECT',
+    isContentEditable: false,
+    closest: () => null
+  }) as unknown as EventTarget;
 
-const plainTarget = (): EventTarget => ({
-  tagName: 'DIV',
-  isContentEditable: false,
-  closest: () => null
-}) as unknown as EventTarget;
+const plainTarget = (): EventTarget =>
+  ({
+    tagName: 'DIV',
+    isContentEditable: false,
+    closest: () => null
+  }) as unknown as EventTarget;
 
-const contentEditableTarget = (): EventTarget => ({
-  tagName: 'DIV',
-  isContentEditable: true,
-  closest: () => null
-}) as unknown as EventTarget;
+const contentEditableTarget = (): EventTarget =>
+  ({
+    tagName: 'DIV',
+    isContentEditable: true,
+    closest: () => null
+  }) as unknown as EventTarget;
 
 const dispatchSpy = () => vi.fn<(action: GameAction) => void>();
 
@@ -87,14 +91,15 @@ describe('usePointerControls touch long press', () => {
     });
 
     handlers.onTouchStart();
-    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(dispatch).toHaveBeenCalledTimes(2);
     expect(dispatch).toHaveBeenNthCalledWith(1, { type: 'rhythmTap', atMs: 1000 });
+    expect(dispatch).toHaveBeenNthCalledWith(2, { type: 'startChargeHold', atMs: 1000 });
 
     nowMs = 1305;
     vi.advanceTimersByTime(305);
 
-    expect(dispatch).toHaveBeenCalledTimes(2);
-    expect(dispatch).toHaveBeenNthCalledWith(2, { type: 'beginChargeAim', atMs: 1305 });
+    expect(dispatch).toHaveBeenCalledTimes(3);
+    expect(dispatch).toHaveBeenNthCalledWith(3, { type: 'beginChargeAim', atMs: 1305 });
   });
 
   it('does not start charge if phase is no longer runup when timer fires', () => {
@@ -111,8 +116,9 @@ describe('usePointerControls touch long press', () => {
     phaseTag = 'chargeAim';
     vi.advanceTimersByTime(350);
 
-    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(dispatch).toHaveBeenCalledTimes(2);
     expect(dispatch).toHaveBeenNthCalledWith(1, { type: 'rhythmTap', atMs: 1000 });
+    expect(dispatch).toHaveBeenNthCalledWith(2, { type: 'startChargeHold', atMs: 1000 });
   });
 
   it('releases charge on touch end when currently charging', () => {
@@ -130,6 +136,26 @@ describe('usePointerControls touch long press', () => {
 
     phaseTag = 'runup';
     handlers.onTouchEnd();
-    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    expect(dispatch).toHaveBeenNthCalledWith(2, { type: 'cancelChargeHold' });
+  });
+
+  it('cancels the hold on early touch end during runup', () => {
+    vi.useFakeTimers();
+    const dispatch = dispatchSpy();
+    const handlers = createTouchLongPressHandlers({
+      dispatch,
+      getPhaseTag: () => 'runup',
+      now: () => 1000
+    });
+
+    handlers.onTouchStart();
+    handlers.onTouchEnd();
+    vi.advanceTimersByTime(350);
+
+    expect(dispatch).toHaveBeenCalledTimes(3);
+    expect(dispatch).toHaveBeenNthCalledWith(1, { type: 'rhythmTap', atMs: 1000 });
+    expect(dispatch).toHaveBeenNthCalledWith(2, { type: 'startChargeHold', atMs: 1000 });
+    expect(dispatch).toHaveBeenNthCalledWith(3, { type: 'cancelChargeHold' });
   });
 });

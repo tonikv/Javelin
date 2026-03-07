@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  playChargeCenterCue,
   playRunupTap,
   playChargeStart,
   playCrowdReaction,
@@ -16,6 +17,7 @@ describe('audio no-op fallback', () => {
     expect(() => playRunupTap(1)).not.toThrow();
     expect(() => playRunupTap(0.3)).not.toThrow();
     expect(() => playChargeStart()).not.toThrow();
+    expect(() => playChargeCenterCue()).not.toThrow();
     expect(() => playThrowWhoosh(0.75)).not.toThrow();
     expect(() => setFlightWindIntensity(0.5)).not.toThrow();
     expect(() => playLandingImpact(true)).not.toThrow();

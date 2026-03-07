@@ -217,7 +217,11 @@ type NoiseBurstParams = {
   startOffsetS?: number;
 };
 
-const playNoiseBurst = (audio: AudioEngine, destination: AudioNode, params: NoiseBurstParams): void => {
+const playNoiseBurst = (
+  audio: AudioEngine,
+  destination: AudioNode,
+  params: NoiseBurstParams
+): void => {
   const now = audio.ctx.currentTime + (params.startOffsetS ?? 0);
   const durationS = Math.max(0.02, params.durationS);
   const attackS = Math.max(0.002, params.attackS ?? 0.01);
@@ -293,6 +297,19 @@ export const playChargeStart = (): void => {
       filterHz: 520,
       volume: 0.025,
       durationS: 0.12
+    });
+  });
+};
+
+export const playChargeCenterCue = (): void => {
+  runWithAudio((audio) => {
+    playTone(audio, audio.channels.effects, {
+      frequencyHz: 620,
+      endFrequencyHz: 780,
+      type: 'triangle',
+      volume: 0.022,
+      durationS: 0.045,
+      attackS: 0.002
     });
   });
 };
@@ -426,9 +443,12 @@ export const resumeAudioContext = (): void => {
   };
 
   if (audio.ctx.state === 'suspended') {
-    void audio.ctx.resume().then(bootAmbience).catch(() => {
-      // Swallow resume errors in unsupported/blocked environments.
-    });
+    void audio.ctx
+      .resume()
+      .then(bootAmbience)
+      .catch(() => {
+        // Swallow resume errors in unsupported/blocked environments.
+      });
     return;
   }
 

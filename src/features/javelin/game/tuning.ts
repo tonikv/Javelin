@@ -245,14 +245,14 @@ export const DIFFICULTY_GAMEPLAY_TUNING: Record<DifficultyLevel, DifficultyGamep
   },
   pro: {
     speedUp: {
-      tapGainNorm: 0.074,
-      tapSoftCapIntervalMs: 130,
-      tapSoftCapMinMultiplier: 0.12
+      tapGainNorm: 0.078,
+      tapSoftCapIntervalMs: 150,
+      tapSoftCapMinMultiplier: 0.2
     },
     movement: {
-      runupSpeedDecayPerSecond: 0.23,
-      chargeAimSpeedDecayPerSecond: 0.28,
-      chargeAimStopSpeedNorm: 0.05
+      runupSpeedDecayPerSecond: 0.18,
+      chargeAimSpeedDecayPerSecond: 0.24,
+      chargeAimStopSpeedNorm: 0.04
     },
     throwPhase: {
       chargeFillDurationMs: 700,
@@ -260,43 +260,43 @@ export const DIFFICULTY_GAMEPLAY_TUNING: Record<DifficultyLevel, DifficultyGamep
       chargeGoodWindow: { start: 0.7, end: 0.94 }
     },
     releaseMeter: {
-      sweepDurationMsMin: 510,
-      sweepDurationMsMax: 760,
-      perfectWidth: 0.16,
-      goodWidth: 0.34,
-      highSpeedPerfectWidth: 0.125,
-      highSpeedGoodWidth: 0.28
+      sweepDurationMsMin: 560,
+      sweepDurationMsMax: 820,
+      perfectWidth: 0.19,
+      goodWidth: 0.38,
+      highSpeedPerfectWidth: 0.15,
+      highSpeedGoodWidth: 0.32
     },
     runupRhythm: {
       tempoCurve: [
-        { speedNorm: 0.0, targetIntervalMs: 210 },
-        { speedNorm: 0.35, targetIntervalMs: 194 },
-        { speedNorm: 0.65, targetIntervalMs: 178 },
-        { speedNorm: 0.85, targetIntervalMs: 164 },
-        { speedNorm: 1.0, targetIntervalMs: 154 }
+        { speedNorm: 0.0, targetIntervalMs: 228 },
+        { speedNorm: 0.35, targetIntervalMs: 212 },
+        { speedNorm: 0.65, targetIntervalMs: 196 },
+        { speedNorm: 0.85, targetIntervalMs: 182 },
+        { speedNorm: 1.0, targetIntervalMs: 170 }
       ],
-      perfectToleranceRatio: 0.18,
-      goodToleranceRatio: 0.34,
+      perfectToleranceRatio: 0.25,
+      goodToleranceRatio: 0.44,
       perfectMultiplier: 1,
-      goodMultiplier: 0.9,
-      missMultiplier: 0.58,
-      stabilityGainPerGood: 0.035,
-      stabilityLossPerMiss: 0.045,
-      stableDecayMultiplier: 0.96,
-      unstableDecayMultiplier: 1.02,
+      goodMultiplier: 0.98,
+      missMultiplier: 0.8,
+      stabilityGainPerGood: 0.05,
+      stabilityLossPerMiss: 0.025,
+      stableDecayMultiplier: 0.94,
+      unstableDecayMultiplier: 0.98,
       comboMax: 4
     }
   },
   elite: {
     speedUp: {
-      tapGainNorm: 0.068,
-      tapSoftCapIntervalMs: 140,
-      tapSoftCapMinMultiplier: 0.08
+      tapGainNorm: 0.072,
+      tapSoftCapIntervalMs: 150,
+      tapSoftCapMinMultiplier: 0.14
     },
     movement: {
-      runupSpeedDecayPerSecond: 0.26,
-      chargeAimSpeedDecayPerSecond: 0.32,
-      chargeAimStopSpeedNorm: 0.06
+      runupSpeedDecayPerSecond: 0.21,
+      chargeAimSpeedDecayPerSecond: 0.27,
+      chargeAimStopSpeedNorm: 0.05
     },
     throwPhase: {
       chargeFillDurationMs: 650,
@@ -305,30 +305,30 @@ export const DIFFICULTY_GAMEPLAY_TUNING: Record<DifficultyLevel, DifficultyGamep
     },
     runupRhythm: {
       tempoCurve: [
-        { speedNorm: 0.0, targetIntervalMs: 180 },
-        { speedNorm: 0.35, targetIntervalMs: 160 },
-        { speedNorm: 0.65, targetIntervalMs: 140 },
-        { speedNorm: 0.85, targetIntervalMs: 124 },
-        { speedNorm: 1.0, targetIntervalMs: 112 }
+        { speedNorm: 0.0, targetIntervalMs: 210 },
+        { speedNorm: 0.35, targetIntervalMs: 192 },
+        { speedNorm: 0.65, targetIntervalMs: 174 },
+        { speedNorm: 0.85, targetIntervalMs: 158 },
+        { speedNorm: 1.0, targetIntervalMs: 146 }
       ],
-      perfectToleranceRatio: 0.1,
-      goodToleranceRatio: 0.2,
+      perfectToleranceRatio: 0.18,
+      goodToleranceRatio: 0.34,
       perfectMultiplier: 1,
-      goodMultiplier: 0.72,
-      missMultiplier: 0.25,
-      stabilityGainPerGood: 0.08,
-      stabilityLossPerMiss: 0.14,
-      stableDecayMultiplier: 0.82,
-      unstableDecayMultiplier: 1.08,
-      comboMax: 6
+      goodMultiplier: 0.9,
+      missMultiplier: 0.58,
+      stabilityGainPerGood: 0.06,
+      stabilityLossPerMiss: 0.055,
+      stableDecayMultiplier: 0.9,
+      unstableDecayMultiplier: 1,
+      comboMax: 5
     },
     releaseMeter: {
-      sweepDurationMsMin: 360,
-      sweepDurationMsMax: 520,
-      perfectWidth: 0.08,
-      goodWidth: 0.18,
-      highSpeedPerfectWidth: 0.06,
-      highSpeedGoodWidth: 0.16
+      sweepDurationMsMin: 470,
+      sweepDurationMsMax: 680,
+      perfectWidth: 0.12,
+      goodWidth: 0.26,
+      highSpeedPerfectWidth: 0.09,
+      highSpeedGoodWidth: 0.2
     }
   }
 };

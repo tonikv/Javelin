@@ -70,6 +70,7 @@ export type RenderSession = {
   camera: CameraSmoothingState;
   resultMarker: ResultMarkerFadeState;
   lastRunupTapAtMs: number | null;
+  lastChargeCenterPhase01: number | null;
   lastFaultJavelinLanded: boolean;
   lastPhaseTag: GameState['phase']['tag'];
   paletteCache: PaletteCacheState;
@@ -93,6 +94,7 @@ export type OverlayHints = {
 export type GameAudioCallbacks = {
   onRunupTap?: (tapGainNorm: number) => void;
   onChargeStart?: () => void;
+  onChargeCenterCue?: () => void;
   onThrowRelease?: (speedNorm: number, quality: TimingQuality) => void;
   onFlightWindUpdate?: (intensity: number) => void;
   onFlightWindStop?: () => void;

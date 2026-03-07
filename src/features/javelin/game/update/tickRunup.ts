@@ -26,7 +26,10 @@ export const tickRunup = (state: GameState, dtMs: number): GameState => {
     runupRhythmTuning && state.phase.runupRhythm
       ? getRunupRhythmDecayMultiplier(state.phase.runupRhythm.stability01, runupRhythmTuning)
       : 1;
-  const runupSpeedDecayPerSecond = tuning.movement.runupSpeedDecayPerSecond * decayMultiplier;
+  const runupSpeedDecayPerSecond =
+    state.phase.chargeHold !== null
+      ? 0
+      : tuning.movement.runupSpeedDecayPerSecond * decayMultiplier;
 
   const speedAfterDecay = clamp(
     state.phase.speedNorm - (dtMs / 1000) * runupSpeedDecayPerSecond,

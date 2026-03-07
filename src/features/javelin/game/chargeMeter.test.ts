@@ -34,12 +34,13 @@ describe('charge meter helpers', () => {
     const tuning = getDifficultyGameplayTuning('elite');
     const halfSweepMs = Math.round((tuning.releaseMeter?.sweepDurationMsMax ?? 520) * 0.5);
     const sample = computeChargeMeterSample(halfSweepMs, tuning, 0);
+    const perfectWidth = tuning.releaseMeter?.perfectWidth ?? 0.1;
 
     expect(sample.mode).toBe('centerSweep');
     expect(sample.phase01).toBeCloseTo(0.5, 3);
     expect(sample.quality).toBe('perfect');
-    expect(sample.perfectWindow.start).toBeCloseTo(0.46, 2);
-    expect(sample.perfectWindow.end).toBeCloseTo(0.54, 2);
+    expect(sample.perfectWindow.start).toBeCloseTo(0.5 - perfectWidth * 0.5, 2);
+    expect(sample.perfectWindow.end).toBeCloseTo(0.5 + perfectWidth * 0.5, 2);
     expect(computeReleaseForceNorm(sample.phase01, sample.quality, sample.mode)).toBeGreaterThan(
       0.99
     );

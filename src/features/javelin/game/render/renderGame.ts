@@ -19,6 +19,7 @@ import {
   shouldDrawFrontArmOverHead
 } from './javelinRender';
 import { drawOnboardingHint, drawReleaseFlash, drawResultOverlay, drawWindHint } from './overlays';
+import { emitTimingCursorAudioCues } from './timingCues';
 import type { RenderFrameInput } from './types';
 
 const getOverlayUiScale = (width: number): number => {
@@ -82,6 +83,8 @@ export const renderGame = (input: RenderFrameInput): void => {
     }
   }
 
+  emitTimingCursorAudioCues(state, session, audio);
+
   const overlayUiScale = getOverlayUiScale(width);
   const palette = getSessionPalette(theme, session);
   const camera = createWorldToScreen(
@@ -130,13 +133,7 @@ export const renderGame = (input: RenderFrameInput): void => {
 
   const pose = getPoseForState(state);
   const javelin = getVisibleJavelinRenderState(state, pose);
-  const headScreen = drawAthlete(
-    ctx,
-    toScreen,
-    pose,
-    shouldDrawFrontArmOverHead(state),
-    palette
-  );
+  const headScreen = drawAthlete(ctx, toScreen, pose, shouldDrawFrontArmOverHead(state), palette);
 
   if (javelin.mode === 'landed') {
     const tipFirst = state.phase.tag === 'result' ? state.phase.tipFirst === true : false;
